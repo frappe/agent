@@ -8,6 +8,9 @@ class Base:
         self.config_file = None
         self.name = None
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.name})"
+
     def execute(self, command, directory=None):
         directory = directory or self.directory
         try:
