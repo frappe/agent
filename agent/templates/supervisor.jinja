@@ -1,0 +1,13 @@
+[program:agent-web]
+command={{ directory }}/env/bin/gunicorn -b :{{ web_port }} agent.web:application
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stdout_logfile={{ directory }}/logs/web.log
+stderr_logfile={{ directory }}/logs/web.error.log
+user=frappe
+directory={{ directory }}
+
+[group:agent]
+programs=agent-web
+
