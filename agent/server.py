@@ -81,10 +81,7 @@ class Server(Base):
         supervisor_config = os.path.join(self.directory, "supervisor.conf")
         self._render_template(
             "supervisor.jinja",
-            {
-                "web_port": self.config["web_port"],
-                "directory": self.directory,
-            },
+            {"web_port": self.config["web_port"], "directory": self.directory},
             supervisor_config,
         )
 
