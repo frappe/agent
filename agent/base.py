@@ -34,3 +34,8 @@ class Base:
     def setconfig(self, value):
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=4, sort_keys=True)
+
+
+class AgentException(Exception):
+    def __init__(self, data):
+        self.data = data
