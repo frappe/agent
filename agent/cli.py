@@ -20,6 +20,7 @@ def config():
         "benches_directory": "/home/frappe/benches",
         "name": "x.frappe.cloud",
         "redis_port": 25025,
+        "workers": 2,
         "web_port": 25052,
     }
     json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)

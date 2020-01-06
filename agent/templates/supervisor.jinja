@@ -8,6 +8,28 @@ stderr_logfile={{ directory }}/logs/web.error.log
 user=frappe
 directory={{ directory }}
 
-[group:agent]
-programs=agent-web
+[program:agent-redis]
+command=redis-server --port {{ redis_port }}
+autostart=true
+autorestart=true
+stdout_logfile={{ directory }}/logs/redis.log
+stderr_logfile={{ directory }}/logs/redis.error.log
+user=frappe
+directory={{ directory }}
 
+[program:agent-worker]
+command={{ directory }}/env/bin/rq worker --url redis://127.0.0.1:{{ redis_port }}
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stopwaitsecs=1500
+killasgroup=true
+numprocs={{ workers }}
+process_name=%(program_name)s-%(process_num)d
+stdout_logfile={{ directory }}/logs/worker.log
+stderr_logfile={{ directory }}/logs/worker.error.log
+user=frappe
+directory={{ directory }}
+
+[group:agent]
+programs=agent-web, agent-redis, agent-worker
