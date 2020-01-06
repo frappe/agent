@@ -26,6 +26,12 @@ def config():
 
 
 @setup.command()
+@click.option("--password", prompt=True, hide_input=True)
+def authentication(password):
+    Server().setup_authentication(password)
+
+
+@setup.command()
 def supervisor():
     Server().setup_supervisor()
 

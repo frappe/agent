@@ -1,6 +1,7 @@
 import os
 
 from jinja2 import Environment, PackageLoader
+from passlib.hash import pbkdf2_sha256 as pbkdf2
 
 from agent.base import Base
 from agent.job import Job, Step, step, job
@@ -40,6 +41,11 @@ class Server(Base):
 
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)
+
+    def setup_authentication(self, password):
+        config = self.config
+        config["access_token"] = pbkdf2.hash(password)
+        self.setconfig(config)
 
     def setup_nginx(self):
         self._generate_nginx_config()

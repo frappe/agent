@@ -1,11 +1,35 @@
 import json
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from playhouse.shortcuts import model_to_dict
+from passlib.hash import pbkdf2_sha256 as pbkdf2
 
 from agent.job import JobModel
 from agent.server import Server
 
 application = Flask(__name__)
+
+
+@application.before_request
+def validate_access_token():
+    try:
+        if application.debug:
+            return
+        method, access_token = request.headers["Authorization"].split(" ")
+        stored_hash = Server.config["access_token"]
+        if method.lower() == "bearer" and pbkdf2.verify(
+            access_token, stored_hash
+        ):
+            return
+        return Response("Unauthenticated", 401)
+    except Exception:
+        return Response("Bad Request", 400)
+
+
+@application.route("/authentication", methods=["POST"])
+def reset_authentication_token():
+    data = request.json
+    Server().setup_authentication(data["token"])
+    return jsonify({"message": "Success"})
 
 
 """
