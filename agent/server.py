@@ -4,14 +4,39 @@ from jinja2 import Environment, PackageLoader
 
 from agent.base import Base
 from agent.job import Job, Step
+from agent.bench import Bench
 
 
 class Server(Base):
     def __init__(self, directory=None):
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
+        self.name = self.config["name"]
+        self.benches_directory = self.config["benches_directory"]
+
         self.job = None
         self.step = None
+
+    @step("Initialize Bench")
+    def bench_init(self, name, python, repo, branch):
+        self.execute(
+            f"bench init --frappe-branch {branch} --frappe-path {repo} "
+            f"--python {python} {name} --no-backups",
+            directory=self.benches_directory,
+        )
+
+    @job("New Bench")
+    def new_bench(self, name, python, config, apps):
+        frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
+        self.bench_init(name, python, frappe["repo"], frappe["branch"])
+        bench = Bench(name, self)
+        bench.setconfig(config)
+        bench.setup_redis()
+        bench.reset_apps(apps)
+        bench.setup_requirements()
+        bench.build()
+        bench.setup_production()
+        return bench
 
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)
@@ -24,6 +49,15 @@ class Server(Base):
         self._generate_supervisor_config()
         self._update_supervisor()
 
+    @property
+    def benches(self):
+        benches = {}
+        for directory in os.listdir(self.benches_directory):
+            try:
+                benches[directory] = Bench(directory, self)
+            except Exception:
+                pass
+        return benches
 
     @property
     def job_record(self):
