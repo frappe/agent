@@ -1,4 +1,10 @@
+import datetime
 import json
+import traceback
+
+import wrapt
+from redis import Redis
+from rq import Queue, get_current_job
 from peewee import (
     SqliteDatabase,
     Model,
@@ -9,8 +15,17 @@ from peewee import (
     ForeignKeyField,
 )
 
+from agent.base import AgentException
+
 agent_database = SqliteDatabase("jobs.sqlite3")
 
+
+def connection():
+    return Redis(port=11111)
+
+
+def queue():
+    return Queue(connection=connection())
 
 
 @wrapt.decorator
@@ -68,6 +83,56 @@ class Job(Action):
             sort_keys=True,
             indent=4,
         )
+
+
+def step(name):
+    @wrapt.decorator
+    def wrapper(wrapped, instance, args, kwargs):
+        instance.step_record.start(name, instance.job_record.model.id)
+        try:
+            result = wrapped(*args, **kwargs)
+        except AgentException as e:
+            instance.step_record.failure(e.data)
+            raise e
+        except Exception as e:
+            instance.step_record.failure(
+                {"traceback": "".join(traceback.format_exc())}
+            )
+            raise e
+        else:
+            instance.step_record.success(result)
+        return result
+
+    return wrapper
+
+
+def job(name):
+    @wrapt.decorator
+    def wrapper(wrapped, instance, args, kwargs):
+        if get_current_job(connection=connection()):
+            instance.job_record.start()
+            try:
+                result = wrapped(*args, **kwargs)
+            except AgentException as e:
+                instance.job_record.failure(e.data)
+                raise e
+            except Exception as e:
+                instance.job_record.failure(
+                    {"traceback": "".join(traceback.format_exc())}
+                )
+                raise e
+            else:
+                instance.job_record.success(result)
+            return result
+        else:
+            instance.job_record.enqueue(name, wrapped, args, kwargs)
+            queue().enqueue_call(
+                wrapped, args=args, kwargs=kwargs, timeout=3600, result_ttl=-1
+            )
+            return instance.job_record.model.id
+
+    return wrapper
+
 
 class JobModel(Model):
     name = CharField()
