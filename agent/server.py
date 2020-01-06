@@ -3,7 +3,7 @@ import os
 from jinja2 import Environment, PackageLoader
 
 from agent.base import Base
-from agent.job import Job, Step
+from agent.job import Job, Step, step, job
 from agent.bench import Bench
 
 
