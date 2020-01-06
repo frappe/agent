@@ -78,6 +78,10 @@ class Bench(Base):
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=1, sort_keys=True)
 
+    @job("Update Bench Configuration")
+    def setconfig_job(self, value):
+        self.setconfig(value)
+
     @property
     def job_record(self):
         return self.server.job_record

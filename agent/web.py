@@ -57,8 +57,11 @@ def new_bench():
     return {"job": job}
 
 
-app = Flask(__name__)
-app.debug = True
+@application.route("/benches/<string:bench>/config", methods=["POST"])
+def bench_set_config(bench):
+    data = request.json
+    job = Server().benches[bench].setconfig_job(data)
+    return {"job": job}
 
 
 def to_dict(model):
