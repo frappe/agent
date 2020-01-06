@@ -1,5 +1,7 @@
 import json
 import subprocess
+import traceback
+from datetime import datetime
 
 
 class Base:
@@ -13,6 +15,8 @@ class Base:
 
     def execute(self, command, directory=None):
         directory = directory or self.directory
+        start = datetime.now()
+        data = {"command": command, "directory": directory, "start": start}
         try:
             process = subprocess.run(
                 command,
@@ -22,9 +26,27 @@ class Base:
                 cwd=directory,
                 shell=True,
             )
-            return process.stdout.decode().strip()
         except subprocess.CalledProcessError as e:
-            raise e
+            end = datetime.now()
+            data.update({"duration": end - start, "end": end})
+            data.update(
+                {
+                    "output": e.output.decode().strip(),
+                    "returncode": e.returncode,
+                    "traceback": "".join(traceback.format_exc()),
+                }
+            )
+            raise AgentException(data)
+
+        end = datetime.now()
+        data.update(
+            {
+                "duration": end - start,
+                "end": end,
+                "output": process.stdout.decode().strip(),
+            }
+        )
+        return data
 
     @property
     def config(self):
