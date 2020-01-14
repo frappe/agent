@@ -37,7 +37,6 @@ class Server(Base):
         bench.setup_requirements()
         bench.build()
         bench.setup_production()
-        return bench
 
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)
