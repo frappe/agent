@@ -42,6 +42,10 @@ class Server(Base):
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)
 
+    @step("Reload NGINX")
+    def reload_nginx(self):
+        return self.execute(f"sudo service nginx reload")
+
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)

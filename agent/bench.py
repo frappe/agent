@@ -33,6 +33,26 @@ class Bench(Base):
     def execute(self, command):
         return super().execute(command, directory=self.directory)
 
+    @step("New Site")
+    def bench_new_site(self, name, mariadb_root_password, admin_password):
+        return self.execute(
+            f"bench new-site "
+            f"--admin-password {admin_password} "
+            f"--mariadb-root-password {mariadb_root_password} "
+            f"{name}"
+        )
+
+    @job("New Site")
+    def new_site(
+        self, name, config, apps, mariadb_root_password, admin_password
+    ):
+        self.bench_new_site(name, mariadb_root_password, admin_password)
+        site = Site(name, self)
+        site.install_apps(apps)
+        site.update_config(config)
+        self.setup_nginx()
+        self.server.reload_nginx()
+
     @step("Bench Reset Apps")
     def reset_apps(self, apps):
         for app in apps:
@@ -46,6 +66,10 @@ class Bench(Base):
                 self.execute(f"get-app --branch {branch} {repo} {name}")
             self.apps[name].reset(hash)
         return
+
+    @step("Bench Setup NGINX")
+    def setup_nginx(self):
+        return self.execute(f"bench setup nginx --yes")
 
     @step("Bench Setup Production")
     def setup_production(self):

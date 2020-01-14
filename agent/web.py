@@ -81,6 +81,38 @@ def new_bench():
     return {"job": job}
 
 
+"""
+POST /benches/bench-1/sites
+{
+    "name": "test.frappe.cloud",
+    "mariadb_root_password": "root",
+    "admin_password": "admin",
+    "apps": ["frappe", "press"],
+    "config": {
+        "monitor": 1,
+    }
+}
+
+"""
+
+
+@application.route("/benches/<string:bench>/sites", methods=["POST"])
+def new_site(bench):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .new_site(
+            data["name"],
+            data["config"],
+            data["apps"],
+            data["mariadb_root_password"],
+            data["admin_password"],
+        )
+    )
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json
