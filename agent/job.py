@@ -21,7 +21,10 @@ agent_database = SqliteDatabase("jobs.sqlite3")
 
 
 def connection():
-    return Redis(port=11111)
+    from agent.server import Server
+
+    port = Server().config["redis_port"]
+    return Redis(port=port)
 
 
 def queue():
