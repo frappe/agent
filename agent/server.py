@@ -18,7 +18,7 @@ class Server(Base):
         self.job = None
         self.step = None
 
-    @step("Initialize Bench")
+    @step("Bench Initialize")
     def bench_init(self, name, python, repo, branch):
         self.execute(
             f"bench init --frappe-branch {branch} --frappe-path {repo} "
