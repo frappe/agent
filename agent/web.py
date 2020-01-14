@@ -92,18 +92,8 @@ def to_dict(model):
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         job["data"] = json.loads(job["data"]) or {}
-        if "output" in job["data"]:
-            job["data"]["output"] = job["data"]["output"].split("\n")
-        if "traceback" in job["data"]:
-            job["data"]["traceback"] = job["data"]["traceback"].split("\n")
         for step in job["steps"]:
             step["data"] = json.loads(step["data"]) or {}
-            if "output" in step["data"]:
-                step["data"]["output"] = step["data"]["output"].split("\n")
-            if "traceback" in step["data"]:
-                step["data"]["traceback"] = step["data"]["traceback"].split(
-                    "\n"
-                )
     else:
         job = list(map(model_to_dict, model))
     return job
