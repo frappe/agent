@@ -21,13 +21,13 @@ class Proxy(Server):
         self.job = None
         self.step = None
 
-    @job("Add Upstream to Proxy")
+    @job("Add Host to Proxy")
     def add_host_job(self, host):
         self.add_host(host)
         self.generate_hosts_config()
         self.reload_nginx()
 
-    @step("Add Host to Proxy")
+    @step("Add Host File")
     def add_host(self, host):
         if not os.path.exists(self.hosts_directory):
             os.mkdir(self.hosts_directory)
@@ -40,7 +40,7 @@ class Proxy(Server):
         self.generate_upstream_map()
         self.reload_nginx()
 
-    @step("Add Site to Upstream")
+    @step("Add Site File to Upstream Directory")
     def add_site_to_upstream(self, upstream, site):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
@@ -52,7 +52,7 @@ class Proxy(Server):
         self.generate_upstream_list()
         self.reload_nginx()
 
-    @step("Add Upstream to Proxy")
+    @step("Add Upstream Directory")
     def add_upstream(self, upstream):
         if not os.path.exists(self.upstreams_directory):
             os.mkdir(self.upstreams_directory)
@@ -65,7 +65,7 @@ class Proxy(Server):
         self.generate_upstream_map()
         self.reload_nginx()
 
-    @step("Remove Site from Upstream")
+    @step("Remove Site File from Upstream Directory")
     def remove_site_from_upstream(self, upstream, site):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
