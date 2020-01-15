@@ -5,6 +5,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 
 from agent.job import JobModel
 from agent.server import Server
+from agent.proxy import Proxy
 
 application = Flask(__name__)
 
@@ -117,6 +118,38 @@ def new_site(bench):
 def bench_set_config(bench):
     data = request.json
     job = Server().benches[bench].setconfig_job(data)
+    return {"job": job}
+
+
+@application.route("/proxy/hosts", methods=["POST"])
+def proxy_add_host():
+    data = request.json
+    job = Proxy().add_host_job(data["name"])
+    return {"job": job}
+
+
+@application.route("/proxy/upstreams", methods=["POST"])
+def proxy_add_upstream():
+    data = request.json
+    job = Proxy().add_upstream_job(data["name"])
+    return {"job": job}
+
+
+@application.route(
+    "/proxy/upstreams/<string:upstream>/sites", methods=["POST"]
+)
+def proxy_add_upstream_site(upstream):
+    data = request.json
+    job = Proxy().add_site_to_upstream_job(upstream, data["name"])
+    return {"job": job}
+
+
+@application.route(
+    "/proxy/upstreams/<string:upstream>/sites/<string:site>",
+    methods=["DELETE"],
+)
+def proxy_remove_upstream_site(upstream, site):
+    job = Proxy().remove_site_from_upstream_job(upstream, site)
     return {"job": job}
 
 

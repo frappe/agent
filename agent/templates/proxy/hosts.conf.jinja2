@@ -1,0 +1,64 @@
+{% macro locations() %}
+	location /assets/ {
+		proxy_pass                 $upstream_server_hash;
+		proxy_set_header           Host $host;
+		proxy_set_header           X-Real-IP $remote_addr;
+		proxy_set_header           X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header           X-Forwarded-Proto $scheme;
+		proxy_http_version         1.1;
+		proxy_set_header           Connection "";
+		proxy_cache                proxy_cache_zone;
+		proxy_cache_valid          200 302 2m;
+		proxy_cache_valid          404 1m;
+		proxy_cache_bypass         $http_secret_cache_purge;
+		add_header                 X-Proxy-Upstream $upstream_server_hash;
+		add_header                 X-Proxy-Cache $upstream_cache_status;
+	}
+
+	location /socket.io {
+		proxy_pass                 $upstream_server_hash;
+		proxy_http_version         1.1;
+		proxy_set_header           Upgrade $http_upgrade;
+		proxy_set_header           Connection "upgrade";
+		proxy_set_header           Host $host;
+		proxy_set_header           X-Real-IP $remote_addr;
+		proxy_set_header           X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header           X-Forwarded-Proto $scheme;
+		add_header                 X-Proxy-Upstream $upstream_server_hash;
+	}
+
+	location / {
+		add_header                 Access-Control-Allow-Origin 'http://{{ host }}' always;
+		add_header                 Access-Control-Allow-Headers "Origin, Content-Type, Accept" always;
+		add_header                 Access-Control-Allow-Credentials true;
+		add_header                 Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+		proxy_pass                 $upstream_server_hash;
+		proxy_http_version         1.1;
+		proxy_set_header           Host $host;
+		proxy_set_header           X-Real-IP $remote_addr;
+		proxy_set_header           X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header           X-Forwarded-Proto $scheme;
+		proxy_set_header           Connection "";
+		proxy_read_timeout         120;
+		proxy_buffering            off;
+		proxy_buffer_size          128k;
+		proxy_buffers              100 128k;
+		add_header                 X-Proxy-Upstream $upstream_server_hash;
+	}
+{% endmacro %}
+
+include                    "/etc/nginx/conf.d/upstreams.list";
+include                    "/etc/nginx/conf.d/upstreams.map";
+
+{% for host in hosts %}
+server {
+	listen                     80 default;
+	server_name                .{{ host }};
+
+	client_max_body_size       50m;
+	client_body_buffer_size    16K;
+	client_header_buffer_size  1k;
+
+	{{ locations() }}
+}
+{% endfor %}

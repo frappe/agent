@@ -18,6 +18,7 @@ def setup():
 def config():
     config = {
         "benches_directory": "/home/frappe/benches",
+        "proxy_base_directory": "/home/frappe/nginx",
         "name": "x.frappe.cloud",
         "redis_port": 25025,
         "workers": 2,
