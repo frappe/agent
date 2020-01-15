@@ -83,13 +83,15 @@ class Server(Base):
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self._render_template(
-            "nginx.jinja", {"web_port": self.config["web_port"]}, nginx_config,
+            "agent/nginx.conf.jinja2",
+            {"web_port": self.config["web_port"]},
+            nginx_config,
         )
 
     def _generate_supervisor_config(self):
         supervisor_config = os.path.join(self.directory, "supervisor.conf")
         self._render_template(
-            "supervisor.jinja",
+            "agent/supervisor.conf.jinja2",
             {
                 "web_port": self.config["web_port"],
                 "redis_port": self.config["redis_port"],
