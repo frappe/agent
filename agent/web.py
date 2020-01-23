@@ -224,5 +224,5 @@ def jobs(id=None, status=None):
 
 @application.route("/update", methods=["POST"])
 def update_agent():
-    Server().update_agent()
+    Server().update_agent_web()
     return {"message": "Success"}

@@ -90,7 +90,7 @@ class Server(Base):
             self.step = Step()
         return self.step
 
-    def update_agent(self):
+    def update_agent_web(self):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
@@ -107,6 +107,22 @@ class Server(Base):
 
         # Kill yourself. Supervisor will restart agent:agent-web
         exit(0)
+
+    def update_agent_cli(self):
+        directory = os.path.join(self.directory, "repo")
+        self.execute("git reset --hard", directory=directory)
+        self.execute("git clean -fd", directory=directory)
+        self.execute("git fetch upstream", directory=directory)
+        self.execute("git merge --ff-only upstream/master", directory=directory)
+
+        self.execute("./env/bin/pip install -e repo", directory=self.directory)
+
+        self.execute("sudo supervisorctl restart agent:")
+        self._generate_supervisor_config()
+        self._update_supervisor()  
+
+        self._generate_nginx_config()
+        self._reload_nginx()
 
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.directory, "nginx.conf")
