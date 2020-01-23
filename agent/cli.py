@@ -43,4 +43,3 @@ def supervisor():
 @setup.command()
 def nginx():
     Server().setup_nginx()
-
