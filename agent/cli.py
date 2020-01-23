@@ -44,7 +44,3 @@ def supervisor():
 def nginx():
     Server().setup_nginx()
 
-@setup.command()
-def ssl():
-    Server().setup_ssl()
-    
