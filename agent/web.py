@@ -73,6 +73,11 @@ POST /benches
 """
 
 
+@application.route("/ping", methods=["GET"])
+def ping():
+    return {"message": "pong"}
+
+
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json
