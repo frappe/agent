@@ -62,7 +62,6 @@ class Server(Base):
     def setup_nginx(self):
         self._generate_nginx_config()
         self._reload_nginx()
-        self._obtain_ssl_certificate()
 
     def setup_supervisor(self):
         self._generate_supervisor_config()
@@ -147,12 +146,6 @@ class Server(Base):
 
     def _reload_nginx(self):
         self.execute("sudo systemctl reload nginx")
-
-    def _obtain_ssl_certificate(self):
-        self.execute(
-            f"sudo certbot --nginx --domains {self.name} "
-            f"--email aditya@erpnext.com --agree-tos --no-redirect"
-        )
 
     def _render_template(self, template, context, outfile):
         environment = Environment(loader=PackageLoader("agent", "templates"))
