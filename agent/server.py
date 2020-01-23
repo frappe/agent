@@ -51,7 +51,11 @@ class Server(Base):
         self.setconfig(config)
 
     def setup_nginx(self):
-        self._generate_nginx_config()
+        self._generate_nginx_http_config()
+        self._reload_nginx()
+
+    def setup_ssl(self):
+        self._generate_nginx_https_config()
         self._reload_nginx()
 
     def setup_supervisor(self):
@@ -80,11 +84,19 @@ class Server(Base):
             self.step = Step()
         return self.step
 
-    def _generate_nginx_config(self):
+    def _generate_nginx_https_config(self):
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self._render_template(
             "agent/nginx.conf.jinja2",
-            {"web_port": self.config["web_port"]},
+            {"web_port": self.config["web_port"], "name": self.name},
+            nginx_config,
+        )
+
+    def _generate_nginx_http_config(self):
+        nginx_config = os.path.join(self.directory, "nginx.conf")
+        self._render_template(
+            "agent/nginx_http.conf.jinja2",
+            {"name": self.name},
             nginx_config,
         )
 
