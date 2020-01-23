@@ -78,6 +78,41 @@ def ping():
     return {"message": "pong"}
 
 
+@application.route("/server", methods=["GET"])
+def get_server():
+    return Server().dump()
+
+
+@application.route("/benches", methods=["GET"])
+def get_benches():
+    return {name: bench.dump() for name, bench in Server().benches.items()}
+
+
+@application.route("/benches/<string:bench>", methods=["GET"])
+def get_bench(bench):
+    return Server().benches[bench].dump()
+
+
+@application.route("/benches/<string:bench>/sites", methods=["GET"])
+def get_sites(bench):
+    return {name: site.dump() for name, site in Server().benches[bench].sites.items()}
+
+
+@application.route("/benches/<string:bench>/apps", methods=["GET"])
+def get_apps(bench):
+    return {name: site.dump() for name, site in Server().benches[bench].apps.items()}
+
+
+@application.route("/benches/<string:bench>/config", methods=["GET"])
+def get_config(bench):
+    return Server().benches[bench].config
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>", methods=["GET"])
+def get_site(bench, site):
+    return Server().benches[bench].sites[site].dump()
+
+
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json

@@ -11,6 +11,9 @@ class App(Base):
             raise Exception
         self.execute("git rev-parse --is-inside-work-tree")
 
+    def dump(self):
+        return {"name": self.name}
+
     def execute(self, command):
         return super().execute(command, directory=self.directory)
 

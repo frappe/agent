@@ -18,6 +18,9 @@ class Site(Base):
     def bench_execute(self, command):
         return self.bench.execute(f"bench --site {self.name} {command}")
 
+    def dump(self):
+        return {"name": self.name}
+
     @step("Install Apps")
     def install_apps(self, apps):
         for app in apps:

@@ -30,6 +30,14 @@ class Bench(Base):
     def build(self):
         return self.execute("bench build")
 
+    def dump(self):
+        return {
+            "name": self.name,
+            "apps": {name: app.dump() for name, app in self.apps.items()},
+            "config": self.config,
+            "sites": {name: site.dump() for name, site in self.sites.items()},
+        }
+
     def execute(self, command):
         return super().execute(command, directory=self.directory)
 

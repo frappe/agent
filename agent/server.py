@@ -26,6 +26,15 @@ class Server(Base):
             directory=self.benches_directory,
         )
 
+    def dump(self):
+        return {
+            "name": self.name,
+            "benches": {
+                name: bench.dump() for name, bench in self.benches.items()
+            },
+            "config": self.config,
+        }
+
     @job("New Bench")
     def new_bench(self, name, python, config, apps):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
@@ -106,8 +115,10 @@ class Server(Base):
         self.execute("sudo systemctl reload nginx")
 
     def _obtain_ssl_certificate(self):
-        self.execute(f"sudo certbot --nginx --domains {self.name} "
-        f"--email aditya@erpnext.com --agree-tos --no-redirect")
+        self.execute(
+            f"sudo certbot --nginx --domains {self.name} "
+            f"--email aditya@erpnext.com --agree-tos --no-redirect"
+        )
 
     def _render_template(self, template, context, outfile):
         environment = Environment(loader=PackageLoader("agent", "templates"))
