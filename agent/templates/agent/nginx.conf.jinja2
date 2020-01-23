@@ -12,6 +12,6 @@ server {
 	ssl_prefer_server_ciphers   off;
 
 	location /agent {
-		proxy_pass                 http://127.0.0.1:{{ web_port }};
+		proxy_pass                 http://127.0.0.1:{{ web_port }}/;
 	}
 }
