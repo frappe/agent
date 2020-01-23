@@ -15,13 +15,15 @@ def setup():
 
 
 @setup.command()
-def config():
+@click.option("--name", required=True)
+@click.option("--workers", required=True, type=int)
+def config(name, workers):
     config = {
         "benches_directory": "/home/frappe/benches",
         "proxy_base_directory": "/home/frappe/nginx",
-        "name": "x.frappe.cloud",
+        "name": name,
         "redis_port": 25025,
-        "workers": 2,
+        "workers": workers,
         "web_port": 25052,
     }
     json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)
