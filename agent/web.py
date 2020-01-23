@@ -220,3 +220,9 @@ def jobs(id=None, status=None):
             )
         )
     return jsonify(json.loads(json.dumps(job, default=str)))
+
+
+@application.route("/update", methods=["POST"])
+def update_agent():
+    Server().update_agent()
+    return {"message": "Success"}

@@ -90,6 +90,23 @@ class Server(Base):
             self.step = Step()
         return self.step
 
+    def update_agent(self):
+        directory = os.path.join(self.directory, "repo")
+        self.execute("git reset --hard", directory=directory)
+        self.execute("git fetch upstream", directory=directory)
+        self.execute("git merge --ff-only upstream/master", directory=directory)
+        self.execute("sudo supervisorctl restart agent:web")
+
+        # TODO: Handle jobs lost because of this. Nobody likes unemployment
+        self.execute("sudo supervisorctl restart agent:redis")
+
+        for worker in range(self.config["workers"]):
+            worker_name = f"agent:worker-{worker}"
+            self.execute(f"sudo supervisorctl restart {worker_name}")
+
+        # Kill yourself. Supervisor will restart agent:agent-web
+        exit(0)
+
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self._render_template(
