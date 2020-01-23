@@ -16,7 +16,7 @@ def validate_access_token():
         if application.debug:
             return
         method, access_token = request.headers["Authorization"].split(" ")
-        stored_hash = Server.config["access_token"]
+        stored_hash = Server().config["access_token"]
         if method.lower() == "bearer" and pbkdf2.verify(
             access_token, stored_hash
         ):
