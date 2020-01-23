@@ -1,0 +1,36 @@
+language: python
+dist: bionic
+sudo: required
+
+git:
+  depth: 1
+
+python:
+  - 3.7
+
+addons:
+  apt:
+    packages:
+    - nginx
+    - supervisor
+
+hosts:
+  - x.frappe.cloud
+
+matrix:
+  include:
+  - name: Agent Setup
+    script:
+      - cd ~/agent
+      - agent setup config
+      - agent setup nginx
+      - agent setup supervisor
+      - agent setup production
+
+install:
+  - mkdir ~/agent
+  - cd ~/agent
+  - virtualenv -p python3 env
+  - cp -R $TRAVIS_BUILD_DIR repo
+  - source ~/agent/env/bin/activate
+  - pip install -e ~/agent/repo
