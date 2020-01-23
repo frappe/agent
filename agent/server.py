@@ -93,6 +93,7 @@ class Server(Base):
     def update_agent(self):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
+        self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
         self.execute("git merge --ff-only upstream/master", directory=directory)
         self.execute("sudo supervisorctl restart agent:web")
