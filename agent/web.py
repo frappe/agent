@@ -1,5 +1,5 @@
 import json
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 

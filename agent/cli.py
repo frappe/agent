@@ -47,6 +47,7 @@ def nginx():
 
 @setup.command()
 def database():
-    from agent.job import  agent_database as database
-    from agent.job import  JobModel, StepModel
+    from agent.job import agent_database as database
+    from agent.job import JobModel, StepModel
+
     database.create_tables([JobModel, StepModel])
