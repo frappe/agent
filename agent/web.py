@@ -73,42 +73,44 @@ POST /benches
 """
 
 
-@application.route("/ping", methods=["GET"])
+@application.route("/ping")
 def ping():
     return {"message": "pong"}
 
 
-@application.route("/server", methods=["GET"])
+@application.route("/server")
 def get_server():
     return Server().dump()
 
 
-@application.route("/benches", methods=["GET"])
+@application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}
 
 
-@application.route("/benches/<string:bench>", methods=["GET"])
+@application.route("/benches/<string:bench>")
 def get_bench(bench):
     return Server().benches[bench].dump()
 
 
-@application.route("/benches/<string:bench>/sites", methods=["GET"])
+@application.route("/benches/<string:bench>/sites")
 def get_sites(bench):
-    return {name: site.dump() for name, site in Server().benches[bench].sites.items()}
+    sites = Server().benches[bench].sites
+    return {name: site.dump() for name, site in sites.items()}
 
 
-@application.route("/benches/<string:bench>/apps", methods=["GET"])
+@application.route("/benches/<string:bench>/apps")
 def get_apps(bench):
-    return {name: site.dump() for name, site in Server().benches[bench].apps.items()}
+    apps = Server().benches[bench].apps
+    return {name: site.dump() for name, site in apps.items()}
 
 
-@application.route("/benches/<string:bench>/config", methods=["GET"])
+@application.route("/benches/<string:bench>/config")
 def get_config(bench):
     return Server().benches[bench].config
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>", methods=["GET"])
+@application.route("/benches/<string:bench>/sites/<string:site>")
 def get_site(bench, site):
     return Server().benches[bench].sites[site].dump()
 
