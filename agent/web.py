@@ -21,9 +21,9 @@ def validate_access_token():
             access_token, stored_hash
         ):
             return
-        return Response("Unauthenticated", 401)
+        return jsonify({"message": "Unauthenticated"}), 401
     except Exception:
-        return Response("Bad Request", 400)
+        return jsonify({"message": "Bad Request"}), 400
 
 
 @application.route("/authentication", methods=["POST"])
