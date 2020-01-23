@@ -173,7 +173,3 @@ class StepModel(Model):
 
     class Meta:
         database = agent_database
-
-
-def migrate():
-    agent_database.create_tables([JobModel, StepModel])

@@ -43,3 +43,10 @@ def supervisor():
 @setup.command()
 def nginx():
     Server().setup_nginx()
+
+
+@setup.command()
+def migrate():
+    from agent.job import  agent_database as database
+    from agent.job import  JobModel, StepModel
+    database.create_tables([JobModel, StepModel])
