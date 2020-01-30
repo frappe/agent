@@ -20,7 +20,7 @@ class Server(Base):
 
     @step("Bench Initialize")
     def bench_init(self, name, python, repo, branch):
-        self.execute(
+        return self.execute(
             f"bench init --frappe-branch {branch} --frappe-path {repo} "
             f"--python {python} {name} --no-backups",
             directory=self.benches_directory,
