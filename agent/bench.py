@@ -85,7 +85,7 @@ class Bench(Base):
     @step("Bench Setup Production")
     def setup_production(self):
         user = self.config["frappe_user"]
-        return self.execute(f"bench setup production --yes {user}")
+        return self.execute(f"sudo bench setup production {user} --yes")
 
     @step("Bench Setup Redis")
     def setup_redis(self):
