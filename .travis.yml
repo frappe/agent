@@ -13,9 +13,8 @@ addons:
     packages:
     - nginx
     - supervisor
-
-hosts:
-  - test.frappe.agent
+  hosts:
+    - test.frappe.agent
 
 jobs:
   include:
