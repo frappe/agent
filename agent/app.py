@@ -26,7 +26,7 @@ class App(Base):
 
     @property
     def remote(self):
-        remotes = self.execute("git remote").split("\n")
+        remotes = self.execute("git remote")["output"].split("\n")
         if "upstream" in remotes:
             return "upstream"
         if "origin" in remotes:
