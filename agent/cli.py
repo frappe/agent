@@ -18,6 +18,7 @@ def setup():
 def update():
     Server().update_agent_cli()
 
+
 @setup.command()
 @click.option("--name", required=True)
 @click.option("--workers", required=True, type=int)

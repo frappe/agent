@@ -94,7 +94,9 @@ class Server(Base):
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
-        self.execute("git merge --ff-only upstream/master", directory=directory)
+        self.execute(
+            "git merge --ff-only upstream/master", directory=directory
+        )
 
         # TODO: Handle jobs lost because of this. Nobody likes unemployment
         self.execute("sudo supervisorctl restart agent:redis")
@@ -110,13 +112,15 @@ class Server(Base):
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
-        self.execute("git merge --ff-only upstream/master", directory=directory)
+        self.execute(
+            "git merge --ff-only upstream/master", directory=directory
+        )
 
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self.execute("sudo supervisorctl restart agent:")
         self._generate_supervisor_config()
-        self._update_supervisor()  
+        self._update_supervisor()
 
         self._generate_nginx_config()
         self._reload_nginx()
