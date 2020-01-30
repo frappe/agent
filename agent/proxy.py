@@ -73,7 +73,7 @@ class Proxy(Server):
 
     @step("Reload NGINX")
     def reload_nginx(self):
-        return self.execute("sudo service reload nginx")
+        return self.execute("sudo systemctl reload nginx")
 
     @step("Generate NGINX Root Configuration")
     def generate_nginx_root_config(self):

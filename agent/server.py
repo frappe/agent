@@ -52,7 +52,7 @@ class Server(Base):
 
     @step("Reload NGINX")
     def reload_nginx(self):
-        return self.execute(f"sudo service nginx reload")
+        return self.execute(f"sudo systemctl reload nginx")
 
     def setup_authentication(self, password):
         config = self.config
