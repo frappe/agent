@@ -1,6 +1,6 @@
+os: linux
 language: python
 dist: bionic
-sudo: required
 
 git:
   depth: 1
@@ -17,15 +17,15 @@ addons:
 hosts:
   - x.frappe.cloud
 
-matrix:
+jobs:
   include:
   - name: Agent Setup
     script:
       - cd ~/agent
-      - agent setup config
-      - agent setup nginx
+      - agent setup config --name test.frappe.agent --workers 1
+      - agent setup authentication --password password
       - agent setup supervisor
-      - agent setup production
+      - agent setup nginx
 
 install:
   - mkdir ~/agent
@@ -34,3 +34,5 @@ install:
   - cp -R $TRAVIS_BUILD_DIR repo
   - source ~/agent/env/bin/activate
   - pip install -e ~/agent/repo
+  - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
+  - sudo ln -s /home/travis/agent/nginx.conf /etc/nginx/conf.d/agent.conf
