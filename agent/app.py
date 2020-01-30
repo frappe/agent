@@ -18,4 +18,16 @@ class App(Base):
         return super().execute(command, directory=self.directory)
 
     def reset(self, abbreviation="HEAD"):
-        return self.execute(f"git reset {abbreviation}")
+        return self.execute(f"git reset --hard {abbreviation}")
+
+    def fetch(self):
+        self.execute(f"git fetch {self.remote}")
+
+    @property
+    def remote(self):
+        remotes = self.execute("git remote").split("\n")
+        if "upstream" in remotes:
+            return "upstream"
+        if "origin" in remotes:
+            return "origin"
+        raise Exception(f"Invalid remote for {self.directory}")
