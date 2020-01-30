@@ -95,7 +95,6 @@ class Server(Base):
         self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
         self.execute("git merge --ff-only upstream/master", directory=directory)
-        self.execute("sudo supervisorctl restart agent:web")
 
         # TODO: Handle jobs lost because of this. Nobody likes unemployment
         self.execute("sudo supervisorctl restart agent:redis")
@@ -104,8 +103,7 @@ class Server(Base):
             worker_name = f"agent:worker-{worker}"
             self.execute(f"sudo supervisorctl restart {worker_name}")
 
-        # Kill yourself. Supervisor will restart agent:agent-web
-        exit(0)
+        self.execute("sudo supervisorctl restart agent:web")
 
     def update_agent_cli(self):
         directory = os.path.join(self.directory, "repo")

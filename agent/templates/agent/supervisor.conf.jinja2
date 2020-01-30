@@ -1,4 +1,4 @@
-[program:agent-web]
+[program:web]
 command={{ directory }}/env/bin/gunicorn -b :{{ web_port }} agent.web:application
 environment=PYTHONUNBUFFERED=1
 autostart=true
@@ -8,7 +8,7 @@ stderr_logfile={{ directory }}/logs/web.error.log
 user=frappe
 directory={{ directory }}
 
-[program:agent-redis]
+[program:redis]
 command=redis-server --port {{ redis_port }}
 autostart=true
 autorestart=true
@@ -17,7 +17,7 @@ stderr_logfile={{ directory }}/logs/redis.error.log
 user=frappe
 directory={{ directory }}
 
-[program:agent-worker]
+[program:worker]
 command={{ directory }}/env/bin/rq worker --url redis://127.0.0.1:{{ redis_port }}
 environment=PYTHONUNBUFFERED=1
 autostart=true
@@ -32,4 +32,4 @@ user=frappe
 directory={{ directory }}
 
 [group:agent]
-programs=agent-web, agent-redis, agent-worker
+programs=web, redis, worker
