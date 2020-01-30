@@ -15,24 +15,29 @@ addons:
     - supervisor
 
 hosts:
-  - x.frappe.cloud
+  - test.frappe.agent
 
 jobs:
   include:
   - name: Agent Setup
     script:
       - cd ~/agent
-      - agent setup config --name test.frappe.agent --workers 1
+      - agent setup config --name test.frappe.agent --user travis --workers 1
       - agent setup authentication --password password
       - agent setup supervisor
       - agent setup nginx
 
-install:
+before_install:
   - mkdir ~/agent
   - cd ~/agent
   - virtualenv -p python3 env
   - cp -R $TRAVIS_BUILD_DIR repo
   - source ~/agent/env/bin/activate
+  - pip install black flake8
+  - black -l 79 repo
+  - flake8 repo
+
+install:
   - pip install -e ~/agent/repo
   - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
   - sudo ln -s /home/travis/agent/nginx.conf /etc/nginx/conf.d/agent.conf

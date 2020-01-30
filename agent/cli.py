@@ -21,13 +21,15 @@ def update():
 
 @setup.command()
 @click.option("--name", required=True)
+@click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-def config(name, workers):
+def config(name, user, workers):
     config = {
-        "benches_directory": "/home/frappe/benches",
-        "proxy_base_directory": "/home/frappe/nginx",
+        "benches_directory": f"/home/{user}/benches",
+        "proxy_directory": f"/home/{user}/nginx",
         "name": name,
         "redis_port": 25025,
+        "user": user,
         "workers": workers,
         "web_port": 25052,
     }

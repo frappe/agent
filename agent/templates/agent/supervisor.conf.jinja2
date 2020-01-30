@@ -5,7 +5,7 @@ autostart=true
 autorestart=true
 stdout_logfile={{ directory }}/logs/web.log
 stderr_logfile={{ directory }}/logs/web.error.log
-user=frappe
+user={{ user }}
 directory={{ directory }}
 
 [program:redis]
@@ -14,7 +14,7 @@ autostart=true
 autorestart=true
 stdout_logfile={{ directory }}/logs/redis.log
 stderr_logfile={{ directory }}/logs/redis.error.log
-user=frappe
+user={{ user }}
 directory={{ directory }}
 
 [program:worker]
@@ -28,7 +28,7 @@ numprocs={{ workers }}
 process_name=%(program_name)s-%(process_num)d
 stdout_logfile={{ directory }}/logs/worker.log
 stderr_logfile={{ directory }}/logs/worker.error.log
-user=frappe
+user={{ user }}
 directory={{ directory }}
 
 [group:agent]

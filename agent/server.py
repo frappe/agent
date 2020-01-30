@@ -142,6 +142,7 @@ class Server(Base):
                 "redis_port": self.config["redis_port"],
                 "workers": self.config["workers"],
                 "directory": self.directory,
+                "user": self.config["user"],
             },
             supervisor_config,
         )
