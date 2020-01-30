@@ -72,7 +72,7 @@ class Bench(Base):
             )
             if name != "frappe":
                 self.execute(f"bench get-app --branch {branch} {repo} {name}")
-            self.apps[name].fetch()
+            self.apps[name].fetch(unshallow=True)
             self.apps[name].reset(hash)
         return
 

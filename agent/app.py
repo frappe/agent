@@ -20,8 +20,9 @@ class App(Base):
     def reset(self, abbreviation="HEAD"):
         return self.execute(f"git reset --hard {abbreviation}")
 
-    def fetch(self):
-        self.execute(f"git fetch {self.remote}")
+    def fetch(self, unshallow=False):
+        unshallow = "--unshallow" if unshallow else ""
+        self.execute(f"git fetch {self.remote} {unshallow}")
 
     @property
     def remote(self):
