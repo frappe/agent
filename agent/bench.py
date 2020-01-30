@@ -71,7 +71,7 @@ class Bench(Base):
                 app["hash"],
             )
             if name != "frappe":
-                self.execute(f"get-app --branch {branch} {repo} {name}")
+                self.execute(f"bench get-app --branch {branch} {repo} {name}")
             self.apps[name].reset(hash)
         return
 
