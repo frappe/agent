@@ -156,6 +156,14 @@ def new_site(bench):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"]
+)
+def backup_site(bench, site):
+    job = Server().benches[bench].sites[site].backup_job()
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json

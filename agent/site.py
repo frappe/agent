@@ -1,5 +1,5 @@
 from agent.base import Base
-from agent.job import step
+from agent.job import step, job
 import os
 import json
 
@@ -32,6 +32,14 @@ class Site(Base):
         new_config = self.config
         new_config.update(value)
         self.setconfig(new_config)
+
+    @step("Backup Site")
+    def backup(self):
+        return self.bench.execute(f"bench --site {self.name} backup")
+
+    @job("Backup Site")
+    def backup_job(self):
+        self.backup()
 
     def setconfig(self, value):
         with open(self.config_file, "w") as f:
