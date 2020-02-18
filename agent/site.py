@@ -27,7 +27,9 @@ class Site(Base):
         for app in apps:
             data["apps"][app] = {}
             if app != "frappe":
-                data["apps"][app]["install"] = self.bench_execute(f"install-app {app}")
+                data["apps"][app]["install"] = self.bench_execute(
+                    f"install-app {app}"
+                )
         return data
 
     @step("Site Update Configuration")

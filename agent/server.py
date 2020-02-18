@@ -21,12 +21,12 @@ class Server(Base):
     @step("Bench Initialize")
     def bench_init(self, name, python, repo, branch, clone):
         if clone:
-            # NOTE: Cloning seems incoherent for now. 
+            # NOTE: Cloning seems incoherent for now.
             # Unable to articulate the reasons as of now
             command = (
                 f"bench init --clone-from {clone} --clone-without-update "
                 f"--python {python} {name} --no-backups"
-            ) 
+            )
         else:
             command = (
                 f"bench init --frappe-branch {branch} --frappe-path {repo} "

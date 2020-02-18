@@ -22,7 +22,9 @@ class App(Base):
 
     def fetch(self):
         # Automatically unshallow repository while fetching
-        shallow = self.execute("git rev-parse --is-shallow-repository")["output"]
+        shallow = self.execute("git rev-parse --is-shallow-repository")[
+            "output"
+        ]
         unshallow = "--unshallow" if shallow == "true" else ""
         self.execute(f"git fetch {self.remote} {unshallow}")
 

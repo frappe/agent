@@ -78,7 +78,9 @@ class Bench(Base):
             name, branch, repo = app["name"], app["branch"], app["repo"]
             data["apps"][name] = {}
             if name not in self.apps:
-                data["apps"][name]["get"] = self.execute(f"bench get-app --branch {branch} {repo} {name}")
+                data["apps"][name]["get"] = self.execute(
+                    f"bench get-app --branch {branch} {repo} {name}"
+                )
         return data
 
     @step("Bench Setup NGINX")
