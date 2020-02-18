@@ -119,7 +119,11 @@ def get_site(bench, site):
 def new_bench():
     data = request.json
     job = Server().new_bench(
-        data["name"], data["python"], data["config"], data["apps"]
+        data["name"],
+        data["python"],
+        data["config"],
+        data["apps"],
+        data["clone"],
     )
     return {"job": job}
 

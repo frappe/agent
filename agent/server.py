@@ -19,12 +19,21 @@ class Server(Base):
         self.step = None
 
     @step("Bench Initialize")
-    def bench_init(self, name, python, repo, branch):
-        return self.execute(
-            f"bench init --frappe-branch {branch} --frappe-path {repo} "
-            f"--python {python} {name} --no-backups",
-            directory=self.benches_directory,
-        )
+    def bench_init(self, name, python, repo, branch, clone):
+        if clone:
+            # NOTE: Cloning seems incoherent for now. 
+            # Unable to articulate the reasons as of now
+            command = (
+                f"bench init --clone-from {clone} --clone-without-update "
+                f"--python {python} {name} --no-backups"
+            ) 
+        else:
+            command = (
+                f"bench init --frappe-branch {branch} --frappe-path {repo} "
+                f"--python {python} {name} --no-backups"
+            )
+
+        return self.execute(command, directory=self.benches_directory)
 
     def dump(self):
         return {
@@ -36,9 +45,9 @@ class Server(Base):
         }
 
     @job("New Bench")
-    def new_bench(self, name, python, config, apps):
+    def new_bench(self, name, python, config, apps, clone):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
-        self.bench_init(name, python, frappe["repo"], frappe["branch"])
+        self.bench_init(name, python, frappe["repo"], frappe["branch"], clone)
         bench = Bench(name, self)
         bench.setconfig(config)
         bench.setup_redis()
