@@ -23,9 +23,12 @@ class Site(Base):
 
     @step("Install Apps")
     def install_apps(self, apps):
+        data = {"apps": {}}
         for app in apps:
+            data["apps"][app] = {}
             if app != "frappe":
-                self.bench_execute(f"install-app {app}")
+                data["apps"][app]["install"] = self.bench_execute(f"install-app {app}")
+        return data
 
     @step("Site Update Configuration")
     def update_config(self, value):
