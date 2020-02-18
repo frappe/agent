@@ -63,20 +63,23 @@ class Bench(Base):
 
     @step("Bench Reset Apps")
     def reset_apps(self, apps):
+        data = {"apps": {}}
         for app in apps:
-            name, branch, repo, hash = (
-                app["name"],
-                app["branch"],
-                app["repo"],
-                app["hash"],
-            )
-            if name == "frappe":
-                self.apps[name].fetch(unshallow=True)
-            else:
-                self.execute(f"bench get-app --branch {branch} {repo} {name}")
-                self.apps[name].fetch()
-            self.apps[name].reset(hash)
-        return
+            name, hash = app["name"], app["hash"]
+            data["apps"][name] = {}
+            data["apps"][name]["fetch"] = self.apps[name].fetch()
+            data["apps"][name]["reset"] = self.apps[name].reset(hash)
+        return data
+
+    @step("Bench Get Apps")
+    def get_apps(self, apps):
+        data = {"apps": {}}
+        for app in apps:
+            name, branch, repo = app["name"], app["branch"], app["repo"]
+            data["apps"][name] = {}
+            if name not in self.apps:
+                data["apps"][name]["get"] = self.execute(f"bench get-app --branch {branch} {repo} {name}")
+        return data
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):

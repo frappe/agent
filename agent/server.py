@@ -51,6 +51,7 @@ class Server(Base):
         bench = Bench(name, self)
         bench.setconfig(config)
         bench.setup_redis()
+        bench.get_apps(apps)
         bench.reset_apps(apps)
         bench.setup_requirements()
         bench.build()

@@ -20,8 +20,10 @@ class App(Base):
     def reset(self, abbreviation="HEAD"):
         return self.execute(f"git reset --hard {abbreviation}")
 
-    def fetch(self, unshallow=False):
-        unshallow = "--unshallow" if unshallow else ""
+    def fetch(self):
+        # Automatically unshallow repository while fetching
+        shallow = self.execute("git rev-parse --is-shallow-repository")["output"]
+        unshallow = "--unshallow" if shallow == "true" else ""
         self.execute(f"git fetch {self.remote} {unshallow}")
 
     @property
