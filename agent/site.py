@@ -29,9 +29,7 @@ class Site(Base):
             data["apps"][app] = {}
             log = data["apps"][app]
             if app != "frappe":
-                log["install"] = self.bench_execute(
-                    f"install-app {app}"
-                )
+                log["install"] = self.bench_execute(f"install-app {app}")
                 output.append(log["install"]["output"])
         return data
 

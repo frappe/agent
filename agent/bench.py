@@ -65,7 +65,7 @@ class Bench(Base):
     def reset_apps(self, apps):
         data = {"apps": {}}
         output = []
-        
+
         for app in apps:
             name, hash = app["name"], app["hash"]
             data["apps"][name] = {}
@@ -75,7 +75,7 @@ class Bench(Base):
 
             output.append(log["fetch"]["output"])
             output.append(log["reset"]["output"])
-        
+
         data["output"] = "\n".join(output)
         return data
 
@@ -92,9 +92,9 @@ class Bench(Base):
                 log["get"] = self.execute(
                     f"bench get-app --branch {branch} {repo} {name}"
                 )
-        
+
                 output.append(log["get"]["output"])
-        
+
         data["output"] = "\n".join(output)
         return data
 
