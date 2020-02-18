@@ -26,7 +26,7 @@ class App(Base):
             "output"
         ]
         unshallow = "--unshallow" if shallow == "true" else ""
-        self.execute(f"git fetch {self.remote} {unshallow}")
+        return self.execute(f"git fetch {self.remote} {unshallow}")
 
     @property
     def remote(self):
