@@ -64,7 +64,7 @@ class Bench(Base):
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
         return self.execute(
-            f"bench drop-site {name}"
+            f"bench drop-site {name} "
             f"--root-password {mariadb_root_password} --no-backup"
         )
 
