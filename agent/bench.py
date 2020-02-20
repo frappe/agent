@@ -61,6 +61,19 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
+    @step("Archive Site")
+    def bench_archive_site(self, name, mariadb_root_password):
+        return self.execute(
+            f"bench drop-site {name}"
+            f"--root-password {mariadb_root_password} --no-backup"
+        )
+
+    @job("Archive Site")
+    def archive_site(self, name, mariadb_root_password):
+        self.bench_archive_site(name, mariadb_root_password)
+        self.setup_nginx()
+        self.server.reload_nginx()
+
     @step("Bench Reset Apps")
     def reset_apps(self, apps):
         data = {"apps": {}}
