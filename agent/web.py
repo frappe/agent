@@ -167,6 +167,14 @@ def backup_site(bench, site):
     job = Server().benches[bench].sites[site].backup_job()
     return {"job": job}
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/archive", methods=["POST"]
+)
+def archive_site(bench, site):
+    data = request.json
+    job = Server().benches[bench].archive_site(site, data["mariadb_root_password"])
+    return {"job": job}
+
 
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
