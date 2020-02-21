@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
@@ -6,6 +7,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 from agent.base import Base
 from agent.job import Job, Step, step, job
 from agent.bench import Bench
+from agent.site import Site
 
 
 class Server(Base):
@@ -56,6 +58,61 @@ class Server(Base):
         bench.setup_requirements()
         bench.build()
         bench.setup_production()
+
+    @job("Update Site Pull")
+    def update_site_pull_job(self, name, source, target):
+        source = Bench(source, self)
+        target = Bench(target, self)
+        site = Site(name, source)
+
+        site.enable_maintenance_mode()
+        site.wait_till_ready()
+
+        self.move_site(site, target)
+        site = Site(name, target)
+
+        site.disable_maintenance_mode()
+
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
+
+    @job("Update Site Migrate")
+    def update_site_migrate_job(self, name, source, target):
+        source = Bench(source, self)
+        target = Bench(target, self)
+        site = Site(name, source)
+
+        site.enable_maintenance_mode()
+        site.wait_till_ready()
+        site.clear_backup_directory()
+        site.tablewise_backup()
+
+        self.move_site(site, target)
+        site = Site(name, target)
+
+        site.migrate()
+        site.disable_maintenance_mode()
+
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
+
+    @job("Recover Failed Site Migration")
+    def update_site_recover_job(self, name, source, target):
+        source = Bench(source, self)
+        target = Bench(target, self)
+
+        site = Site(name, source)
+        self.move_site(site, target)
+        site = Site(name, target)
+
+        site.restore_touched_tables()
+        site.disable_maintenance_mode()
+
+    @step("Move Site")
+    def move_site(self, site, target):
+        return shutil.move(site.directory, target.sites_directory)
 
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)

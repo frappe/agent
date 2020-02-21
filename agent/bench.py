@@ -115,6 +115,10 @@ class Bench(Base):
     def setup_nginx(self):
         return self.execute(f"bench setup nginx --yes")
 
+    @step("Bench Setup NGINX Target")
+    def setup_nginx_target(self):
+        return self.execute(f"bench setup nginx --yes")
+
     @step("Bench Setup Production")
     def setup_production(self):
         user = self.config["frappe_user"]

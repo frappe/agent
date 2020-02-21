@@ -167,6 +167,36 @@ def backup_site(bench, site):
     job = Server().benches[bench].sites[site].backup_job()
     return {"job": job}
 
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/migrate",
+    methods=["POST"],
+)
+def update_site_migrate(bench, site):
+    data = request.json
+    job = Server().update_site_migrate_job(site, bench, data["target"])
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/pull", methods=["POST"]
+)
+def update_site_pull(bench, site):
+    data = request.json
+    job = Server().update_site_pull_job(site, bench, data["target"])
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/recover",
+    methods=["POST"],
+)
+def update_site_recover(bench, site):
+    data = request.json
+    job = Server().update_site_recover_job(site, bench, data["target"])
+    return {"job": job}
+
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/archive", methods=["POST"]
 )
