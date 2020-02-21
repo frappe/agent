@@ -172,7 +172,11 @@ def backup_site(bench, site):
 )
 def archive_site(bench, site):
     data = request.json
-    job = Server().benches[bench].archive_site(site, data["mariadb_root_password"])
+    job = (
+        Server()
+        .benches[bench]
+        .archive_site(site, data["mariadb_root_password"])
+    )
     return {"job": job}
 
 
