@@ -160,6 +160,11 @@ def new_site(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/monitor", methods=["POST"])
+def fetch_monitor_data(bench):
+    return Server().benches[bench].fetch_monitor_data()
+
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"]
 )

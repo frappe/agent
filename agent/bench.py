@@ -1,10 +1,11 @@
 import json
 import os
-
+import shutil
 from agent.app import App
 from agent.base import Base
 from agent.job import job, step
 from agent.site import Site
+from datetime import datetime
 
 
 class Bench(Base):
@@ -49,6 +50,27 @@ class Bench(Base):
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"
         )
+
+    def fetch_monitor_data(self):
+        try:
+            monitor_log_file = os.path.join(
+                self.directory, "logs", "monitor.json.log"
+            )
+            target_file = os.path.join(
+                self.server.directory,
+                "logs",
+                f"{self.name}-{datetime.now()}-monitor.json.log",
+            )
+            shutil.move(monitor_log_file, target_file)
+
+            with open(target_file) as f:
+                lines = f.readlines()
+            return lines
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+            return []
 
     @job("New Site")
     def new_site(
