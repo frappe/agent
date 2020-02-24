@@ -64,7 +64,7 @@ class Bench(Base):
             shutil.move(monitor_log_file, target_file)
 
             with open(target_file) as f:
-                lines = f.readlines()
+                lines = list(map(json.loads, f.readlines()))
             return lines
         except Exception:
             import traceback

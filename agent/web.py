@@ -162,7 +162,7 @@ def new_site(bench):
 
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 def fetch_monitor_data(bench):
-    return Server().benches[bench].fetch_monitor_data()
+    return {"data": Server().benches[bench].fetch_monitor_data()}
 
 
 @application.route(
