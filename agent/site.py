@@ -134,7 +134,7 @@ class Site(Base):
             "timestamp": str(datetime.now()),
         }
         try:
-            ping_url = f"http://{self.name}/api/method/ping"
+            ping_url = f"https://{self.name}/api/method/ping"
             data["web"] = requests.get(ping_url).status_code == 200
         except Exception:
             data["web"] = False
