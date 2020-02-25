@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import traceback
 from agent.app import App
 from agent.base import Base
 from agent.job import job, step
@@ -52,25 +53,28 @@ class Bench(Base):
         )
 
     def fetch_monitor_data(self):
+        lines = []
         try:
             monitor_log_file = os.path.join(
                 self.directory, "logs", "monitor.json.log"
             )
+            time = datetime.utcnow().isoformat()
             target_file = os.path.join(
                 self.server.directory,
                 "logs",
-                f"{self.name}-{datetime.now()}-monitor.json.log",
+                f"{self.name}-{time}-monitor.json.log",
             )
             shutil.move(monitor_log_file, target_file)
 
             with open(target_file) as f:
-                lines = list(map(json.loads, f.readlines()))
-            return lines
+                for line in f.readlines():
+                    try:
+                        lines.append(json.loads(line))
+                    except Exception:
+                        traceback.print_exc()
         except Exception:
-            import traceback
-
             traceback.print_exc()
-            return []
+        return lines
 
     @job("New Site")
     def new_site(
