@@ -166,6 +166,13 @@ def fetch_monitor_data(bench):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/status", methods=["GET"]
+)
+def fetch_site_status(bench, site):
+    return {"data": Server().benches[bench].sites[site].fetch_site_status()}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"]
 )
 def backup_site(bench, site):

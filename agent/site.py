@@ -2,8 +2,10 @@ from agent.base import Base
 from agent.job import step, job
 import os
 import json
+import requests
 import shutil
 import time
+from datetime import datetime
 
 
 class Site(Base):
@@ -124,6 +126,24 @@ class Site(Base):
     @step("Resume Scheduler")
     def resume_scheduler(self):
         self.bench.execute(f"bench --site {self.name} scheduler resume")
+
+    def fetch_site_status(self):
+        data = {
+            "scheduler": True,
+            "web": True,
+            "timestamp": str(datetime.now()),
+        }
+        try:
+            ping_url = f"http://{self.name}/api/method/ping"
+            data["web"] = requests.get(ping_url).status_code == 200
+        except Exception:
+            data["web"] = False
+
+        doctor = self.bench.execute(f"bench --site {self.name} doctor")
+        if "inactive" in doctor["output"]:
+            data["scheduler"] = False
+
+        return data
 
     @property
     def tables(self):
