@@ -52,7 +52,7 @@ class Site(Base):
 
     @step("Backup Site")
     def backup(self):
-        return self.bench.execute(f"bench --site {self.name} backup")
+        return self.bench.execute(f"bench --verbose --site {self.name} backup")
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
@@ -159,7 +159,14 @@ class Site(Base):
 
     @job("Backup Site")
     def backup_job(self):
-        self.backup()
+        backup = self.backup()
+        database = backup["output"].split(" - ")[1].split("/")[-1]
+        file = os.path.join(self.directory, "private", "backups", database)
+        return {
+            "database": database,
+            "size": os.stat(file).st_size,
+            "url": f"https://{self.name}/backups/{database}",
+        }
 
     def setconfig(self, value):
         with open(self.config_file, "w") as f:
