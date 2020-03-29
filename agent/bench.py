@@ -181,7 +181,7 @@ class Bench(Base):
         new_config = self.config
         new_config.update(value)
         self.setconfig(new_config)
-        
+
     @property
     def job_record(self):
         return self.server.job_record
