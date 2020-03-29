@@ -50,6 +50,10 @@ class Site(Base):
         new_config.update(value)
         self.setconfig(new_config)
 
+    @job("Site Update Configuration")
+    def update_config_job(self, value):
+        self.update_config(value)
+
     @step("Backup Site")
     def backup(self):
         return self.bench.execute(f"bench --verbose --site {self.name} backup")

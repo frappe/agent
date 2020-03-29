@@ -221,11 +221,19 @@ def archive_site(bench, site):
     )
     return {"job": job}
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/config", methods=["POST"]
+)
+def site_update_config(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].update_config_job(data)
+    return {"job": job}
+
 
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json
-    job = Server().benches[bench].setconfig_job(data)
+    job = Server().benches[bench].update_config_job(data)
     return {"job": job}
 
 
