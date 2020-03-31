@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import click
 
 from agent.server import Server
@@ -58,3 +60,36 @@ def database():
     from agent.job import JobModel, StepModel
 
     database.create_tables([JobModel, StepModel])
+
+
+@cli.group()
+def run():
+    pass
+
+
+@run.command()
+def web():
+    executable = shutil.which("gunicorn")
+    port = Server().config["web_port"]
+    arguments = [
+        executable,
+        "--bind",
+        f"127.0.0.1:{port}",
+        "--reload",
+        "--preload",
+        "agent.web:application",
+    ]
+    os.execv(executable, arguments)
+
+
+@run.command()
+def worker():
+    executable = shutil.which("rq")
+    port = Server().config["redis_port"]
+    arguments = [
+        executable,
+        "worker",
+        "--url",
+        f"redis://127.0.0.1:{port}",
+    ]
+    os.execv(executable, arguments)
