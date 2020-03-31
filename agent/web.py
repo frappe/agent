@@ -1,6 +1,7 @@
 import json
 from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
+from base64 import b64decode
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 
 from agent.job import JobModel
@@ -21,9 +22,17 @@ def validate_access_token():
             access_token, stored_hash
         ):
             return
-        return jsonify({"message": "Unauthenticated"}), 401
+        access_token = b64decode(access_token).decode().split(":")[1]
+        if method.lower() == "basic" and pbkdf2.verify(
+            access_token, stored_hash
+        ):
+            return
     except Exception:
-        return jsonify({"message": "Bad Request"}), 400
+        pass
+
+    response = jsonify({"message": "Unauthenticated"})
+    response.headers.set("WWW-Authenticate", "Basic")
+    return response, 401
 
 
 @application.route("/authentication", methods=["POST"])
@@ -220,6 +229,7 @@ def archive_site(bench, site):
         .archive_site(site, data["mariadb_root_password"])
     )
     return {"job": job}
+
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/config", methods=["POST"]
