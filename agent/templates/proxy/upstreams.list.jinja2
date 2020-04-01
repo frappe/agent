@@ -1,6 +1,0 @@
-{% for name, upstream in upstreams.items() %}
-upstream {{ upstream["hash"] }} {
-	server     {{ name }}:80;
-	keepalive  100;
-}
-{% endfor %}

@@ -1,3 +1,18 @@
+{% for name, upstream in upstreams.items() %}
+upstream {{ upstream["hash"] }} {
+	server_name {{ name }}:80;
+	keepalive 100;
+}
+{% endfor %}
+
+map $host $upstream_server_hash {
+{% for upstream in upstreams.values() -%}
+	{% for site in upstream["sites"] %}
+	{{ site }} http://{{ upstream["hash"] }};
+	{%- endfor %}
+{% endfor %}
+}
+
 map $host $actual_host {
 {% for host in hosts.values() -%}
 	{% for from, to in host.items() %}
@@ -5,3 +20,110 @@ map $host $actual_host {
 	{%- endfor %}
 {%- endfor %}
 }
+
+{% for host in hosts %}
+server {
+	listen 443 ssl default;
+	server_name {{ host }};
+
+	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
+	ssl_certificate_key {{ nginx_directory }}/{{ host }}/privkey.pem;
+	ssl_trusted_certificate {{ nginx_directory }}/{{ host }}/chain.pem;
+
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+	ssl_session_tickets off;
+
+	ssl_protocols TLSv1.2 TLSv1.3;
+	ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+	ssl_prefer_server_ciphers off;
+
+	ssl_stapling on;
+	ssl_stapling_verify on;
+
+	resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 208.67.222.222 208.67.220.220 valid=60s;
+	resolver_timeout 2s;
+
+	client_max_body_size 50m;
+	client_body_buffer_size 16K;
+	client_header_buffer_size 1k;
+
+	add_header X-Frame-Options "SAMEORIGIN" always;
+	add_header X-XSS-Protection "1; mode=block" always;
+	add_header X-Content-Type-Options "nosniff" always;
+	add_header Referrer-Policy "no-referrer-when-downgrade" always;
+	add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+	location /assets/ {
+		proxy_http_version 1.1;
+
+		proxy_cache proxy_cache_zone;
+		proxy_cache_valid 200 302 2m;
+		proxy_cache_valid 404 1m;
+		proxy_cache_bypass $http_secret_cache_purge;
+
+		proxy_set_header Host $actual_host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "";
+
+		add_header X-Proxy-Upstream $upstream_server_hash;
+		add_header X-Proxy-Cache $upstream_cache_status;
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location /socket.io {
+		proxy_http_version 1.1;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Host $actual_host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "upgrade";
+
+		add_header X-Proxy-Upstream $upstream_server_hash;
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location / {
+		proxy_http_version 1.1;
+
+		proxy_read_timeout 120;
+		proxy_buffering off;
+		proxy_buffer_size 128k;
+		proxy_buffers 100 128k;
+
+		proxy_set_header Host $actual_host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "";
+
+		add_header X-Proxy-Upstream $upstream_server_hash;
+		add_header Access-Control-Allow-Origin 'http://{{ host.strip("*.") }}' always;
+		add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept" always;
+		add_header Access-Control-Allow-Credentials true;
+		add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+
+		proxy_pass $upstream_server_hash;
+	}
+}
+
+server {
+	listen 80;
+
+	server_name {{ host }};
+
+	location ^~ /.well-known/acme-challenge/ {
+		return 301 http://ssl.{{ domain }}$request_uri;
+	}
+	location / {
+		return 301 https://$host$request_uri;
+	}
+}
+{% endfor %}

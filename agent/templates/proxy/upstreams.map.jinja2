@@ -1,7 +1,0 @@
-map $host $upstream_server_hash {
-{% for upstream in upstreams.values() -%}
-    {% for site in upstream["sites"] %}
-        {{ site }}  http://{{ upstream["hash"] }};
-	{%- endfor %}
-{% endfor %}
-}
