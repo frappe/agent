@@ -292,11 +292,15 @@ def to_dict(model):
 
 @application.route("/jobs")
 @application.route("/jobs/<int:id>")
+@application.route("/jobs/<string:ids>")
 @application.route("/jobs/status/<string:status>")
-def jobs(id=None, status=None):
+def jobs(id=None, ids=None, status=None):
     choices = [x[1] for x in JobModel._meta.fields["status"].choices]
     if id:
         job = to_dict(JobModel.get(JobModel.id == id))
+    elif ids:
+        ids = ids.split(",")
+        job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
     elif status in choices:
         job = to_dict(
             JobModel.select(JobModel.id, JobModel.name).where(
