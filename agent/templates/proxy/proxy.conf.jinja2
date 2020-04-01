@@ -21,6 +21,8 @@ map $host $actual_host {
 {%- endfor %}
 }
 
+proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;
+
 {% for host in hosts %}
 server {
 	listen 443 ssl;
