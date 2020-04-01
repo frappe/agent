@@ -16,6 +16,7 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
+        self.nginx_directory = self.config["nginx_directory"]
 
         self.job = None
         self.step = None
@@ -119,7 +120,7 @@ class Server(Base):
 
     @step("Reload NGINX")
     def reload_nginx(self):
-        return self.execute(f"sudo systemctl reload nginx")
+        return self._reload_nginx()
 
     def setup_authentication(self, password):
         config = self.config
@@ -128,6 +129,10 @@ class Server(Base):
 
     def setup_nginx(self):
         self._generate_nginx_config()
+        self._reload_nginx()
+
+    def setup_tls(self):
+        self._generate_agent_nginx_config()
         self._reload_nginx()
 
     def setup_supervisor(self):
@@ -190,14 +195,25 @@ class Server(Base):
         self._update_supervisor()
 
         self._generate_nginx_config()
+        self._generate_agent_nginx_config()
         self._reload_nginx()
 
     def _generate_nginx_config(self):
-        nginx_config = os.path.join(self.directory, "nginx.conf")
+        nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
+        self._render_template(
+            "nginx/nginx.conf.jinja2", {}, nginx_config,
+        )
+
+    def _generate_agent_nginx_config(self):
+        agent_nginx_config = os.path.join(self.directory, "nginx.conf")
         self._render_template(
             "agent/nginx.conf.jinja2",
-            {"web_port": self.config["web_port"], "name": self.name},
-            nginx_config,
+            {
+                "web_port": self.config["web_port"],
+                "name": self.name,
+                "tls_directory": self.config["tls_directory"],
+            },
+            agent_nginx_config,
         )
 
     def _generate_supervisor_config(self):
@@ -215,7 +231,7 @@ class Server(Base):
         )
 
     def _reload_nginx(self):
-        self.execute("sudo systemctl reload nginx")
+        return self.execute("sudo systemctl reload nginx")
 
     def _render_template(self, template, context, outfile):
         environment = Environment(loader=PackageLoader("agent", "templates"))

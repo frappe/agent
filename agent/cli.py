@@ -64,6 +64,11 @@ def proxy():
 
 
 @setup.command()
+def tls():
+    Server().setup_tls()
+
+
+@setup.command()
 def database():
     from agent.job import agent_database as database
     from agent.job import JobModel, StepModel
