@@ -27,8 +27,8 @@ server {
 	server_name {{ host }};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
-	ssl_certificate_key {{ nginx_directory }}/{{ host }}/privkey.pem;
-	ssl_trusted_certificate {{ nginx_directory }}/{{ host }}/chain.pem;
+	ssl_certificate_key {{ nginx_directory }}/hosts/{{ host }}/privkey.pem;
+	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ host }}/chain.pem;
 
 	ssl_session_timeout 1d;
 	ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
