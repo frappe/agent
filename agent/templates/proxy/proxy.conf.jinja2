@@ -23,7 +23,7 @@ map $host $actual_host {
 
 {% for host in hosts %}
 server {
-	listen 443 ssl default;
+	listen 443 ssl;
 	server_name {{ host }};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
