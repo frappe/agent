@@ -25,11 +25,14 @@ def update():
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-def config(name, user, workers):
+@click.option("--domain", required=True)
+def config(name, user, workers, domain):
     config = {
         "benches_directory": f"/home/{user}/benches",
-        "proxy_directory": f"/home/{user}/nginx",
+        "domain": domain,
         "name": name,
+        "tls_directory": f"/home/{user}/agent/tls",
+        "nginx_directory": f"/home/{user}/agent/nginx",
         "redis_port": 25025,
         "user": user,
         "workers": workers,
