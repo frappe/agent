@@ -2,8 +2,8 @@ user www-data;
 worker_processes auto;
 worker_rlimit_nofile 65535;
 
+pid /run/nginx.pid;
 
-pid /var/run/nginx.pid;
 
 events {
 	worker_connections 65535;
