@@ -4,6 +4,7 @@ import shutil
 import click
 
 from agent.server import Server
+from agent.proxy import Proxy
 
 
 @click.group()
@@ -55,6 +56,11 @@ def supervisor():
 @setup.command()
 def nginx():
     Server().setup_nginx()
+
+
+@setup.command()
+def proxy():
+    Proxy().setup_proxy()
 
 
 @setup.command()

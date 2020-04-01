@@ -113,25 +113,27 @@ class Proxy(Server):
             hosts_config_file,
         )
 
-    @step("Generate Upstream List Configuration")
-    def generate_upstream_list(self):
-        upstream_list_file = os.path.join(
-            self.proxy_directory, "upstreams.list"
-        )
-        self._render_template(
-            "proxy/upstreams.list.jinja2",
-            {"upstreams": self.upstreams},
-            upstream_list_file,
-        )
+    def setup_proxy(self):
+        self._create_default_host()
+        self._generate_proxy_config()
+        self._reload_nginx()
 
-    @step("Generate Upstream Map Configuration")
-    def generate_upstream_map(self):
-        upstream_map_file = os.path.join(self.proxy_directory, "upstreams.map")
-        self._render_template(
-            "proxy/upstreams.map.jinja2",
-            {"upstreams": self.upstreams},
-            upstream_map_file,
+    def _create_default_host(self):
+        default_host = f"*.{self.config['domain']}"
+        default_host_directory = os.path.join(
+            self.hosts_directory, default_host
         )
+        if not os.path.exists(default_host_directory):
+            os.mkdir(default_host_directory)
+        map_file = os.path.join(default_host_directory, "map.json")
+        json.dump({"default": "$host"}, open(map_file, "w"), indent=4)
+
+        tls_directory = self.config["tls_directory"]
+        for f in ["chain.pem", "fullchain.pem", "privkey.pem"]:
+            source = os.path.join(tls_directory, f)
+            destination = os.path.join(default_host_directory, f)
+            os.remove(destination)
+            os.symlink(source, destination)
 
     @property
     def upstreams(self):
@@ -149,7 +151,10 @@ class Proxy(Server):
 
     @property
     def hosts(self):
-        hosts = []
+        hosts = {}
         for host in os.listdir(self.hosts_directory):
-            hosts.append(host)
+            host_directory = os.path.join(self.hosts_directory, host)
+            map_file = os.path.join(host_directory, "map.json")
+            if os.path.exists(map_file):
+                hosts[host] = json.load(open(map_file))
         return hosts

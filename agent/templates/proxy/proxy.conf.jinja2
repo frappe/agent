@@ -1,0 +1,7 @@
+map $host $actual_host {
+{% for host in hosts.values() -%}
+	{% for from, to in host.items() %}
+	{{ from }} {{ to }};
+	{%- endfor %}
+{%- endfor %}
+}
