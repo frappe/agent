@@ -1,76 +1,65 @@
-user                         nginx;
-worker_processes             auto;
-worker_rlimit_nofile         65535;
+user www-data;
+worker_processes auto;
+worker_rlimit_nofile 65535;
 
-error_log                    /var/log/nginx/error.log warn;
-pid                          /var/run/nginx.pid;
+
+pid /var/run/nginx.pid;
 
 events {
-	worker_connections           2048;
-	multi_accept                 on;
+	worker_connections 65535;
+	multi_accept on;
 }
 
 http {
-	include                      /etc/nginx/mime.types;
-	default_type                 application/octet-stream;
+	include /etc/nginx/mime.types;
+	default_type application/octet-stream;
 
-	log_format                   main '$remote_addr - $remote_user [$time_local] "$request" '
-								'$status $body_bytes_sent "$http_referer" '
-								'"$http_user_agent" "$http_x_forwarded_for"';
+	log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+									'$status $body_bytes_sent "$http_referer" '
+									'"$http_user_agent" "$http_x_forwarded_for" '
+									'"$host" $request_time';
 
-	access_log                   /var/log/nginx/access.log main;
+	access_log /var/log/nginx/access.log main;
+	error_log /var/log/nginx/error.log warn;
 
-	sendfile                     on;
-	tcp_nopush                   on;
-	tcp_nodelay                  on;
-	server_tokens                off;
+	sendfile on;
+	tcp_nopush on;
+	tcp_nodelay on;
+	server_tokens off;
 
-	#                            keepalive_timeout 10;
-	#                            keepalive_requests 10;
+	keepalive_timeout 10;
+	keepalive_requests 10;
 
-	gzip                         on;
-	gzip_disable                 "msie6";
-	gzip_http_version            1.1;
-	gzip_comp_level              5;
-	gzip_min_length              256;
-	gzip_proxied                 any;
-	gzip_vary                    on;
-	gzip_types
-	application/atom+xml
-	application/javascript
-	application/json
-	application/rss+xml
-	application/vnd.ms-fontobject
-	application/x-font-ttf
-	application/font-woff
-	application/x-web-app-manifest+json
-	application/xhtml+xml
-	application/xml
-	font/opentype
-	image/svg+xml
-	image/x-icon
-	text/css
-	text/plain
-	text/x-component
-	;
+	gzip on;
+	gzip_vary on;
+	gzip_proxied any;
+	gzip_comp_level 6;
+	gzip_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml;
 
-	server_names_hash_max_size   4096;
+	brotli on;
+	brotli_comp_level 6;
+	brotli_types text/plain text/css text/xml application/json application/javascript application/rss+xml application/atom+xml image/svg+xml
 
-	open_file_cache              max=65000 inactive=1m;
-	open_file_cache_valid        5s;
-	open_file_cache_min_uses     1;
-	open_file_cache_errors       on;
+	server_names_hash_max_size 4096;
 
-	ssl_protocols                SSLv3 TLSv1;
-	ssl_ciphers                  ECDHE-RSA-AES256-SHA384:AES256-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH:!AESGCM;
-	ssl_prefer_server_ciphers    on;
+	open_file_cache max=65000 inactive=1m;
+	open_file_cache_valid 5s;
+	open_file_cache_min_uses 1;
+	open_file_cache_errors on;
 
-	client_max_body_size         50m;
-	large_client_header_buffers  4 32k;
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+	ssl_session_tickets off;
 
-	proxy_cache_path             /var/cache/nginx levels=1:2 keys_zone=web-cache:8m max_size=1000m inactive=600m;
+	# intermediate configuration
+	ssl_protocols TLSv1.2 TLSv1.3;
+	ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+	ssl_prefer_server_ciphers off;
 
-	include                      /etc/nginx/conf.d/*.conf;
+	client_max_body_size 50m;
+	large_client_header_buffers 4 32k;
+
+	proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=web-cache:8m max_size=1000m inactive=600m;
+
+	include /etc/nginx/conf.d/*.conf;
 }
-
-proxy_cache_path             /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;
