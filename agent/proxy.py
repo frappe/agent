@@ -1,4 +1,6 @@
+import json
 import os
+import shutil
 from hashlib import sha512 as sha
 
 from agent.server import Server
@@ -12,27 +14,36 @@ class Proxy(Server):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
 
-        self.proxy_directory = self.config["proxy_directory"]
+        self.nginx_directory = self.config["nginx_directory"]
         self.upstreams_directory = os.path.join(
-            self.proxy_directory, "upstreams"
+            self.nginx_directory, "upstreams"
         )
-        self.hosts_directory = os.path.join(self.proxy_directory, "hosts")
+        self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
 
         self.job = None
         self.step = None
 
     @job("Add Host to Proxy")
-    def add_host_job(self, host):
-        self.add_host(host)
-        self.generate_hosts_config()
+    def add_host_job(self, host, target, certificate):
+        self.add_host(host, target, certificate)
+        self.generate_proxy_config()
         self.reload_nginx()
 
-    @step("Add Host File")
-    def add_host(self, host):
+    @step("Add Host to Proxy")
+    def add_host(self, host, target, certificate):
         if not os.path.exists(self.hosts_directory):
             os.mkdir(self.hosts_directory)
-        host_file = os.path.join(self.hosts_directory, host)
-        Path(host_file).touch()
+
+        host_directory = os.path.join(self.hosts_directory, host)
+        if not os.path.exists(host_directory):
+            os.mkdir(host_directory)
+
+        map_file = os.path.join(host_directory, "map.json")
+        json.dump({host: target}, open(map_file, "w"), indent=4)
+
+        for key, value in certificate.items():
+            with open(os.path.join(host_directory, key), "w") as f:
+                f.write(value)
 
     @job("Add Site to Upstream")
     def add_site_to_upstream_job(self, upstream, site):
@@ -58,6 +69,17 @@ class Proxy(Server):
             os.mkdir(self.upstreams_directory)
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         os.mkdir(upstream_directory)
+
+    @job("Remove Host from Proxy")
+    def remove_host_job(self, host):
+        self.remove_host(host)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Remove Host from Proxy")
+    def remove_host(self, host):
+        host_directory = os.path.join(self.hosts_directory, host)
+        shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
     def remove_site_from_upstream_job(self, upstream, site):

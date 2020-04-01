@@ -250,7 +250,15 @@ def bench_set_config(bench):
 @application.route("/proxy/hosts", methods=["POST"])
 def proxy_add_host():
     data = request.json
-    job = Proxy().add_host_job(data["name"])
+    job = Proxy().add_host_job(
+        data["name"], data["target"], data["certificate"]
+    )
+    return {"job": job}
+
+
+@application.route("/proxy/hosts/<string:host>", methods=["DELETE"])
+def proxy_remove_host(host):
+    job = Proxy().remove_host_job(host)
     return {"job": job}
 
 
