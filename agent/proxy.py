@@ -48,7 +48,7 @@ class Proxy(Server):
     @job("Add Site to Upstream")
     def add_site_to_upstream_job(self, upstream, site):
         self.add_site_to_upstream(upstream, site)
-        self.generate_upstream_map()
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Add Site File to Upstream Directory")
@@ -60,7 +60,7 @@ class Proxy(Server):
     @job("Add Upstream to Proxy")
     def add_upstream_job(self, upstream):
         self.add_upstream(upstream)
-        self.generate_upstream_list()
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Add Upstream Directory")
@@ -84,7 +84,7 @@ class Proxy(Server):
     @job("Remove Site from Upstream")
     def remove_site_from_upstream_job(self, upstream, site):
         self.remove_site_from_upstream(upstream, site)
-        self.generate_upstream_map()
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
@@ -97,20 +97,21 @@ class Proxy(Server):
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
 
-    @step("Generate NGINX Root Configuration")
-    def generate_nginx_root_config(self):
-        nginx_config_file = os.path.join(self.proxy_directory, "nginx.conf")
-        self._render_template(
-            "proxy/nginx.conf.jinja2", {}, nginx_config_file,
-        )
+    @step("Generate NGINX Configuration")
+    def generate_proxy_config(self):
+        return self._generate_proxy_config()
 
-    @step("Generate Hosts Configuration")
-    def generate_hosts_config(self):
-        hosts_config_file = os.path.join(self.proxy_directory, "hosts.conf")
+    def _generate_proxy_config(self):
+        proxy_config_file = os.path.join(self.nginx_directory, "proxy.conf")
         self._render_template(
-            "proxy/hosts.conf.jinja2",
-            {"hosts": self.hosts},
-            hosts_config_file,
+            "proxy/proxy.conf.jinja2",
+            {
+                "hosts": self.hosts,
+                "upstreams": self.upstreams,
+                "domain": self.config["domain"],
+                "nginx_directory": self.config["nginx_directory"],
+            },
+            proxy_config_file,
         )
 
     def setup_proxy(self):
