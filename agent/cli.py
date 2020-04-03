@@ -5,6 +5,7 @@ import click
 
 from agent.server import Server
 from agent.proxy import Proxy
+from agent.haproxy import HAProxy
 
 
 @click.group()
@@ -26,11 +27,9 @@ def update():
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-@click.option("--domain", required=True)
-def config(name, user, workers, domain):
+def config(name, user, workers):
     config = {
         "benches_directory": f"/home/{user}/benches",
-        "domain": domain,
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
@@ -59,14 +58,14 @@ def nginx():
 
 
 @setup.command()
-def proxy():
-    Proxy().setup_proxy()
-
-
-@setup.command()
-def tls():
-    Server().setup_tls()
-
+@click.option("--domain")
+def proxy(domain=None):
+    proxy = Proxy()
+    if domain:
+        config = proxy.config
+        config["domain"] = domain
+        proxy.setconfig(config)
+    proxy.setup_proxy()
 
 @setup.command()
 def database():

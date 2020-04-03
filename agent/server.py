@@ -129,9 +129,6 @@ class Server(Base):
 
     def setup_nginx(self):
         self._generate_nginx_config()
-        self._reload_nginx()
-
-    def setup_tls(self):
         self._generate_agent_nginx_config()
         self._reload_nginx()
 
