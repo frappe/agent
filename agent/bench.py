@@ -150,6 +150,10 @@ class Bench(Base):
         user = self.config["frappe_user"]
         return self.execute(f"sudo bench setup production {user} --yes")
 
+    @step("Bench Disable Production")
+    def disable_production(self):
+        return self.execute(f"sudo bench disable-production")
+
     @step("Bench Setup Redis")
     def setup_redis(self):
         return self.execute("bench setup redis")

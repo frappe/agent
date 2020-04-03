@@ -137,6 +137,12 @@ def new_bench():
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/archive", methods=["POST"])
+def archive_bench(bench):
+    job = Server().archive_bench(bench)
+    return {"job": job}
+
+
 """
 POST /benches/bench-1/sites
 {

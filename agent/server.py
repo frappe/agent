@@ -16,6 +16,9 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
+        self.archived_directory = os.path.join(
+            os.path.dirname(self.benches_directory), "archived"
+        )
         self.nginx_directory = self.config["nginx_directory"]
 
         self.job = None
@@ -59,6 +62,18 @@ class Server(Base):
         bench.setup_requirements()
         bench.build()
         bench.setup_production()
+
+    @job("Archive Bench")
+    def archive_bench(self, name):
+        bench = Bench(name, self)
+        bench.disable_production()
+        self.move_bench_to_archived_directory(bench)
+
+    @step("Move Bench to Archived Directory")
+    def move_bench_to_archived_directory(self, bench):
+        if not os.path.exists(self.archived_directory):
+            os.mkdir(self.archived_directory)
+        self.execute(f"mv {bench.directory} {self.archived_directory}")
 
     @job("Update Site Pull")
     def update_site_pull_job(self, name, source, target):
