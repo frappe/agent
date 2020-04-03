@@ -28,12 +28,12 @@ class Server(Base):
             # Unable to articulate the reasons as of now
             command = (
                 f"bench init --clone-from {clone} --clone-without-update "
-                f"--python {python} {name} --no-backups --no-auto-update"
+                f"--python {python} {name} --no-backups "
             )
         else:
             command = (
                 f"bench init --frappe-branch {branch} --frappe-path {repo} "
-                f"--python {python} {name} --no-backups --no-auto-update"
+                f"--python {python} {name} --no-backups "
             )
 
         return self.execute(command, directory=self.benches_directory)
