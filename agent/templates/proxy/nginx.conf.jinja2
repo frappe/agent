@@ -116,10 +116,11 @@ server {
 	}
 }
 
+{% endfor %}
+
 server {
 	listen 80;
-
-	server_name {{ host }};
+	server_name _;
 
 	location ^~ /.well-known/acme-challenge/ {
 		return 301 http://ssl.{{ domain }}$request_uri;
@@ -128,4 +129,3 @@ server {
 		return 301 https://$host$request_uri;
 	}
 }
-{% endfor %}
