@@ -66,6 +66,7 @@ def proxy(domain=None):
         proxy.setconfig(config)
     proxy.setup_proxy()
 
+
 @setup.command()
 def database():
     from agent.job import agent_database as database
