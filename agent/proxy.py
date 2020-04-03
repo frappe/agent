@@ -133,7 +133,8 @@ class Proxy(Server):
         for f in ["chain.pem", "fullchain.pem", "privkey.pem"]:
             source = os.path.join(tls_directory, f)
             destination = os.path.join(default_host_directory, f)
-            os.remove(destination)
+            if os.path.exists(destination):
+                os.remove(destination)
             os.symlink(source, destination)
 
     @property
