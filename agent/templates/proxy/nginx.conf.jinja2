@@ -25,7 +25,7 @@ proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 
 
 {% for host in hosts %}
 server {
-	listen 443 ssl;
+	listen 443 http2 ssl;
 	server_name {{ host }};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
