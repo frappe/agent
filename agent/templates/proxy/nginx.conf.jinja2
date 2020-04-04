@@ -5,7 +5,7 @@ upstream {{ upstream["hash"] }} {
 }
 {% endfor %}
 
-map $host $upstream_server_hash {
+map $actual_host $upstream_server_hash {
 {% for upstream in upstreams.values() -%}
 	{% for site in upstream["sites"] %}
 	{{ site }} http://{{ upstream["hash"] }};
