@@ -131,6 +131,7 @@ class Server(Base):
 
         site = Site(name, target)
         site.restore_touched_tables()
+        raise Exception("123")
         site.disable_maintenance_mode()
 
     @step("Move Site")
