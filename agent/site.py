@@ -44,13 +44,13 @@ class Site(Base):
                 output.append(log["install"]["output"])
         return data
 
-    @step("Site Update Configuration")
+    @step("Update Site Configuration")
     def update_config(self, value):
         new_config = self.config
         new_config.update(value)
         self.setconfig(new_config)
 
-    @job("Site Update Configuration")
+    @job("Update Site Configuration")
     def update_config_job(self, value):
         self.update_config(value)
 
