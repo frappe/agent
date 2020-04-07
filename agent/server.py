@@ -114,6 +114,7 @@ class Server(Base):
         site = Site(name, target)
 
         site.migrate()
+        raise Exception("123")
         site.disable_maintenance_mode()
 
     @job("Recover Failed Site Migration")
