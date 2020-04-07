@@ -105,14 +105,15 @@ class Server(Base):
         site.tablewise_backup()
 
         self.move_site(site, target)
-        site = Site(name, target)
-
-        site.migrate()
-        site.disable_maintenance_mode()
 
         source.setup_nginx()
         target.setup_nginx_target()
         self.reload_nginx()
+
+        site = Site(name, target)
+
+        site.migrate()
+        site.disable_maintenance_mode()
 
     @job("Recover Failed Site Migration")
     def update_site_recover_job(self, name, source, target):
@@ -122,6 +123,10 @@ class Server(Base):
         site = Site(name, source)
         self.move_site(site, target)
         site = Site(name, target)
+
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
 
         site.restore_touched_tables()
         site.disable_maintenance_mode()
