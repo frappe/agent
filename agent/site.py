@@ -125,11 +125,11 @@ class Site(Base):
 
     @step("Pause Scheduler")
     def pause_scheduler(self):
-        self.bench.execute(f"bench --site {self.name} scheduler pause")
+        return self.bench.execute(f"bench --site {self.name} scheduler pause")
 
     @step("Resume Scheduler")
     def resume_scheduler(self):
-        self.bench.execute(f"bench --site {self.name} scheduler resume")
+        return self.bench.execute(f"bench --site {self.name} scheduler resume")
 
     def fetch_site_status(self):
         data = {

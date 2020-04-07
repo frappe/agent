@@ -128,7 +128,7 @@ class Server(Base):
 
     @step("Move Site")
     def move_site(self, site, target):
-        return shutil.move(site.directory, target.sites_directory)
+        shutil.move(site.directory, target.sites_directory)
 
     def execute(self, command, directory=None):
         return super().execute(command, directory=directory)
