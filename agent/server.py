@@ -85,13 +85,14 @@ class Server(Base):
         site.wait_till_ready()
 
         self.move_site(site, target)
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
+
         site = Site(name, target)
 
         site.disable_maintenance_mode()
 
-        source.setup_nginx()
-        target.setup_nginx_target()
-        self.reload_nginx()
 
     @job("Update Site Migrate")
     def update_site_migrate_job(self, name, source, target):
@@ -122,12 +123,12 @@ class Server(Base):
 
         site = Site(name, source)
         self.move_site(site, target)
-        site = Site(name, target)
 
         source.setup_nginx()
         target.setup_nginx_target()
         self.reload_nginx()
 
+        site = Site(name, target)
         site.restore_touched_tables()
         site.disable_maintenance_mode()
 
