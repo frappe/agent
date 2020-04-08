@@ -44,6 +44,14 @@ class Site(Base):
                 output.append(log["install"]["output"])
         return data
 
+    @step("Install App on Site")
+    def install_app(self, app):
+        return self.bench_execute(f"install-app {app}")
+
+    @job("Install App on Site")
+    def install_app_job(self, app):
+        self.install_app(app)
+
     @step("Update Site Configuration")
     def update_config(self, value):
         new_config = self.config
