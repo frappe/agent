@@ -93,7 +93,6 @@ class Server(Base):
 
         site.disable_maintenance_mode()
 
-
     @job("Update Site Migrate")
     def update_site_migrate_job(self, name, source, target):
         source = Bench(source, self)
@@ -130,6 +129,7 @@ class Server(Base):
 
         site = Site(name, target)
         site.restore_touched_tables()
+
         site.disable_maintenance_mode()
 
     @step("Move Site")
