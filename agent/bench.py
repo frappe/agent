@@ -109,6 +109,7 @@ class Bench(Base):
             private_file,
         )
         site.migrate()
+        site.set_admin_password(admin_password)
         self.setup_nginx()
         self.server.reload_nginx()
 

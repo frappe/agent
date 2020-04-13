@@ -89,6 +89,10 @@ class Site(Base):
             f"bench --site {self.name} set-maintenance-mode on"
         )
 
+    @step("Set Administrator Password")
+    def set_admin_password(self, password):
+        return self.bench_execute(f"set-admin-password {password}")
+
     @step("Wait for Enqueued Jobs")
     def wait_till_ready(self):
         WAIT_TIMEOUT = 120
