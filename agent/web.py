@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from base64 import b64decode
@@ -170,6 +172,38 @@ def new_site(bench):
             data["apps"],
             data["mariadb_root_password"],
             data["admin_password"],
+        )
+    )
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
+def new_site_from_backup(bench):
+    files = request.files
+    data = json.loads(files["json"].read().decode())
+    tempdir = tempfile.mkdtemp(
+        prefix="agent-upload-", suffix="-" + data["name"]
+    )
+
+    database_file = os.path.join(tempdir, "database.sql.gz")
+    private_file = os.path.join(tempdir, "private.tar")
+    public_file = os.path.join(tempdir, "public.tar")
+
+    files["database"].save(database_file)
+    files["private"].save(private_file)
+    files["public"].save(public_file)
+
+    job = (
+        Server()
+        .benches[bench]
+        .new_site_from_backup(
+            data["name"],
+            data["config"],
+            data["mariadb_root_password"],
+            data["admin_password"],
+            database_file,
+            public_file,
+            private_file,
         )
     )
     return {"job": job}

@@ -48,6 +48,23 @@ class Site(Base):
     def install_app(self, app):
         return self.bench_execute(f"install-app {app}")
 
+    @step("Restore")
+    def restore(
+        self,
+        mariadb_root_password,
+        admin_password,
+        database_file,
+        public_file,
+        private_file,
+    ):
+        return self.bench_execute(
+            f"--force restore "
+            f"--mariadb-root-password {mariadb_root_password} "
+            f"--admin-password {admin_password} "
+            f"--with-public-files {public_file} "
+            f"--with-private-files {private_file} {database_file}"
+        )
+
     @job("Install App on Site")
     def install_app_job(self, app):
         self.install_app(app)

@@ -87,6 +87,34 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
+    @job("New Site from Backup")
+    def new_site_from_backup(
+        self,
+        name,
+        config,
+        mariadb_root_password,
+        admin_password,
+        database_file,
+        public_file,
+        private_file,
+    ):
+        self.bench_new_site(name, mariadb_root_password, admin_password)
+        site = Site(name, self)
+        site.update_config(config)
+        site.restore(
+            mariadb_root_password,
+            admin_password,
+            database_file,
+            public_file,
+            private_file,
+        )
+        site.migrate()
+        self.setup_nginx()
+        self.server.reload_nginx()
+
+        shutil.rmtree(os.path.dirname(database_file))
+        return site.bench_execute("list-apps")
+
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
         return self.execute(
