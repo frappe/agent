@@ -31,7 +31,7 @@ class Base:
             data.update({"duration": end - start, "end": end})
             data.update(
                 {
-                    "output": e.output.decode().strip(),
+                    "output": self.remove_crs(e.output),
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
@@ -43,7 +43,7 @@ class Base:
             {
                 "duration": end - start,
                 "end": end,
-                "output": process.stdout.decode().strip(),
+                "output": self.remove_crs(process.stdout),
             }
         )
         return data
@@ -56,6 +56,10 @@ class Base:
     def setconfig(self, value):
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=4, sort_keys=True)
+
+    def remove_crs(self, input):
+        output = subprocess.check_output(["col", "-b"], input=input)
+        return output.decode().strip()
 
 
 class AgentException(Exception):
