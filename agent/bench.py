@@ -112,6 +112,7 @@ class Bench(Base):
         site.uninstall_unavailable_apps(apps)
         site.migrate()
         site.set_admin_password(admin_password)
+        site.enable_scheduler()
         self.setup_nginx()
         self.server.reload_nginx()
 

@@ -163,6 +163,10 @@ class Site(Base):
     def pause_scheduler(self):
         return self.bench.execute(f"bench --site {self.name} scheduler pause")
 
+    @step("Enable Scheduler")
+    def enable_scheduler(self):
+        return self.bench.execute(f"bench --site {self.name} scheduler enable")
+
     @step("Resume Scheduler")
     def resume_scheduler(self):
         return self.bench.execute(f"bench --site {self.name} scheduler resume")
