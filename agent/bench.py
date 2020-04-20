@@ -92,6 +92,7 @@ class Bench(Base):
         self,
         name,
         config,
+        apps,
         mariadb_root_password,
         admin_password,
         database_file,
@@ -108,6 +109,7 @@ class Bench(Base):
             public_file,
             private_file,
         )
+        site.uninstall_unavailable_apps(apps)
         site.migrate()
         site.set_admin_password(admin_password)
         self.setup_nginx()

@@ -199,6 +199,7 @@ def new_site_from_backup(bench):
         .new_site_from_backup(
             data["name"],
             data["config"],
+            data["apps"],
             data["mariadb_root_password"],
             data["admin_password"],
             database_file,

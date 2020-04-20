@@ -133,6 +133,13 @@ class Site(Base):
     def migrate(self):
         return self.bench.execute(f"bench --site {self.name} migrate")
 
+    @step("Uninstall Unavailable Apps")
+    def uninstall_unavailable_apps(self, apps_to_keep):
+        installed_apps = self.bench_execute("list-apps")["output"].split()
+        for app in installed_apps:
+            if app not in apps_to_keep:
+                self.bench_execute(f"remove-from-installed-apps {app}")
+
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
         return self.bench.execute(
