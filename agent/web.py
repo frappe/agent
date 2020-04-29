@@ -121,6 +121,11 @@ def get_config(bench):
     return Server().benches[bench].config
 
 
+@application.route("/benches/<string:bench>/status", methods=["GET"])
+def get_bench_status(bench):
+    return Server().benches[bench].status()
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>")
 def get_site(bench, site):
     return Server().benches[bench].sites[site].dump()

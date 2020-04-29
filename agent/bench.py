@@ -1,3 +1,4 @@
+import grequests
 import json
 import os
 import shutil
@@ -75,6 +76,49 @@ class Bench(Base):
         except Exception:
             traceback.print_exc()
         return lines
+
+    def status(self):
+        def _inactive_scheduler_sites(bench):
+            inactive = []
+            doctor = bench.execute(f"bench doctor")["output"].split("\n")
+            for line in doctor:
+                if "inactive" in line:
+                    site = line.split(" ")[-1]
+                    inactive.append(site)
+            return inactive
+
+        def __handler(request, exception):
+            print("Ping Failed", request.url, exception)
+
+        def _inactive_web_sites(bench):
+            inactive = []
+            requests = []
+            sites = bench.sites.keys()
+            for site in sites:
+                url = f"https://{site}/api/method/ping"
+                requests.append(grequests.get(url))
+
+            results = grequests.map(requests, exception_handler=__handler)
+            for result, site in zip(results, sites):
+                if not result or result.status_code != 200:
+                    inactive.append(site)
+            return inactive
+
+        status = {
+            "sites": {
+                site: {"scheduler": True, "web": True}
+                for site in self.sites.keys()
+            },
+            "timestamp": str(datetime.now()),
+        }
+
+        for site in _inactive_scheduler_sites(self):
+            status["sites"][site]["scheduler"] = False
+
+        for site in _inactive_web_sites(self):
+            status["sites"][site]["web"] = False
+
+        return status
 
     @job("New Site")
     def new_site(
