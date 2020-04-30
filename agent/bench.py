@@ -78,8 +78,13 @@ class Bench(Base):
         return lines
 
     def status(self):
+        def _touch_currentsite_file(bench):
+            currentsite_file = os.path.join(bench.site_directory, "currentsite.txt")
+            Path(currentsite_file).touch()
+
         def _inactive_scheduler_sites(bench):
             inactive = []
+            _touch_currentsite_file(bench)
             doctor = bench.execute(f"bench doctor")["output"].split("\n")
             for line in doctor:
                 if "inactive" in line:
