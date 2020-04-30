@@ -8,6 +8,7 @@ from agent.base import Base
 from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
+from pathlib import Path
 
 
 class Bench(Base):
@@ -79,8 +80,8 @@ class Bench(Base):
 
     def status(self):
         def _touch_currentsite_file(bench):
-            currentsite_file = os.path.join(bench.site_directory, "currentsite.txt")
-            Path(currentsite_file).touch()
+            file = os.path.join(bench.sites_directory, "currentsite.txt")
+            Path(file).touch()
 
         def _inactive_scheduler_sites(bench):
             inactive = []
