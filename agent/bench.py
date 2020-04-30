@@ -1,4 +1,3 @@
-import grequests
 import json
 import os
 import shutil
@@ -9,6 +8,7 @@ from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
 from pathlib import Path
+import requests
 
 
 class Bench(Base):
@@ -93,19 +93,16 @@ class Bench(Base):
                     inactive.append(site)
             return inactive
 
-        def __handler(request, exception):
-            print("Ping Failed", request.url, exception)
-
         def _inactive_web_sites(bench):
             inactive = []
-            requests = []
-            sites = bench.sites.keys()
-            for site in sites:
+            session = requests.Session()
+            for site in bench.sites.keys():
                 url = f"https://{site}/api/method/ping"
-                requests.append(grequests.get(url))
-
-            results = grequests.map(requests, exception_handler=__handler)
-            for result, site in zip(results, sites):
+                try:
+                    result = session.get(url)
+                except Exception as e:
+                    result = None
+                    print("Ping Failed", url, e)
                 if not result or result.status_code != 200:
                     inactive.append(site)
             return inactive
