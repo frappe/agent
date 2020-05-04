@@ -81,7 +81,7 @@ class Bench(Base):
     def status(self):
         def _touch_currentsite_file(bench):
             file = os.path.join(bench.sites_directory, "currentsite.txt")
-            Path(file).touch()
+            open(file, "w").close()
 
         def _inactive_scheduler_sites(bench):
             inactive = []
