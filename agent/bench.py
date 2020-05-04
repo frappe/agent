@@ -7,7 +7,6 @@ from agent.base import Base
 from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
-from pathlib import Path
 import requests
 
 
