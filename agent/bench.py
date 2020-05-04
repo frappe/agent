@@ -74,6 +74,8 @@ class Bench(Base):
                         lines.append(json.loads(line))
                     except Exception:
                         traceback.print_exc()
+        except FileNotFoundError:
+            pass
         except Exception:
             traceback.print_exc()
         return lines
