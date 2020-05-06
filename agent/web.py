@@ -187,7 +187,7 @@ def new_site_from_backup(bench):
     files = request.files
     data = json.loads(files["json"].read().decode())
     tempdir = tempfile.mkdtemp(
-        prefix="agent-upload-", suffix="-" + data["name"]
+        prefix="agent-upload-", suffix=f'-{data["name"]}'
     )
 
     database_file = os.path.join(tempdir, "database.sql.gz")
@@ -221,9 +221,7 @@ def new_site_from_backup(bench):
 def restore_site(bench, site):
     files = request.files
     data = json.loads(files["json"].read().decode())
-    tempdir = tempfile.mkdtemp(
-        prefix="agent-upload-", suffix="-" + data["name"]
-    )
+    tempdir = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{site}")
 
     database_file = os.path.join(tempdir, "database.sql.gz")
     private_file = os.path.join(tempdir, "private.tar")
