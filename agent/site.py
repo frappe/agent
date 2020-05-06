@@ -65,6 +65,31 @@ class Site(Base):
             f"--with-private-files {private_file} {database_file}"
         )
 
+    @job("Restore Site")
+    def restore_job(
+        self,
+        apps,
+        mariadb_root_password,
+        admin_password,
+        database_file,
+        public_file,
+        private_file,
+    ):
+        self.restore(
+            mariadb_root_password,
+            admin_password,
+            database_file,
+            public_file,
+            private_file,
+        )
+        self.uninstall_unavailable_apps(apps)
+        self.migrate()
+        self.set_admin_password(admin_password)
+        self.enable_scheduler()
+
+        shutil.rmtree(os.path.dirname(database_file))
+        return self.bench_execute("list-apps")
+
     @step("Reinstall Site")
     def reinstall(
         self, mariadb_root_password, admin_password,

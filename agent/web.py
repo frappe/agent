@@ -216,6 +216,40 @@ def new_site_from_backup(bench):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/restore", methods=["POST"]
+)
+def restore_site(bench, site):
+    files = request.files
+    data = json.loads(files["json"].read().decode())
+    tempdir = tempfile.mkdtemp(
+        prefix="agent-upload-", suffix="-" + data["name"]
+    )
+
+    database_file = os.path.join(tempdir, "database.sql.gz")
+    private_file = os.path.join(tempdir, "private.tar")
+    public_file = os.path.join(tempdir, "public.tar")
+
+    files["database"].save(database_file)
+    files["private"].save(private_file)
+    files["public"].save(public_file)
+
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .restore_job(
+            data["apps"],
+            data["mariadb_root_password"],
+            data["admin_password"],
+            database_file,
+            public_file,
+            private_file,
+        )
+    )
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/reinstall", methods=["POST"]
 )
 def reinstall_site(bench, site):
