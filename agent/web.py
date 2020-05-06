@@ -216,6 +216,20 @@ def new_site_from_backup(bench):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/reinstall", methods=["POST"]
+)
+def reinstall_site(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .reinstall_job(data["mariadb_root_password"], data["admin_password"])
+    )
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
 )
 def install_app_site(bench, site):

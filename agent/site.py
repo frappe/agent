@@ -65,6 +65,22 @@ class Site(Base):
             f"--with-private-files {private_file} {database_file}"
         )
 
+    @step("Reinstall Site")
+    def reinstall(
+        self, mariadb_root_password, admin_password,
+    ):
+        return self.bench_execute(
+            f"reinstall --yes "
+            f"--mariadb-root-password {mariadb_root_password} "
+            f"--admin-password {admin_password}"
+        )
+
+    @job("Reinstall Site")
+    def reinstall_job(
+        self, mariadb_root_password, admin_password,
+    ):
+        return self.reinstall(mariadb_root_password, admin_password)
+
     @job("Install App on Site")
     def install_app_job(self, app):
         self.install_app(app)
