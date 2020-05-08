@@ -94,9 +94,9 @@ def get_server():
     return Server().dump()
 
 
-@application.route("/server/status")
+@application.route("/server/status", methods=["POST"])
 def get_server_status():
-    data = request.args
+    data = request.json
     return Server().status(data["mariadb_root_password"])
 
 
