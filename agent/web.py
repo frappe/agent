@@ -94,6 +94,12 @@ def get_server():
     return Server().dump()
 
 
+@application.route("/server/status", methods=["POST"])
+def get_server_status():
+    data = request.json
+    return Server().status(data["mariadb_root_password"])
+
+
 @application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}

@@ -1,10 +1,12 @@
 import os
 import shutil
+import time
 
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import MySQLDatabase
 
-from agent.base import Base
+from agent.base import Base, AgentException
 from agent.job import Job, Step, step, job
 from agent.bench import Bench
 from agent.site import Site
@@ -216,6 +218,153 @@ class Server(Base):
         self._generate_nginx_config()
         self._generate_agent_nginx_config()
         self._reload_nginx()
+
+    def status(self, mariadb_root_password):
+        return {
+            "mariadb": self.mariadb_processlist(
+                mariadb_root_password=mariadb_root_password
+            ),
+            "supervisor": self.supervisor_status(),
+            "nginx": self.nginx_status(),
+            "stats": self.stats(),
+            "processes": self.processes(),
+        }
+
+    def _memory_stats(self):
+        free = self.execute("free -t -m")["output"].split("\n")
+        memory = {}
+        headers = free[0].split()
+        for line in free[1:]:
+            type, line = line.split(None, 1)
+            memory[type.lower()] = dict(
+                zip(headers, list(map(int, line.split())))
+            )
+        return memory
+
+    def _cpu_stats(self):
+        prev_proc = self.execute("cat /proc/stat")["output"].split("\n")
+        time.sleep(0.5)
+        now_proc = self.execute("cat /proc/stat")["output"].split("\n")
+
+        # 0   user            Time spent in user mode.
+        # 1   nice            Time spent in user mode with low priority
+        # 2   system          Time spent in system mode.
+        # 3   idle            Time spent in the idle task.
+        # 4   iowait          Time waiting for I/O to complete.  This
+        # 5   irq             Time servicing interrupts.
+        # 6   softirq         Time servicing softirqs.
+        # 7   steal           Stolen time
+        # 8   guest           Time spent running a virtual CPU for guest OS
+        # 9   guest_nice      Time spent running a niced guest
+
+        # IDLE = idle + iowait
+        # NONIDLE = user + nice + system + irq + softirq + steal + guest
+        #           + guest_nice
+        # TOTAL = IDLE + NONIDLE
+        # USAGE = TOTAL - IDLE / TOTAL
+        cpu = {}
+        for prev, now in zip(prev_proc, now_proc):
+            if prev.startswith("cpu"):
+                type = prev.split()[0]
+                prev = list(map(int, prev.split()[1:]))
+                now = list(map(int, now.split()[1:]))
+
+                idle = (now[3] + now[4]) - (prev[3] + prev[4])
+                total = sum(now) - sum(prev)
+                cpu[type] = int(1000 * (total - idle) / total) / 10
+        return cpu
+
+    def stats(self):
+        load_average = os.getloadavg()
+        return {
+            "cpu": {
+                "usage": self._cpu_stats(),
+                "count": os.cpu_count(),
+                "load_average": {
+                    1: load_average[0],
+                    5: load_average[1],
+                    15: load_average[2],
+                },
+            },
+            "memory": self._memory_stats(),
+        }
+
+    def processes(self):
+        processes = []
+        try:
+            output = self.execute("ps --pid 2 --ppid 2 --deselect u")[
+                "output"
+            ].split("\n")
+            headers = list(filter(None, output[0].split()))
+            rows = map(
+                lambda s: s.strip().split(None, len(headers) - 1), output[1:]
+            )
+            processes = [dict(zip(headers, row)) for row in rows]
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return processes
+
+    def mariadb_processlist(self, mariadb_root_password):
+        processes = []
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host="localhost",
+                port=3306,
+            )
+            cursor = mariadb.execute_sql("SHOW PROCESSLIST")
+            rows = cursor.fetchall()
+            columns = [d[0] for d in cursor.description]
+            processes = list(map(lambda x: dict(zip(columns, x)), rows))
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return processes
+
+    def supervisor_status(self, name="all"):
+        status = []
+        try:
+            try:
+                supervisor = self.execute(f"sudo supervisorctl status {name}")
+            except AgentException as e:
+                supervisor = e.data
+
+            for process in supervisor["output"].split("\n"):
+                name, description = process.split(None, 1)
+
+                name, *group = name.strip().split(":")
+                group = group[0] if group else ""
+
+                state, *description = description.strip().split(None, 1)
+                state = state.strip()
+                description = description[0].strip() if description else ""
+
+                status.append(
+                    {
+                        "name": name,
+                        "group": group,
+                        "state": state,
+                        "description": description,
+                        "online": state == "RUNNING",
+                    }
+                )
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return status
+
+    def nginx_status(self):
+        try:
+            systemd = self.execute(f"sudo systemctl status nginx")
+        except AgentException as e:
+            systemd = e.data
+        return systemd["output"]
 
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
