@@ -2,6 +2,7 @@ import os
 import shutil
 import time
 
+from datetime import datetime
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
@@ -228,6 +229,7 @@ class Server(Base):
             "nginx": self.nginx_status(),
             "stats": self.stats(),
             "processes": self.processes(),
+            "timestamp": str(datetime.now()),
         }
 
     def _memory_stats(self):
