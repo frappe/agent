@@ -238,7 +238,7 @@ class Server(Base):
         headers = free[0].split()
         for line in free[1:]:
             type, line = line.split(None, 1)
-            memory[type.lower()] = dict(
+            memory[type.lower()[:-1]] = dict(
                 zip(headers, list(map(int, line.split())))
             )
         return memory
