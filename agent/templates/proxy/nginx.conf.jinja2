@@ -5,12 +5,28 @@ upstream {{ upstream["hash"] }} {
 }
 {% endfor %}
 
+upstream site_not_found {
+	server 127.0.0.1:10090;
+	keepalive 100;
+}
+
+upstream deactivated {
+	server 127.0.0.1:10091;
+	keepalive 100;
+}
+
+upstream suspended {
+	server 127.0.0.1:10092;
+	keepalive 100;
+}
+
 map $actual_host $upstream_server_hash {
 {% for upstream in upstreams.values() -%}
 	{% for site in upstream["sites"] %}
-	{{ site }} http://{{ upstream["hash"] }};
+	{{ site.name }} http://{{ site.upstream }};
 	{%- endfor %}
 {% endfor %}
+	default http://site_not_found;
 }
 
 map $host $actual_host {
@@ -128,4 +144,44 @@ server {
 	location / {
 		return 301 https://$host$request_uri;
 	}
+}
+
+
+server {
+	listen 127.0.0.1:10090;
+	location / {
+		return 307 https://{{ domain }}/dashboard/#/sites/new?domain=$host;
+	}
+}
+
+server {
+	listen 127.0.0.1:10091;
+
+	root {{ error_pages_directory }};
+	error_page 503 /deactivated.html;
+
+	location / {
+		return 503;
+	}
+
+	location = /deactivated.html {
+		internal;
+	}
+}
+
+
+server {
+	listen 127.0.0.1:10092;
+
+	root {{ error_pages_directory }};
+	error_page 402 /suspended.html;
+
+	location / {
+		return 402;
+	}
+
+	location = /suspended.html {
+		internal;
+	}
+
 }

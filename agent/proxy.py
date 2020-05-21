@@ -19,6 +19,9 @@ class Proxy(Server):
             self.nginx_directory, "upstreams"
         )
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
+        self.error_pages_directory = os.path.join(
+            self.directory, "repo", "agent", "pages"
+        )
 
         self.job = None
         self.step = None
@@ -93,6 +96,19 @@ class Proxy(Server):
         site_file = os.path.join(upstream_directory, site)
         os.remove(site_file)
 
+    @job("Update Site Status")
+    def update_site_status_job(self, upstream, site, status):
+        self.update_site_status(upstream, site, status)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Update Site File")
+    def update_site_status(self, upstream, site, status):
+        upstream_directory = os.path.join(self.upstreams_directory, upstream)
+        site_file = os.path.join(upstream_directory, site)
+        with open(site_file, "w") as f:
+            f.write(status)
+
     @step("Reload NGINX")
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
@@ -110,6 +126,7 @@ class Proxy(Server):
                 "upstreams": self.upstreams,
                 "domain": self.config["domain"],
                 "nginx_directory": self.config["nginx_directory"],
+                "error_pages_directory": self.error_pages_directory,
             },
             proxy_config_file,
         )
@@ -148,7 +165,15 @@ class Proxy(Server):
                 hashed_upstream = sha(upstream.encode()).hexdigest()[:16]
                 upstreams[upstream] = {"sites": [], "hash": hashed_upstream}
                 for site in os.listdir(upstream_directory):
-                    upstreams[upstream]["sites"].append(site)
+                    with open(os.path.join(upstream_directory, site)) as f:
+                        status = f.read().strip()
+                    if status in ("deactivated", "suspended"):
+                        actual_upstream = status
+                    else:
+                        actual_upstream = hashed_upstream
+                    upstreams[upstream]["sites"].append(
+                        {"name": site, "upstream": actual_upstream}
+                    )
         return upstreams
 
     @property

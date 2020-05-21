@@ -394,6 +394,16 @@ def proxy_remove_upstream_site(upstream, site):
     return {"job": job}
 
 
+@application.route(
+    "/proxy/upstreams/<string:upstream>/sites/<string:site>/status",
+    methods=["POST"],
+)
+def update_site_status(upstream, site):
+    data = request.json
+    job = Proxy().update_site_status_job(upstream, site, data["status"])
+    return {"job": job}
+
+
 def to_dict(model):
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
