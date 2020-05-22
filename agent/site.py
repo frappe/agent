@@ -121,8 +121,9 @@ class Site(Base):
         self.update_config(value)
 
     @step("Backup Site")
-    def backup(self):
-        return self.bench.execute(f"bench --verbose --site {self.name} backup")
+    def backup(self, with_files=False):
+        with_files = "--with-files" if with_files else ""
+        self.bench.execute(f"bench --site {self.name} backup {with_files}")
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
@@ -243,15 +244,30 @@ class Site(Base):
             return json.load(f)
 
     @job("Backup Site")
-    def backup_job(self):
-        backup = self.backup()
-        database = backup["output"].split(" - ")[1].split("/")[-1]
-        file = os.path.join(self.directory, "private", "backups", database)
-        return {
-            "database": database,
-            "size": os.stat(file).st_size,
-            "url": f"https://{self.name}/backups/{database}",
-        }
+    def backup_job(self, with_files=False):
+        self.backup(with_files)
+        backup_directory = os.path.join(self.directory, "private", "backups")
+        databases, publics, privates = [], [], []
+        for file in os.listdir(backup_directory):
+            path = os.path.join(backup_directory, file)
+            if file.endswith("database.sql.gz"):
+                databases.append(path)
+            elif file.endswith("private-files.tar"):
+                privates.append(path)
+            elif file.endswith("files.tar"):
+                publics.append(path)
+        backups = {"database": {"path": max(databases, key=os.path.getmtime)}}
+        if with_files:
+            backups["private"] = {"path": max(privates, key=os.path.getmtime)}
+            backups["public"] = {"path": max(publics, key=os.path.getmtime)}
+
+        for backup in backups.values():
+            file = os.path.basename(backup["path"])
+            backup["file"] = file
+            backup["size"] = os.stat(backup["path"]).st_size
+            backup["url"] = f"https://{self.name}/backups/{file}"
+
+        return backups
 
     def setconfig(self, value):
         with open(self.config_file, "w") as f:

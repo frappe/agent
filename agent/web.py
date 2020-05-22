@@ -292,7 +292,9 @@ def fetch_site_status(bench, site):
     "/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"]
 )
 def backup_site(bench, site):
-    job = Server().benches[bench].sites[site].backup_job()
+    data = request.json
+    with_files = data.get("with_files") if data else False
+    job = Server().benches[bench].sites[site].backup_job(with_files)
     return {"job": job}
 
 
