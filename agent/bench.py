@@ -209,7 +209,7 @@ class Bench(Base):
             log = data["apps"][name]
             if name not in self.apps:
                 log["get"] = self.execute(
-                    f"bench get-app --branch {branch} {repo} {name}"
+                    f"bench get-app --branch {branch} {repo}"
                 )
 
                 output.append(log["get"]["output"])
