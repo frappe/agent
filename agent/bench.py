@@ -190,7 +190,7 @@ class Bench(Base):
             backup_file = backups["database"]["path"]
 
             with open(backup_file, 'rb') as data:
-                s3.upload_fileobj(data, bucket)
+                s3.upload_fileobj(data, bucket, backup_file)
 
     @step("Bench Reset Apps")
     def reset_apps(self, apps):
