@@ -181,7 +181,7 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @job("Backup Sites to S3")
+    @step("Backup Sites to S3")
     def offsite_backup(self, bucket, auth):
         s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
 
@@ -191,6 +191,10 @@ class Bench(Base):
 
             with open(backup_file, 'rb') as data:
                 s3.upload_fileobj(data, bucket, backup_file)
+
+    @job("Backup Sites to S3")
+    def offsite_backup_job(self, bucket, auth):
+        self.offsite_backup(bucket, auth)
 
     @step("Bench Reset Apps")
     def reset_apps(self, apps):

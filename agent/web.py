@@ -162,7 +162,7 @@ def offsite_backup(bench):
     bucket = data.get("bucket")
     auth = data.get("auth")
 
-    job = Server().benches[bench].offsite_backup(bucket, auth)
+    job = Server().benches[bench].offsite_backup_job(bucket, auth)
     return {"job": job}
 
 
