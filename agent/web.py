@@ -156,6 +156,12 @@ def archive_bench(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/offsite_backup", methods=["POST"])
+def offsite_backup(bench, bucket, auth):
+    job = Server().offsite_backup(bench, bucket, auth)
+    return {"job": job}
+
+
 """
 POST /benches/bench-1/sites
 {

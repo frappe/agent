@@ -8,6 +8,7 @@ from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
 import requests
+import boto3
 
 
 class Bench(Base):
@@ -179,6 +180,17 @@ class Bench(Base):
         self.bench_archive_site(name, mariadb_root_password)
         self.setup_nginx()
         self.server.reload_nginx()
+
+    @job("Backup Sites to S3")
+    def offsite_backup(self, name, bucket, auth):
+        s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
+
+        for path, site in self.sites.items():
+            backups = site.fetch_latest_backup(with_files=False)
+            backup_file = backups["database"]["path"]
+
+            with open(backup_file, 'rb') as data:
+                s3.upload_fileobj(data, bucket)
 
     @step("Bench Reset Apps")
     def reset_apps(self, apps):

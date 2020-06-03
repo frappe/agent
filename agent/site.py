@@ -125,6 +125,8 @@ class Site(Base):
         with_files = "--with-files" if with_files else ""
         self.bench.execute(f"bench --site {self.name} backup {with_files}")
 
+        return self.fetch_latest_backup(with_files=with_files)
+
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
         return self.bench.execute(
@@ -245,9 +247,14 @@ class Site(Base):
 
     @job("Backup Site")
     def backup_job(self, with_files=False):
-        self.backup(with_files)
-        backup_directory = os.path.join(self.directory, "private", "backups")
+        backups = self.backup(with_files)
+
+        return backups
+
+    def fetch_latest_backup(self, with_files=True):
         databases, publics, privates = [], [], []
+        backup_directory = os.path.join(self.directory, "private", "backups")
+
         for file in os.listdir(backup_directory):
             path = os.path.join(backup_directory, file)
             if file.endswith("database.sql.gz"):
@@ -256,7 +263,9 @@ class Site(Base):
                 privates.append(path)
             elif file.endswith("files.tar"):
                 publics.append(path)
+
         backups = {"database": {"path": max(databases, key=os.path.getmtime)}}
+
         if with_files:
             backups["private"] = {"path": max(privates, key=os.path.getmtime)}
             backups["public"] = {"path": max(publics, key=os.path.getmtime)}
