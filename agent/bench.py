@@ -182,7 +182,7 @@ class Bench(Base):
         self.server.reload_nginx()
 
     @job("Backup Sites to S3")
-    def offsite_backup(self, name, bucket, auth):
+    def offsite_backup(self, bucket, auth):
         s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
 
         for path, site in self.sites.items():
