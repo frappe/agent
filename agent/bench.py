@@ -183,14 +183,18 @@ class Bench(Base):
 
     @step("Backup Sites to S3")
     def offsite_backup(self, bucket, auth):
+        backup_files = {}
         s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
 
         for path, site in self.sites.items():
             backups = site.fetch_latest_backup(with_files=False)
             backup_file = backups["database"]["path"]
+            backup_files[site.name] = backup_file
 
             with open(backup_file, 'rb') as data:
                 s3.upload_fileobj(data, bucket, backup_file)
+
+        return backup_files
 
     @job("Backup Sites to S3")
     def offsite_backup_job(self, bucket, auth):
