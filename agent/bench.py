@@ -191,8 +191,11 @@ class Bench(Base):
             backup_file = backups["database"]["path"]
             backup_files[site.name] = backup_file
 
+            # TODO: lets save these as bucket/bench/site/file
+            file_name = backup_file.split(os.sep)[-1]
+
             with open(backup_file, 'rb') as data:
-                s3.upload_fileobj(data, bucket, backup_file)
+                s3.upload_fileobj(data, bucket, file_name)
 
         return backup_files
 
