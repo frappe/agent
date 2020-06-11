@@ -139,12 +139,12 @@ def get_site(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/logs")
 def get_logs(bench, site):
-    return Server().benches[bench].sites[site].logs
+    return jsonify(Server().benches[bench].sites[site].logs)
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
 def get_log(bench, site, log):
-    return Server().benches[bench].sites[site].retrieve(log)
+    return { log: Server().benches[bench].sites[site].retrieve_log(log) }
 
 
 @application.route("/benches", methods=["POST"])
