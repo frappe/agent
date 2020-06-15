@@ -181,28 +181,6 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @step("Backup Sites to S3")
-    def offsite_backup(self, bucket, auth):
-        backup_files = {}
-        s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
-
-        for path, site in self.sites.items():
-            backups = site.fetch_latest_backup(with_files=False)
-            backup_file = backups["database"]["path"]
-            backup_files[site.name] = backup_file
-
-            # TODO: lets save these as bucket/bench/site/file
-            file_name = backup_file.split(os.sep)[-1]
-
-            with open(backup_file, 'rb') as data:
-                s3.upload_fileobj(data, bucket, file_name)
-
-        return backup_files
-
-    @job("Backup Sites to S3")
-    def offsite_backup_job(self, bucket, auth):
-        self.offsite_backup(bucket, auth)
-
     @step("Bench Reset Apps")
     def reset_apps(self, apps):
         data = {"apps": {}}
