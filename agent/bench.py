@@ -41,8 +41,8 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
-    def execute(self, command):
-        return super().execute(command, directory=self.directory)
+    def execute(self, command, input=None):
+        return super().execute(command, directory=self.directory, input=input)
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
@@ -180,20 +180,17 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @step("Bench Reset Apps")
-    def reset_apps(self, apps):
-        data = {"apps": {}}
+    @step("Bench Reset Frappe App")
+    def reset_frappe(self, apps):
+        data = {}
         output = []
 
-        for app in apps:
-            name, hash = app["name"], app["hash"]
-            data["apps"][name] = {}
-            log = data["apps"][name]
-            log["fetch"] = self.apps[name].fetch()
-            log["reset"] = self.apps[name].reset(hash)
+        hash = list(filter(lambda x: x["name"] == "frappe", apps))[0]["hash"]
+        data["fetch"] = self.apps["frappe"].fetch_ref(hash)
+        data["checkout"] = self.apps["frappe"].checkout(hash)
 
-            output.append(log["fetch"]["output"])
-            output.append(log["reset"]["output"])
+        output.append(data["fetch"]["output"])
+        output.append(data["checkout"]["output"])
 
         data["output"] = "\n".join(output)
         return data
@@ -204,18 +201,47 @@ class Bench(Base):
         output = []
 
         for app in apps:
-            name, branch, repo = app["name"], app["branch"], app["repo"]
+            name, repo, url, hash = (
+                app["name"],
+                app["repo"],
+                app["url"],
+                app["hash"],
+            )
+            if name in self.apps:  # Skip frappe
+                continue
+
+            app_directory = os.path.join(self.apps_directory, repo)
+            os.mkdir(app_directory)
+
             data["apps"][name] = {}
             log = data["apps"][name]
-            if name not in self.apps:
-                log["get"] = self.execute(
-                    f"bench get-app --branch {branch} {repo}"
-                )
+            log["clone"] = self.clone_app(url, hash, app_directory)
+            log["get"] = self.get_app(url)
 
-                output.append(log["get"]["output"])
+            output.append(log["clone"])
+            output.append(log["get"])
 
         data["output"] = "\n".join(output)
         return data
+
+    def clone_app(self, url, hash, dir):
+        commands = []
+        commands.append(self.server.execute("git init", dir))
+        commands.append(
+            self.server.execute(f"git remote add upstream {url}", dir)
+        )
+        commands.append(
+            self.server.execute(
+                f"git fetch --progress --depth 1 upstream {hash}", dir
+            )
+        )
+        commands.append(self.server.execute(f"git checkout {hash}", dir))
+        return "".join(c["output"] for c in commands)
+
+    def get_app(self, url):
+        return self.execute(
+            f"bench get-app {url} --skip-assets", input="N\ny\n"
+        )["output"]
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):

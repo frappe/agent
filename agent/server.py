@@ -34,12 +34,14 @@ class Server(Base):
             # Unable to articulate the reasons as of now
             command = (
                 f"bench init --clone-from {clone} --clone-without-update "
-                f"--python {python} {name} --no-backups "
+                "--no-backups --skip-assets --verbose "
+                f"--python {python} {name}"
             )
         else:
             command = (
                 f"bench init --frappe-branch {branch} --frappe-path {repo} "
-                f"--python {python} {name} --no-backups "
+                "--no-backups --skip-assets --verbose "
+                f"--python {python} {name}"
             )
 
         return self.execute(command, directory=self.benches_directory)
@@ -60,8 +62,8 @@ class Server(Base):
         bench = Bench(name, self)
         bench.setconfig(config)
         bench.setup_redis()
+        bench.reset_frappe(apps)
         bench.get_apps(apps)
-        bench.reset_apps(apps)
         bench.setup_requirements()
         bench.build()
         bench.setup_production()
