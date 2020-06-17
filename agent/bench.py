@@ -41,8 +41,8 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
-    def execute(self, command):
-        return super().execute(command, directory=self.directory)
+    def execute(self, command, input=None):
+        return super().execute(command, directory=self.directory, input=input)
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
