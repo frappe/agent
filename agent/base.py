@@ -13,7 +13,7 @@ class Base:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
 
-    def execute(self, command, directory=None):
+    def execute(self, command, directory=None, input=None):
         directory = directory or self.directory
         start = datetime.now()
         data = {"command": command, "directory": directory, "start": start}
@@ -25,6 +25,7 @@ class Base:
                 stderr=subprocess.STDOUT,
                 cwd=directory,
                 shell=True,
+                input=input.encode() if input else None,
             )
         except subprocess.CalledProcessError as e:
             end = datetime.now()
