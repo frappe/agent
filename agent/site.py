@@ -5,7 +5,7 @@ import json
 import requests
 import shutil
 import time
-from datetime import datetime
+from datetime import datetime, date
 
 
 class Site(Base):
@@ -121,11 +121,30 @@ class Site(Base):
         self.update_config(value)
 
     @step("Backup Site")
-    def backup(self, with_files=False):
+    def backup(self, with_files=False, offsite=None):
         with_files = "--with-files" if with_files else ""
         self.bench.execute(f"bench --site {self.name} backup {with_files}")
-
         return self.fetch_latest_backup(with_files=with_files)
+
+    @step("Upload Site Backup to S3")
+    def upload_offsite_backup(self, backup_files):
+        if not backup_files:
+            return {}
+
+        offsite_files = {}
+        today = str(date.today())
+        bucket, auth = offsite["bucket"], offsite["auth"]
+        s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
+
+        for file_type, file_path in backup_files.items():
+            file_name = backup_file.split(os.sep)[-1]
+            offsite_path = os.path.join(self.bench.name, self.name, today, file_name)
+            offsite_files[file_name] = offsite_path
+
+            with open(backup_file, 'rb') as data:
+                s3.upload_fileobj(data, bucket, offsite_path)
+
+        return offsite_files
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
@@ -246,10 +265,10 @@ class Site(Base):
             return json.load(f)
 
     @job("Backup Site")
-    def backup_job(self, with_files=False):
-        backups = self.backup(with_files)
-
-        return backups
+    def backup_job(self, with_files=False, offsite=None):
+        backup_files = self.backup(with_files, offsite)
+        uploaded_files = self.upload_offsite_backup(backup_files if offsite else {})
+        return [backup_files, uploaded_files]
 
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates = [], [], []
