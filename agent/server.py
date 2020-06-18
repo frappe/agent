@@ -369,7 +369,7 @@ class Server(Base):
 
     def nginx_status(self):
         try:
-            systemd = self.execute(f"sudo systemctl status nginx")
+            systemd = self.execute("sudo systemctl status nginx")
         except AgentException as e:
             systemd = e.data
         return systemd["output"]
