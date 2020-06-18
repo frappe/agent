@@ -254,7 +254,7 @@ class Bench(Base):
     @step("Bench Setup Supervisor")
     def setup_supervisor(self):
         user = self.config["frappe_user"]
-        return self.execute(f"sudo bench setup supervisor {user} --yes")
+        return self.execute(f"sudo bench setup supervisor --user {user} --yes")
 
     @step("Bench Setup Production")
     def setup_production(self):
