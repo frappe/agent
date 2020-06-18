@@ -148,6 +148,10 @@ class Server(Base):
     def reload_nginx(self):
         return self._reload_nginx()
 
+    @step("Update Supervisor")
+    def update_supervisor(self):
+        return self._update_supervisor()
+
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)

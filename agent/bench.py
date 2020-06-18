@@ -251,6 +251,11 @@ class Bench(Base):
     def setup_nginx_target(self):
         return self.execute(f"bench setup nginx --yes")
 
+    @step("Bench Setup Supervisor")
+    def setup_supervisor(self):
+        user = self.config["frappe_user"]
+        return self.execute(f"sudo bench setup supervisor {user} --yes")
+
     @step("Bench Setup Production")
     def setup_production(self):
         user = self.config["frappe_user"]
@@ -289,9 +294,11 @@ class Bench(Base):
 
     @job("Update Bench Configuration")
     def update_config_job(self, value):
-        new_config = self.config
-        new_config.update(value)
-        self.setconfig(new_config)
+        self.update_config(value)
+        self.setup_supervisor()
+        self.server.update_supervisor()
+        self.setup_nginx()
+        self.server.reload_nginx()
 
     @property
     def job_record(self):
