@@ -281,6 +281,11 @@ class Bench(Base):
                 pass
         return apps
 
+    @step("Update Bench Configuration")
+    def update_config(self, value):
+        new_config = self.config
+        new_config.update(value)
+        self.setconfig(new_config)
 
     @job("Update Bench Configuration")
     def update_config_job(self, value):

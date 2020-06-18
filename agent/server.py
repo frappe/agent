@@ -60,7 +60,7 @@ class Server(Base):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
         self.bench_init(name, python, frappe["repo"], frappe["branch"], clone)
         bench = Bench(name, self)
-        bench.setconfig(config)
+        bench.update_config(config)
         bench.setup_redis()
         bench.reset_frappe(apps)
         bench.get_apps(apps)
