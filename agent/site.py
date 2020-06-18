@@ -269,10 +269,6 @@ class Site(Base):
 
         return backups
 
-    def setconfig(self, value):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=1, sort_keys=True)
-
     @property
     def job_record(self):
         return self.bench.server.job_record

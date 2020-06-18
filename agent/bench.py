@@ -281,10 +281,6 @@ class Bench(Base):
                 pass
         return apps
 
-    @step("Bench Set Configuration")
-    def setconfig(self, value):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=1, sort_keys=True)
 
     @job("Update Bench Configuration")
     def update_config_job(self, value):

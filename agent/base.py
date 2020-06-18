@@ -54,9 +54,9 @@ class Base:
         with open(self.config_file, "r") as f:
             return json.load(f)
 
-    def setconfig(self, value):
+    def setconfig(self, value, indent=1):
         with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=4, sort_keys=True)
+            json.dump(value, f, indent=indent, sort_keys=True)
 
     def remove_crs(self, input):
         output = subprocess.check_output(["col", "-b"], input=input)

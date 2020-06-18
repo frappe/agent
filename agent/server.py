@@ -151,7 +151,7 @@ class Server(Base):
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)
-        self.setconfig(config)
+        self.setconfig(config, indent=4)
 
     def setup_nginx(self):
         self._generate_nginx_config()
