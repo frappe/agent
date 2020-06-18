@@ -63,7 +63,7 @@ def proxy(domain=None):
     if domain:
         config = proxy.config
         config["domain"] = domain
-        proxy.setconfig(config)
+        proxy.setconfig(config, indent=4)
     proxy.setup_proxy()
 
 

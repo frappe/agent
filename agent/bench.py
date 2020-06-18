@@ -87,7 +87,7 @@ class Bench(Base):
         def _inactive_scheduler_sites(bench):
             inactive = []
             _touch_currentsite_file(bench)
-            doctor = bench.execute(f"bench doctor")["output"].split("\n")
+            doctor = bench.execute("bench doctor")["output"].split("\n")
             for line in doctor:
                 if "inactive" in line:
                     site = line.split(" ")[-1]
@@ -245,11 +245,16 @@ class Bench(Base):
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
-        return self.execute(f"bench setup nginx --yes")
+        return self.execute("bench setup nginx --yes")
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
-        return self.execute(f"bench setup nginx --yes")
+        return self.execute("bench setup nginx --yes")
+
+    @step("Bench Setup Supervisor")
+    def setup_supervisor(self):
+        user = self.config["frappe_user"]
+        return self.execute(f"sudo bench setup supervisor {user} --yes")
 
     @step("Bench Setup Production")
     def setup_production(self):
@@ -258,7 +263,7 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute(f"sudo bench disable-production")
+        return self.execute("sudo bench disable-production")
 
     @step("Bench Setup Redis")
     def setup_redis(self):
@@ -281,16 +286,19 @@ class Bench(Base):
                 pass
         return apps
 
-    @step("Bench Set Configuration")
-    def setconfig(self, value):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=1, sort_keys=True)
-
-    @job("Update Bench Configuration")
-    def update_config_job(self, value):
+    @step("Update Bench Configuration")
+    def update_config(self, value):
         new_config = self.config
         new_config.update(value)
         self.setconfig(new_config)
+
+    @job("Update Bench Configuration")
+    def update_config_job(self, value):
+        self.update_config(value)
+        self.setup_supervisor()
+        self.server.update_supervisor()
+        self.setup_nginx()
+        self.server.reload_nginx()
 
     @property
     def job_record(self):

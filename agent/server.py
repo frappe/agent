@@ -60,7 +60,7 @@ class Server(Base):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
         self.bench_init(name, python, frappe["repo"], frappe["branch"], clone)
         bench = Bench(name, self)
-        bench.setconfig(config)
+        bench.update_config(config)
         bench.setup_redis()
         bench.reset_frappe(apps)
         bench.get_apps(apps)
@@ -148,10 +148,14 @@ class Server(Base):
     def reload_nginx(self):
         return self._reload_nginx()
 
+    @step("Update Supervisor")
+    def update_supervisor(self):
+        return self._update_supervisor()
+
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)
-        self.setconfig(config)
+        self.setconfig(config, indent=4)
 
     def setup_nginx(self):
         self._generate_nginx_config()
@@ -365,7 +369,7 @@ class Server(Base):
 
     def nginx_status(self):
         try:
-            systemd = self.execute(f"sudo systemctl status nginx")
+            systemd = self.execute("sudo systemctl status nginx")
         except AgentException as e:
             systemd = e.data
         return systemd["output"]
