@@ -78,6 +78,9 @@ class Server(Base):
     def move_bench_to_archived_directory(self, bench):
         if not os.path.exists(self.archived_directory):
             os.mkdir(self.archived_directory)
+        target = os.path.join(self.archived_directory, bench.name)
+        if os.path.exists(target):
+            shutil.rmtree(target)
         self.execute(f"mv {bench.directory} {self.archived_directory}")
 
     @job("Update Site Pull")
