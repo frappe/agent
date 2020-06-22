@@ -2,6 +2,7 @@ from agent.base import Base
 from agent.job import step, job
 import os
 import json
+import re
 import requests
 import shutil
 import time
@@ -26,8 +27,10 @@ class Site(Base):
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
 
-    def bench_execute(self, command):
-        return self.bench.execute(f"bench --site {self.name} {command}")
+    def bench_execute(self, command, input=None):
+        return self.bench.execute(
+            f"bench --site {self.name} {command}", input=input
+        )
 
     def dump(self):
         return {"name": self.name}
@@ -230,6 +233,17 @@ class Site(Base):
             data["scheduler"] = False
 
         return data
+
+    def sid(self):
+        code = """import frappe
+            from frappe.app import init_request
+            frappe.utils.set_request()
+            frappe.app.init_request(frappe.local.request)
+            frappe.local.login_manager.login_as("Administrator")
+            print(">>>" + frappe.session.sid + "<<<")"""
+
+        output = self.bench_execute("console", input=code)["output"]
+        return re.search(r">>>(.*)<<<", output).group(1)
 
     @property
     def tables(self):

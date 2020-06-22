@@ -137,6 +137,11 @@ def get_site(bench, site):
     return Server().benches[bench].sites[site].dump()
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/sid")
+def get_site_sid(bench, site):
+    return {"sid": Server().benches[bench].sites[site].sid()}
+
+
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json
