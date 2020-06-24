@@ -3,7 +3,7 @@ import os
 import shutil
 import traceback
 from agent.app import App
-from agent.base import Base
+from agent.base import Base, AgentException
 from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
@@ -95,7 +95,11 @@ class Bench(Base):
         def _inactive_scheduler_sites(bench):
             inactive = []
             _touch_currentsite_file(bench)
-            doctor = bench.execute("bench doctor")["output"].split("\n")
+            try:
+                doctor = bench.execute("bench doctor")["output"].split("\n")
+            except AgentException as e:
+                doctor = e.data["output"]
+
             for line in doctor:
                 if "inactive" in line:
                     site = line.split(" ")[-1]
@@ -127,8 +131,8 @@ class Bench(Base):
         for site in _inactive_scheduler_sites(self):
             status["sites"][site]["scheduler"] = False
 
-        for site in _inactive_web_sites(self):
-            status["sites"][site]["web"] = False
+        # for site in _inactive_web_sites(self):
+        #     status["sites"][site]["web"] = False
 
         return status
 
