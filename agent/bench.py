@@ -60,10 +60,9 @@ class Bench(Base):
                 self.directory, "logs", "monitor.json.log"
             )
             time = datetime.utcnow().isoformat()
+            logs_directory = os.path.join(self.server.directory, "logs",)
             target_file = os.path.join(
-                self.server.directory,
-                "logs",
-                f"{self.name}-{time}-monitor.json.log",
+                logs_directory, f"{self.name}-{time}-monitor.json.log",
             )
             shutil.move(monitor_log_file, target_file)
 
@@ -73,6 +72,14 @@ class Bench(Base):
                         lines.append(json.loads(line))
                     except Exception:
                         traceback.print_exc()
+
+            now = datetime.now().timestamp()
+            for file in os.listdir(logs_directory):
+                path = os.path.join(logs_directory, file)
+                if file.endswith("-monitor.json.log") and (
+                    now - os.stat(path).st_mtime
+                ) > (7 * 86400):
+                    os.remove(path)
         except FileNotFoundError:
             pass
         except Exception:
