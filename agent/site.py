@@ -234,6 +234,10 @@ class Site(Base):
 
         return data
 
+    def fetch_site_info(self):
+        data = {"config": self.config, "timezone": self.timezone}
+        return data
+
     def sid(self):
         code = """import frappe
             from frappe.app import init_request
@@ -244,6 +248,11 @@ class Site(Base):
 
         output = self.bench_execute("console", input=code)["output"]
         return re.search(r">>>(.*)<<<", output).group(1)
+
+    @property
+    def timezone(self):
+        timezone = self.bench_execute("execute frappe.client.get_time_zone")
+        return json.loads(timezone["output"].splitlines()[-1])["time_zone"]
 
     @property
     def tables(self):
