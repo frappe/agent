@@ -64,14 +64,15 @@ class Bench(Base):
             target_file = os.path.join(
                 logs_directory, f"{self.name}-{time}-monitor.json.log",
             )
-            shutil.move(monitor_log_file, target_file)
+            if os.path.exists(monitor_log_file):
+                shutil.move(monitor_log_file, target_file)
 
-            with open(target_file) as f:
-                for line in f.readlines():
-                    try:
-                        lines.append(json.loads(line))
-                    except Exception:
-                        traceback.print_exc()
+                with open(target_file) as f:
+                    for line in f.readlines():
+                        try:
+                            lines.append(json.loads(line))
+                        except Exception:
+                            traceback.print_exc()
 
             now = datetime.now().timestamp()
             for file in os.listdir(logs_directory):
