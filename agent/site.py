@@ -184,6 +184,7 @@ class Site(Base):
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
+        self.bench_execute("clear-cache")
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
