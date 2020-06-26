@@ -281,6 +281,15 @@ def install_app_site(bench, site):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/apps/<string:app>",
+    methods=["DELETE"],
+)
+def uninstall_app_site(bench, site, app):
+    job = Server().benches[bench].sites[site].uninstall_app_job(app)
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 def fetch_monitor_data(bench):
     return {"data": Server().benches[bench].fetch_monitor_data()}

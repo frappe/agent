@@ -51,6 +51,10 @@ class Site(Base):
     def install_app(self, app):
         return self.bench_execute(f"install-app {app}")
 
+    @step("Uninstall App from Site")
+    def uninstall_app(self, app):
+        return self.bench_execute(f"uninstall-app {app} --yes --no-backup")
+
     @step("Restore Site")
     def restore(
         self,
@@ -112,6 +116,10 @@ class Site(Base):
     @job("Install App on Site")
     def install_app_job(self, app):
         self.install_app(app)
+
+    @job("Uninstall App on Site")
+    def uninstall_app_job(self, app):
+        self.uninstall_app(app)
 
     @step("Update Site Configuration")
     def update_config(self, value):
