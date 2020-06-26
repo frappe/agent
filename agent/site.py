@@ -241,11 +241,15 @@ class Site(Base):
 
     def sid(self):
         code = """import frappe
-            from frappe.app import init_request
-            frappe.utils.set_request()
-            frappe.app.init_request(frappe.local.request)
-            frappe.local.login_manager.login_as("Administrator")
-            print(">>>" + frappe.session.sid + "<<<")"""
+from frappe.app import init_request
+try:
+    from frappe.utils import set_request
+except ImportError:
+    from frappe.tests import set_request
+set_request()
+frappe.app.init_request(frappe.local.request)
+frappe.local.login_manager.login_as("Administrator")
+print(">>>" + frappe.session.sid + "<<<")"""
 
         output = self.bench_execute("console", input=code)["output"]
         return re.search(r">>>(.*)<<<", output).group(1)
