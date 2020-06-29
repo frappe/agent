@@ -15,6 +15,7 @@ class Site(Base):
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)
         self.backup_directory = os.path.join(self.directory, ".migrate")
+        self.logs_directory = os.path.join(self.directory, "logs")
         self.config_file = os.path.join(self.directory, "site_config.json")
         self.touched_tables_file = os.path.join(
             self.directory, "touched_tables.json"
@@ -314,3 +315,35 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def step_record(self):
         return self.bench.server.step_record
+
+    @property
+    def logs(self):
+        def path(file):
+            return os.path.join(self.logs_directory, file)
+
+        def modified_time(file):
+            return os.path.getctime(path(file))
+
+        try:
+            log_files = sorted(os.listdir(self.logs_directory), key=modified_time, reverse=True)
+            payload = []
+
+            for x in log_files:
+                stats = os.stat(path(x))
+                payload.append({
+                    "name": x,
+                    "size": stats.st_size / 1000,
+                    "created": str(datetime.fromtimestamp(stats.st_ctime)),
+                    "modified": str(datetime.fromtimestamp(stats.st_mtime))
+                })
+
+            return payload
+
+        except FileNotFoundError:
+            return []
+
+    def retrieve_log(self, name):
+        if name not in { x["name"] for x in self.logs }:
+            return ""
+        log_file = os.path.join(self.logs_directory, name)
+        return open(log_file).read()

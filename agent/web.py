@@ -137,6 +137,16 @@ def get_site(bench, site):
     return Server().benches[bench].sites[site].dump()
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/logs")
+def get_logs(bench, site):
+    return jsonify(Server().benches[bench].sites[site].logs)
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
+def get_log(bench, site, log):
+    return {log: Server().benches[bench].sites[site].retrieve_log(log)}
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>/sid")
 def get_site_sid(bench, site):
     return {"sid": Server().benches[bench].sites[site].sid()}
