@@ -19,6 +19,8 @@ server {
 	resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 208.67.222.222 208.67.220.220 valid=60s;
 	resolver_timeout 2s;
 
+	client_max_body_size 12G;
+
 	location /agent {
 		proxy_http_version 1.1;
 		proxy_cache_bypass $http_upgrade;

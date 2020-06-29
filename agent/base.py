@@ -13,7 +13,7 @@ class Base:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
 
-    def execute(self, command, directory=None):
+    def execute(self, command, directory=None, input=None):
         directory = directory or self.directory
         start = datetime.now()
         data = {"command": command, "directory": directory, "start": start}
@@ -25,6 +25,7 @@ class Base:
                 stderr=subprocess.STDOUT,
                 cwd=directory,
                 shell=True,
+                input=input.encode() if input else None,
             )
         except subprocess.CalledProcessError as e:
             end = datetime.now()
@@ -53,9 +54,9 @@ class Base:
         with open(self.config_file, "r") as f:
             return json.load(f)
 
-    def setconfig(self, value):
+    def setconfig(self, value, indent=1):
         with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=4, sort_keys=True)
+            json.dump(value, f, indent=indent, sort_keys=True)
 
     def remove_crs(self, input):
         output = subprocess.check_output(["col", "-b"], input=input)

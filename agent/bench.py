@@ -3,7 +3,7 @@ import os
 import shutil
 import traceback
 from agent.app import App
-from agent.base import Base
+from agent.base import Base, AgentException
 from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
@@ -41,8 +41,8 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
-    def execute(self, command):
-        return super().execute(command, directory=self.directory)
+    def execute(self, command, input=None):
+        return super().execute(command, directory=self.directory, input=input)
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
@@ -60,19 +60,27 @@ class Bench(Base):
                 self.directory, "logs", "monitor.json.log"
             )
             time = datetime.utcnow().isoformat()
+            logs_directory = os.path.join(self.server.directory, "logs",)
             target_file = os.path.join(
-                self.server.directory,
-                "logs",
-                f"{self.name}-{time}-monitor.json.log",
+                logs_directory, f"{self.name}-{time}-monitor.json.log",
             )
-            shutil.move(monitor_log_file, target_file)
+            if os.path.exists(monitor_log_file):
+                shutil.move(monitor_log_file, target_file)
 
-            with open(target_file) as f:
-                for line in f.readlines():
-                    try:
-                        lines.append(json.loads(line))
-                    except Exception:
-                        traceback.print_exc()
+                with open(target_file) as f:
+                    for line in f.readlines():
+                        try:
+                            lines.append(json.loads(line))
+                        except Exception:
+                            traceback.print_exc()
+
+            now = datetime.now().timestamp()
+            for file in os.listdir(logs_directory):
+                path = os.path.join(logs_directory, file)
+                if file.endswith("-monitor.json.log") and (
+                    now - os.stat(path).st_mtime
+                ) > (7 * 86400):
+                    os.remove(path)
         except FileNotFoundError:
             pass
         except Exception:
@@ -87,7 +95,11 @@ class Bench(Base):
         def _inactive_scheduler_sites(bench):
             inactive = []
             _touch_currentsite_file(bench)
-            doctor = bench.execute(f"bench doctor")["output"].split("\n")
+            try:
+                doctor = bench.execute("bench doctor")["output"].split("\n")
+            except AgentException as e:
+                doctor = e.data["output"]
+
             for line in doctor:
                 if "inactive" in line:
                     site = line.split(" ")[-1]
@@ -119,8 +131,8 @@ class Bench(Base):
         for site in _inactive_scheduler_sites(self):
             status["sites"][site]["scheduler"] = False
 
-        for site in _inactive_web_sites(self):
-            status["sites"][site]["web"] = False
+        # for site in _inactive_web_sites(self):
+        #     status["sites"][site]["web"] = False
 
         return status
 
@@ -180,20 +192,17 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @step("Bench Reset Apps")
-    def reset_apps(self, apps):
-        data = {"apps": {}}
+    @step("Bench Reset Frappe App")
+    def reset_frappe(self, apps):
+        data = {}
         output = []
 
-        for app in apps:
-            name, hash = app["name"], app["hash"]
-            data["apps"][name] = {}
-            log = data["apps"][name]
-            log["fetch"] = self.apps[name].fetch()
-            log["reset"] = self.apps[name].reset(hash)
+        hash = list(filter(lambda x: x["name"] == "frappe", apps))[0]["hash"]
+        data["fetch"] = self.apps["frappe"].fetch_ref(hash)
+        data["checkout"] = self.apps["frappe"].checkout(hash)
 
-            output.append(log["fetch"]["output"])
-            output.append(log["reset"]["output"])
+        output.append(data["fetch"]["output"])
+        output.append(data["checkout"]["output"])
 
         data["output"] = "\n".join(output)
         return data
@@ -204,26 +213,60 @@ class Bench(Base):
         output = []
 
         for app in apps:
-            name, branch, repo = app["name"], app["branch"], app["repo"]
+            name, repo, url, hash = (
+                app["name"],
+                app["repo"],
+                app["url"],
+                app["hash"],
+            )
+            if name in self.apps:  # Skip frappe
+                continue
+
+            app_directory = os.path.join(self.apps_directory, repo)
+            os.mkdir(app_directory)
+
             data["apps"][name] = {}
             log = data["apps"][name]
-            if name not in self.apps:
-                log["get"] = self.execute(
-                    f"bench get-app --branch {branch} {repo} {name}"
-                )
+            log["clone"] = self.clone_app(url, hash, app_directory)
+            log["get"] = self.get_app(url)
 
-                output.append(log["get"]["output"])
+            output.append(log["clone"])
+            output.append(log["get"])
 
         data["output"] = "\n".join(output)
         return data
 
+    def clone_app(self, url, hash, dir):
+        commands = []
+        commands.append(self.server.execute("git init", dir))
+        commands.append(
+            self.server.execute(f"git remote add upstream {url}", dir)
+        )
+        commands.append(
+            self.server.execute(
+                f"git fetch --progress --depth 1 upstream {hash}", dir
+            )
+        )
+        commands.append(self.server.execute(f"git checkout {hash}", dir))
+        return "".join(c["output"] for c in commands)
+
+    def get_app(self, url):
+        return self.execute(
+            f"bench get-app {url} --skip-assets", input="N\ny\n"
+        )["output"]
+
     @step("Bench Setup NGINX")
     def setup_nginx(self):
-        return self.execute(f"bench setup nginx --yes")
+        return self.execute("bench setup nginx --yes")
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
-        return self.execute(f"bench setup nginx --yes")
+        return self.execute("bench setup nginx --yes")
+
+    @step("Bench Setup Supervisor")
+    def setup_supervisor(self):
+        user = self.config["frappe_user"]
+        return self.execute(f"sudo bench setup supervisor --user {user} --yes")
 
     @step("Bench Setup Production")
     def setup_production(self):
@@ -232,7 +275,7 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute(f"sudo bench disable-production")
+        return self.execute("sudo bench disable-production")
 
     @step("Bench Setup Redis")
     def setup_redis(self):
@@ -255,16 +298,19 @@ class Bench(Base):
                 pass
         return apps
 
-    @step("Bench Set Configuration")
-    def setconfig(self, value):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=1, sort_keys=True)
-
-    @job("Update Bench Configuration")
-    def update_config_job(self, value):
+    @step("Update Bench Configuration")
+    def update_config(self, value):
         new_config = self.config
         new_config.update(value)
         self.setconfig(new_config)
+
+    @job("Update Bench Configuration")
+    def update_config_job(self, value):
+        self.update_config(value)
+        self.setup_supervisor()
+        self.server.update_supervisor()
+        self.setup_nginx()
+        self.server.reload_nginx()
 
     @property
     def job_record(self):

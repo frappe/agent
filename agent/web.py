@@ -144,7 +144,12 @@ def get_logs(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
 def get_log(bench, site, log):
-    return { log: Server().benches[bench].sites[site].retrieve_log(log) }
+    return {log: Server().benches[bench].sites[site].retrieve_log(log)}
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/sid")
+def get_site_sid(bench, site):
+    return {"sid": Server().benches[bench].sites[site].sid()}
 
 
 @application.route("/benches", methods=["POST"])
@@ -286,6 +291,15 @@ def install_app_site(bench, site):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/apps/<string:app>",
+    methods=["DELETE"],
+)
+def uninstall_app_site(bench, site, app):
+    job = Server().benches[bench].sites[site].uninstall_app_job(app)
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 def fetch_monitor_data(bench):
     return {"data": Server().benches[bench].fetch_monitor_data()}
@@ -296,6 +310,13 @@ def fetch_monitor_data(bench):
 )
 def fetch_site_status(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_status()}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/info", methods=["GET"]
+)
+def fetch_site_info(bench, site):
+    return {"data": Server().benches[bench].sites[site].fetch_site_info()}
 
 
 @application.route(
