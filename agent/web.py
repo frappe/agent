@@ -142,7 +142,9 @@ def get_logs(bench, site):
     return jsonify(Server().benches[bench].sites[site].logs)
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/logs/<string:log>"
+)
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
 

@@ -325,17 +325,25 @@ print(">>>" + frappe.session.sid + "<<<")
             return os.path.getctime(path(file))
 
         try:
-            log_files = sorted(os.listdir(self.logs_directory), key=modified_time, reverse=True)
+            log_files = sorted(
+                os.listdir(self.logs_directory),
+                key=modified_time,
+                reverse=True,
+            )
             payload = []
 
             for x in log_files:
                 stats = os.stat(path(x))
-                payload.append({
-                    "name": x,
-                    "size": stats.st_size / 1000,
-                    "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                    "modified": str(datetime.fromtimestamp(stats.st_mtime))
-                })
+                payload.append(
+                    {
+                        "name": x,
+                        "size": stats.st_size / 1000,
+                        "created": str(datetime.fromtimestamp(stats.st_ctime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
+                    }
+                )
 
             return payload
 
@@ -343,7 +351,7 @@ print(">>>" + frappe.session.sid + "<<<")
             return []
 
     def retrieve_log(self, name):
-        if name not in { x["name"] for x in self.logs }:
+        if name not in {x["name"] for x in self.logs}:
             return ""
         log_file = os.path.join(self.logs_directory, name)
         return open(log_file).read()
