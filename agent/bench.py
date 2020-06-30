@@ -270,6 +270,22 @@ class Bench(Base):
 
     @step("Bench Setup Production")
     def setup_production(self):
+        processes = [
+            "web",
+            "schedule",
+            "worker",
+            "redis-queue",
+            "redis-socketio",
+            "redis-cache",
+            "node-socketio",
+        ]
+        logs_directory = os.path.join(self.directory, "logs")
+        for process in processes:
+            stdout_log = os.path.join(logs_directory, f"{process}.log")
+            stderr_log = os.path.join(logs_directory, f"{process}.error.log")
+            open(stdout_log, "a").close()
+            open(stderr_log, "a").close()
+
         user = self.config["frappe_user"]
         return self.execute(f"sudo bench setup production {user} --yes")
 
