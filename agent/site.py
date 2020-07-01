@@ -1,5 +1,6 @@
 from agent.base import Base
 from agent.job import step, job
+import boto3
 import os
 import json
 import requests
@@ -121,14 +122,14 @@ class Site(Base):
         self.update_config(value)
 
     @step("Backup Site")
-    def backup(self, with_files=False, offsite=None):
+    def backup(self, with_files=False):
         with_files = "--with-files" if with_files else ""
         self.bench.execute(f"bench --site {self.name} backup {with_files}")
         return self.fetch_latest_backup(with_files=with_files)
 
     @step("Upload Site Backup to S3")
-    def upload_offsite_backup(self, backup_files):
-        if not backup_files:
+    def upload_offsite_backup(self, backup_files, offsite):
+        if not (offiste and backup_files):
             return {}
 
         offsite_files = {}
@@ -266,8 +267,8 @@ class Site(Base):
 
     @job("Backup Site")
     def backup_job(self, with_files=False, offsite=None):
-        backup_files = self.backup(with_files, offsite)
-        uploaded_files = self.upload_offsite_backup(backup_files if offsite else {})
+        backup_files = self.backup(with_files)
+        uploaded_files = self.upload_offsite_backup(backup_files, offsite)
         return [backup_files, uploaded_files]
 
     def fetch_latest_backup(self, with_files=True):

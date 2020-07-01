@@ -8,7 +8,6 @@ from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
 import requests
-import boto3
 
 
 class Bench(Base):
