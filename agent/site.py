@@ -54,7 +54,7 @@ class Site(Base):
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
-        return self.bench_execute(f"uninstall-app {app} --yes --no-backup")
+        return self.bench_execute(f"uninstall-app {app} --yes")
 
     @step("Restore Site")
     def restore(
