@@ -1,6 +1,4 @@
 import json
-import os
-import tempfile
 from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from base64 import b64decode
