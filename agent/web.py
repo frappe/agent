@@ -9,6 +9,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 from agent.job import JobModel
 from agent.server import Server
 from agent.proxy import Proxy
+from agent.utils import download_file
 
 application = Flask(__name__)
 
@@ -207,19 +208,11 @@ def new_site(bench):
 
 @application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
 def new_site_from_backup(bench):
-    files = request.files
-    data = json.loads(files["json"].read().decode())
-    tempdir = tempfile.mkdtemp(
-        prefix="agent-upload-", suffix=f'-{data["name"]}'
-    )
+    data = request.json
 
-    database_file = os.path.join(tempdir, "database.sql.gz")
-    private_file = os.path.join(tempdir, "private.tar")
-    public_file = os.path.join(tempdir, "public.tar")
-
-    files["database"].save(database_file)
-    files["private"].save(private_file)
-    files["public"].save(public_file)
+    database_file = download_file(data["database"])
+    private_file = download_file(data["private"])
+    public_file = download_file(data["public"])
 
     job = (
         Server()
@@ -242,17 +235,11 @@ def new_site_from_backup(bench):
     "/benches/<string:bench>/sites/<string:site>/restore", methods=["POST"]
 )
 def restore_site(bench, site):
-    files = request.files
-    data = json.loads(files["json"].read().decode())
-    tempdir = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{site}")
+    data = request.json
 
-    database_file = os.path.join(tempdir, "database.sql.gz")
-    private_file = os.path.join(tempdir, "private.tar")
-    public_file = os.path.join(tempdir, "public.tar")
-
-    files["database"].save(database_file)
-    files["private"].save(private_file)
-    files["public"].save(public_file)
+    database_file = download_file(data["database"])
+    private_file = download_file(data["private"])
+    public_file = download_file(data["public"])
 
     job = (
         Server()
