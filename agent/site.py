@@ -1,6 +1,5 @@
 from agent.base import Base
 from agent.job import step, job
-import boto3
 import os
 import json
 import requests
@@ -132,6 +131,7 @@ class Site(Base):
         if not (offiste and backup_files):
             return {}
 
+        import boto3
         offsite_files = {}
         bucket, auth, prefix = offsite["bucket"], offsite["auth"], offsite["path"]
         s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
