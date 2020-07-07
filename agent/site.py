@@ -6,7 +6,7 @@ import json
 import requests
 import shutil
 import time
-from datetime import datetime, date
+from datetime import datetime
 
 
 class Site(Base):
@@ -133,13 +133,12 @@ class Site(Base):
             return {}
 
         offsite_files = {}
-        today = str(date.today())
-        bucket, auth = offsite["bucket"], offsite["auth"]
+        bucket, auth, prefix = offsite["bucket"], offsite["auth"], offsite["path"]
         s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
 
         for file_type, file_path in backup_files.items():
             file_name = backup_file.split(os.sep)[-1]
-            offsite_path = os.path.join(self.bench.name, self.name, today, file_name)
+            offsite_path = os.path.join(prefix, file_name)
             offsite_files[file_name] = offsite_path
 
             with open(backup_file, 'rb') as data:
