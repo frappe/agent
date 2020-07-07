@@ -128,20 +128,29 @@ class Site(Base):
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite):
-        if not (offiste and backup_files):
+        if not (offsite and backup_files):
             return {}
 
         import boto3
-        offsite_files = {}
-        bucket, auth, prefix = offsite["bucket"], offsite["auth"], offsite["path"]
-        s3 = boto3.client('s3', aws_access_key_id=auth["ACCESS_KEY"], aws_secret_access_key=auth["SECRET_KEY"])
 
-        for file_type, file_path in backup_files.items():
-            file_name = backup_file.split(os.sep)[-1]
+        offsite_files = {}
+        bucket, auth, prefix = (
+            offsite["bucket"],
+            offsite["auth"],
+            offsite["path"],
+        )
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=auth["ACCESS_KEY"],
+            aws_secret_access_key=auth["SECRET_KEY"],
+        )
+
+        for backup_file in backup_files.values():
+            file_name = backup_file["file"].split(os.sep)[-1]
             offsite_path = os.path.join(prefix, file_name)
             offsite_files[file_name] = offsite_path
 
-            with open(backup_file, 'rb') as data:
+            with open(backup_file["path"], "rb") as data:
                 s3.upload_fileobj(data, bucket, offsite_path)
 
         return offsite_files
