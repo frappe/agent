@@ -316,7 +316,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
         uploaded_files = self.upload_offsite_backup(backup_files, offsite)
-        return [backup_files, uploaded_files]
+        return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates = [], [], []
