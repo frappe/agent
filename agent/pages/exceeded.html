@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Daily Usage Limit Reached</title>
+    <style>
+        html {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            color: #1A4469;
+            background-color: #F9FAFA;
+        }
+
+        .container {
+            padding-top: 4rem;
+            max-width: 768px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            text-align: center;
+        }
+
+        .logo svg {
+            height: 1rem;
+        }
+
+        .message-container {
+            width: 24rem;
+            margin: 0 auto;
+            background-color: white;
+            padding: 2.5rem;
+            margin-top: 1.5rem;
+            -webkit-box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            font-size: 13px;
+            text-align: center;
+            border-radius: 0.375rem;
+        }
+
+        .alert-icon svg {
+            height: 2rem;
+            width: 2rem;
+        }
+
+        h1 {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        p {
+            color: #4C5A67;
+            line-height: 1.5;
+        }
+
+        a {
+            color: #1579D0;
+            text-decoration: none;
+            border-bottom: 1px solid #1579D0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 616 139" fill="none">
+                <path d="M4 64.8841V132.392H30.9045V87.9678L78.8062 87.9289V64.8469L4 64.8841Z" fill="#3C88F7" />
+                <path d="M85.9937 9.59998H4.03442V32.6431H85.9937V9.59998Z" fill="#3C88F7" />
+                <g class="text-black" fill="currentColor">
+                    <path
+                        d="M257.4 58.4C257.2 24.2 232.4 9.19999 202 9.19999C165.4 9.19999 141.2 32.4 141.2 73C141.2 111.4 163 134.8 200.8 134.8C232.8 134.8 254.4 119 257.4 89.2L231.8 88C228.8 104 218 113.2 201.4 113.2C180.8 113.2 167.4 99 167.4 72C167.4 46.2 180 30.4 201.4 30.4C220.6 30.4 230.4 40.8 232 59.2L257.4 58.4Z" />
+                    <path d="M299.548 5H274.748V132.6H299.548V5Z" />
+                    <path
+                        d="M315.991 90C315.991 118 331.991 134.6 361.191 134.6C392.191 134.6 409.191 116.8 409.191 89C409.191 61.4 393.391 43.8 364.391 43.8C333.191 43.8 315.991 62.2 315.991 90ZM342.191 89.4C342.191 73.4 350.591 63.6 363.391 63.6C375.791 63.6 382.991 73.4 382.991 89.4C382.991 105 374.791 115 362.391 115C349.791 115 342.191 105 342.191 89.4Z" />
+                    <path
+                        d="M481.534 123.6V132.6H504.134V45.6H479.334V99.4C475.934 108 470.534 113 463.134 113C453.134 113 448.334 106.8 448.334 92V45.6H423.534V98.6C423.534 124 435.134 134.6 454.734 134.6C467.334 134.6 476.734 128.6 482.134 115.8L481.534 123.6Z" />
+                    <path
+                        d="M587.288 88C587.288 101.6 581.087 114.8 566.487 114.8C555.087 114.8 546.688 106 546.688 89.2C546.688 72.6 555.088 63.6 567.288 63.6C579.288 63.6 587.288 72.2 587.288 88ZM590.888 132.6H612.488V5H587.688V53.8C582.088 47.2 573.687 43.8 562.087 43.8C537.487 43.8 520.487 60.8 520.487 90.2C520.487 120 535.888 134.6 560.288 134.6C572.288 134.6 582.287 129.8 588.688 119.6C589.488 123.8 590.288 128.2 590.888 132.6Z" />
+                </g>
+            </svg>
+        </div>
+        <div class="message-container">
+            <div class="alert-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd"
+                        d="M4.00288 21.3966C2.47791 21.3966 1.51397 19.7584 2.25456 18.4253L10.2527 4.02871C11.0147 2.65709 12.9873 2.6571 13.7493 4.02872L21.7474 18.4253C22.488 19.7584 21.524 21.3966 19.9991 21.3966H4.00288ZM11.9991 18.4126C12.5688 18.4126 13.0307 17.9507 13.0307 17.381C13.0307 16.8113 12.5688 16.3495 11.9991 16.3495C11.4294 16.3495 10.9675 16.8113 10.9675 17.381C10.9675 17.9507 11.4294 18.4126 11.9991 18.4126ZM13 8.8601C13 8.30782 12.5523 7.8601 12 7.8601C11.4477 7.8601 11 8.30782 11 8.8601V13.9074C11 14.4597 11.4477 14.9074 12 14.9074C12.5523 14.9074 13 14.4597 13 13.9074V8.8601Z"
+                        fill="#D6932E" />
+                </svg>
+            </div>
+            <h1>
+                Daily Usage Limit Reached.
+            </h1>
+            <p class="message">
+                Daily usage limit is reached for this site. If you are the owner of this site, you can upgrade your plan
+                from your <a href="https://frappecloud.com/dashboard">Frappe Cloud Dashboard</a>.
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>

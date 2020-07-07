@@ -28,6 +28,14 @@ class App(Base):
         unshallow = "--unshallow" if shallow == "true" else ""
         return self.execute(f"git fetch {self.remote} {unshallow}")
 
+    def fetch_ref(self, ref):
+        return self.execute(
+            f"git fetch --progress --depth 1 {self.remote} {ref}"
+        )
+
+    def checkout(self, ref):
+        return self.execute(f"git checkout {ref}")
+
     @property
     def remote(self):
         remotes = self.execute("git remote")["output"].split("\n")

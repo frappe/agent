@@ -130,6 +130,13 @@ server {
 
 		proxy_pass $upstream_server_hash;
 	}
+
+	proxy_intercept_errors on;
+	error_page 429 /exceeded.html;
+	location /exceeded.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
 }
 
 {% endfor %}

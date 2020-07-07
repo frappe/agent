@@ -2,6 +2,7 @@ from agent.base import Base
 from agent.job import step, job
 import os
 import json
+import re
 import requests
 import shutil
 import time
@@ -14,6 +15,7 @@ class Site(Base):
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)
         self.backup_directory = os.path.join(self.directory, ".migrate")
+        self.logs_directory = os.path.join(self.directory, "logs")
         self.config_file = os.path.join(self.directory, "site_config.json")
         self.touched_tables_file = os.path.join(
             self.directory, "touched_tables.json"
@@ -26,8 +28,10 @@ class Site(Base):
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
 
-    def bench_execute(self, command):
-        return self.bench.execute(f"bench --site {self.name} {command}")
+    def bench_execute(self, command, input=None):
+        return self.bench.execute(
+            f"bench --site {self.name} {command}", input=input
+        )
 
     def dump(self):
         return {"name": self.name}
@@ -47,6 +51,10 @@ class Site(Base):
     @step("Install App on Site")
     def install_app(self, app):
         return self.bench_execute(f"install-app {app}")
+
+    @step("Uninstall App from Site")
+    def uninstall_app(self, app):
+        return self.bench_execute(f"uninstall-app {app} --yes")
 
     @step("Restore Site")
     def restore(
@@ -109,6 +117,10 @@ class Site(Base):
     @job("Install App on Site")
     def install_app_job(self, app):
         self.install_app(app)
+
+    @job("Uninstall App on Site")
+    def uninstall_app_job(self, app):
+        self.uninstall_app(app)
 
     @step("Update Site Configuration")
     def update_config(self, value):
@@ -211,6 +223,7 @@ class Site(Base):
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
+                self.bench_execute("clear-cache")
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
@@ -261,6 +274,32 @@ class Site(Base):
 
         return data
 
+    def fetch_site_info(self):
+        data = {"config": self.config, "timezone": self.timezone}
+        return data
+
+    def sid(self):
+        code = """import frappe
+from frappe.app import init_request
+try:
+    from frappe.utils import set_request
+except ImportError:
+    from frappe.tests import set_request
+set_request()
+frappe.app.init_request(frappe.local.request)
+frappe.local.login_manager.login_as("Administrator")
+print(">>>" + frappe.session.sid + "<<<")
+
+"""
+
+        output = self.bench_execute("console", input=code)["output"]
+        return re.search(r">>>(.*)<<<", output).group(1)
+
+    @property
+    def timezone(self):
+        timezone = self.bench_execute("execute frappe.client.get_time_zone")
+        return json.loads(timezone["output"].splitlines()[-1])["time_zone"]
+
     @property
     def tables(self):
         return self.execute(
@@ -306,10 +345,6 @@ class Site(Base):
 
         return backups
 
-    def setconfig(self, value):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=1, sort_keys=True)
-
     @property
     def job_record(self):
         return self.bench.server.job_record
@@ -317,3 +352,43 @@ class Site(Base):
     @property
     def step_record(self):
         return self.bench.server.step_record
+
+    @property
+    def logs(self):
+        def path(file):
+            return os.path.join(self.logs_directory, file)
+
+        def modified_time(file):
+            return os.path.getctime(path(file))
+
+        try:
+            log_files = sorted(
+                os.listdir(self.logs_directory),
+                key=modified_time,
+                reverse=True,
+            )
+            payload = []
+
+            for x in log_files:
+                stats = os.stat(path(x))
+                payload.append(
+                    {
+                        "name": x,
+                        "size": stats.st_size / 1000,
+                        "created": str(datetime.fromtimestamp(stats.st_ctime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
+                    }
+                )
+
+            return payload
+
+        except FileNotFoundError:
+            return []
+
+    def retrieve_log(self, name):
+        if name not in {x["name"] for x in self.logs}:
+            return ""
+        log_file = os.path.join(self.logs_directory, name)
+        return open(log_file).read()

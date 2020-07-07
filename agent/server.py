@@ -28,18 +28,20 @@ class Server(Base):
         self.step = None
 
     @step("Bench Initialize")
-    def bench_init(self, name, python, repo, branch, clone):
+    def bench_init(self, name, python, url, branch, clone):
         if clone:
             # NOTE: Cloning seems incoherent for now.
             # Unable to articulate the reasons as of now
             command = (
                 f"bench init --clone-from {clone} --clone-without-update "
-                f"--python {python} {name} --no-backups "
+                "--no-backups --skip-assets --verbose "
+                f"--python {python} {name}"
             )
         else:
             command = (
-                f"bench init --frappe-branch {branch} --frappe-path {repo} "
-                f"--python {python} {name} --no-backups "
+                f"bench init --frappe-branch {branch} --frappe-path {url} "
+                "--no-backups --skip-assets --verbose "
+                f"--python {python} {name}"
             )
 
         return self.execute(command, directory=self.benches_directory)
@@ -56,12 +58,12 @@ class Server(Base):
     @job("New Bench")
     def new_bench(self, name, python, config, apps, clone):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
-        self.bench_init(name, python, frappe["repo"], frappe["branch"], clone)
+        self.bench_init(name, python, frappe["url"], frappe["branch"], clone)
         bench = Bench(name, self)
-        bench.setconfig(config)
+        bench.update_config(config)
         bench.setup_redis()
+        bench.reset_frappe(apps)
         bench.get_apps(apps)
-        bench.reset_apps(apps)
         bench.setup_requirements()
         bench.build()
         bench.setup_production()
@@ -76,6 +78,9 @@ class Server(Base):
     def move_bench_to_archived_directory(self, bench):
         if not os.path.exists(self.archived_directory):
             os.mkdir(self.archived_directory)
+        target = os.path.join(self.archived_directory, bench.name)
+        if os.path.exists(target):
+            shutil.rmtree(target)
         self.execute(f"mv {bench.directory} {self.archived_directory}")
 
     @job("Update Site Pull")
@@ -93,6 +98,7 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
+        site.migrate()
 
         site.disable_maintenance_mode()
 
@@ -146,10 +152,14 @@ class Server(Base):
     def reload_nginx(self):
         return self._reload_nginx()
 
+    @step("Update Supervisor")
+    def update_supervisor(self):
+        return self._update_supervisor()
+
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)
-        self.setconfig(config)
+        self.setconfig(config, indent=4)
 
     def setup_nginx(self):
         self._generate_nginx_config()
@@ -363,7 +373,7 @@ class Server(Base):
 
     def nginx_status(self):
         try:
-            systemd = self.execute(f"sudo systemctl status nginx")
+            systemd = self.execute("sudo systemctl status nginx")
         except AgentException as e:
             systemd = e.data
         return systemd["output"]
