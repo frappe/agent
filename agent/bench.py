@@ -131,8 +131,8 @@ class Bench(Base):
         for site in _inactive_scheduler_sites(self):
             status["sites"][site]["scheduler"] = False
 
-        # for site in _inactive_web_sites(self):
-        #     status["sites"][site]["web"] = False
+        for site in _inactive_web_sites(self):
+            status["sites"][site]["web"] = False
 
         return status
 

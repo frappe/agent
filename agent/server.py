@@ -98,6 +98,7 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
+        site.migrate()
 
         site.disable_maintenance_mode()
 

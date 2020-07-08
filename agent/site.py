@@ -54,7 +54,7 @@ class Site(Base):
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
-        return self.bench_execute(f"uninstall-app {app} --yes --no-backup")
+        return self.bench_execute(f"uninstall-app {app} --yes")
 
     @step("Restore Site")
     def restore(
@@ -136,6 +136,36 @@ class Site(Base):
     def backup(self, with_files=False):
         with_files = "--with-files" if with_files else ""
         self.bench.execute(f"bench --site {self.name} backup {with_files}")
+        return self.fetch_latest_backup(with_files=with_files)
+
+    @step("Upload Site Backup to S3")
+    def upload_offsite_backup(self, backup_files, offsite):
+        if not (offsite and backup_files):
+            return {}
+
+        import boto3
+
+        offsite_files = {}
+        bucket, auth, prefix = (
+            offsite["bucket"],
+            offsite["auth"],
+            offsite["path"],
+        )
+        s3 = boto3.client(
+            "s3",
+            aws_access_key_id=auth["ACCESS_KEY"],
+            aws_secret_access_key=auth["SECRET_KEY"],
+        )
+
+        for backup_file in backup_files.values():
+            file_name = backup_file["file"].split(os.sep)[-1]
+            offsite_path = os.path.join(prefix, file_name)
+            offsite_files[file_name] = offsite_path
+
+            with open(backup_file["path"], "rb") as data:
+                s3.upload_fileobj(data, bucket, offsite_path)
+
+        return offsite_files
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
@@ -283,10 +313,15 @@ print(">>>" + frappe.session.sid + "<<<")
             return json.load(f)
 
     @job("Backup Site")
-    def backup_job(self, with_files=False):
-        self.backup(with_files)
-        backup_directory = os.path.join(self.directory, "private", "backups")
+    def backup_job(self, with_files=False, offsite=None):
+        backup_files = self.backup(with_files)
+        uploaded_files = self.upload_offsite_backup(backup_files, offsite)
+        return {"backups": backup_files, "offsite": uploaded_files}
+
+    def fetch_latest_backup(self, with_files=True):
         databases, publics, privates = [], [], []
+        backup_directory = os.path.join(self.directory, "private", "backups")
+
         for file in os.listdir(backup_directory):
             path = os.path.join(backup_directory, file)
             if file.endswith("database.sql.gz"):
@@ -295,7 +330,9 @@ print(">>>" + frappe.session.sid + "<<<")
                 privates.append(path)
             elif file.endswith("files.tar"):
                 publics.append(path)
+
         backups = {"database": {"path": max(databases, key=os.path.getmtime)}}
+
         if with_files:
             backups["private"] = {"path": max(privates, key=os.path.getmtime)}
             backups["public"] = {"path": max(publics, key=os.path.getmtime)}
