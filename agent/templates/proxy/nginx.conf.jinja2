@@ -129,6 +129,7 @@ server {
 		add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
 
 		proxy_pass $upstream_server_hash;
+		http2_push_preload on;
 	}
 
 	proxy_intercept_errors on;
