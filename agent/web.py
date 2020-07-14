@@ -207,10 +207,11 @@ def new_site(bench):
 @application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
 def new_site_from_backup(bench):
     data = request.json
+    site = data["name"]
 
-    database_file = download_file(data["database"])
-    private_file = download_file(data["private"])
-    public_file = download_file(data["public"])
+    database_file = download_file(data["database"], suffix=site)
+    private_file = download_file(data["private"], suffix=site)
+    public_file = download_file(data["public"], suffix=site)
 
     job = (
         Server()
@@ -235,9 +236,9 @@ def new_site_from_backup(bench):
 def restore_site(bench, site):
     data = request.json
 
-    database_file = download_file(data["database"])
-    private_file = download_file(data["private"])
-    public_file = download_file(data["public"])
+    database_file = download_file(data["database"], suffix=site)
+    private_file = download_file(data["private"], suffix=site)
+    public_file = download_file(data["public"], suffix=site)
 
     job = (
         Server()

@@ -4,9 +4,9 @@ import tempfile
 from urllib.parse import urlparse
 
 
-def download_file(url):
+def download_file(url, suffix=None):
     filename = urlparse(url).path.split('/')[-1]
-    tempdir = tempfile.mkdtemp(prefix="agent-upload-", suffix=f'-{filename}')
+    tempdir = tempfile.mkdtemp(prefix="agent-upload-", suffix=f'-{suffix}')
     local_filename = os.path.join(tempdir, filename)
 
     with requests.get(url, stream=True) as r:
