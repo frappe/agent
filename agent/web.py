@@ -3,6 +3,7 @@ from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from base64 import b64decode
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+import tempfile
 
 from agent.job import JobModel
 from agent.server import Server
@@ -207,11 +208,11 @@ def new_site(bench):
 @application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
 def new_site_from_backup(bench):
     data = request.json
-    site = data["name"]
+    folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{data['name']}")
 
-    database_file = download_file(data["database"], suffix=site)
-    private_file = download_file(data["private"], suffix=site)
-    public_file = download_file(data["public"], suffix=site)
+    database_file = download_file(data["database"], prefix=folder)
+    private_file = download_file(data["private"], prefix=folder)
+    public_file = download_file(data["public"], prefix=folder)
 
     job = (
         Server()
@@ -235,10 +236,11 @@ def new_site_from_backup(bench):
 )
 def restore_site(bench, site):
     data = request.json
+    folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{site}")
 
-    database_file = download_file(data["database"], suffix=site)
-    private_file = download_file(data["private"], suffix=site)
-    public_file = download_file(data["public"], suffix=site)
+    database_file = download_file(data["database"], prefix=folder)
+    private_file = download_file(data["private"], prefix=folder)
+    public_file = download_file(data["public"], prefix=folder)
 
     job = (
         Server()
