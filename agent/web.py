@@ -208,7 +208,9 @@ def new_site(bench):
 @application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
 def new_site_from_backup(bench):
     data = request.json
-    folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{data['name']}")
+    folder = tempfile.mkdtemp(
+        prefix="agent-upload-", suffix=f"-{data['name']}"
+    )
 
     database_file = download_file(data["database"], prefix=folder)
     private_file = download_file(data["private"], prefix=folder)

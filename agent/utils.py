@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 
 def download_file(url, prefix):
-    filename = urlparse(url).path.split('/')[-1]
+    filename = urlparse(url).path.split("/")[-1]
     local_filename = os.path.join(prefix, filename)
 
     with requests.get(url, stream=True) as r:
