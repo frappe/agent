@@ -1,14 +1,14 @@
 import json
-import os
-import tempfile
 from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from base64 import b64decode
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+import tempfile
 
 from agent.job import JobModel
 from agent.server import Server
 from agent.proxy import Proxy
+from agent.utils import download_file
 
 application = Flask(__name__)
 
@@ -207,19 +207,14 @@ def new_site(bench):
 
 @application.route("/benches/<string:bench>/sites/restore", methods=["POST"])
 def new_site_from_backup(bench):
-    files = request.files
-    data = json.loads(files["json"].read().decode())
-    tempdir = tempfile.mkdtemp(
-        prefix="agent-upload-", suffix=f'-{data["name"]}'
+    data = request.json
+    folder = tempfile.mkdtemp(
+        prefix="agent-upload-", suffix=f"-{data['name']}"
     )
 
-    database_file = os.path.join(tempdir, "database.sql.gz")
-    private_file = os.path.join(tempdir, "private.tar")
-    public_file = os.path.join(tempdir, "public.tar")
-
-    files["database"].save(database_file)
-    files["private"].save(private_file)
-    files["public"].save(public_file)
+    database_file = download_file(data["database"], prefix=folder)
+    private_file = download_file(data["private"], prefix=folder)
+    public_file = download_file(data["public"], prefix=folder)
 
     job = (
         Server()
@@ -242,17 +237,12 @@ def new_site_from_backup(bench):
     "/benches/<string:bench>/sites/<string:site>/restore", methods=["POST"]
 )
 def restore_site(bench, site):
-    files = request.files
-    data = json.loads(files["json"].read().decode())
-    tempdir = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{site}")
+    data = request.json
+    folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{site}")
 
-    database_file = os.path.join(tempdir, "database.sql.gz")
-    private_file = os.path.join(tempdir, "private.tar")
-    public_file = os.path.join(tempdir, "public.tar")
-
-    files["database"].save(database_file)
-    files["private"].save(private_file)
-    files["public"].save(public_file)
+    database_file = download_file(data["database"], prefix=folder)
+    private_file = download_file(data["private"], prefix=folder)
+    public_file = download_file(data["public"], prefix=folder)
 
     job = (
         Server()
