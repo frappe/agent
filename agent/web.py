@@ -374,8 +374,7 @@ def update_site_recover_pull(bench, site):
     methods=["POST"],
 )
 def update_site_recover(bench, site):
-    data = request.json
-    job = Server().update_site_recover_job(site, bench, data["target"])
+    job = Server().update_site_recover_job(site, bench)
     return {"job": job}
 
 
