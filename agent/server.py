@@ -143,6 +143,23 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
+    @job("Recover Failed Site Pull")
+    def update_site_recover_pull_job(self, name, source, target, activate):
+        source = Bench(source, self)
+        target = Bench(target, self)
+
+        site = Site(name, source)
+        self.move_site(site, target)
+
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
+
+        site = Site(name, target)
+
+        if activate:
+            site.disable_maintenance_mode()
+
     @step("Move Site")
     def move_site(self, site, target):
         shutil.move(site.directory, target.sites_directory)

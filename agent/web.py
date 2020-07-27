@@ -358,6 +358,18 @@ def update_site_recover(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/recover_pull",
+    methods=["POST"],
+)
+def update_site_recover_pull(bench, site):
+    data = request.json
+    job = Server().update_site_recover_pull_job(
+        site, bench, data["target"], data.get("activate", True)
+    )
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/archive", methods=["POST"]
 )
 def archive_site(bench, site):
