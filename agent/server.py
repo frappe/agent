@@ -125,8 +125,8 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
-    @job("Recover Failed Site Migration")
-    def update_site_recover_job(self, name, source, target, activate):
+    @job("Recover Failed Site Migrate")
+    def update_site_recover_migrate_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -159,6 +159,11 @@ class Server(Base):
 
         if activate:
             site.disable_maintenance_mode()
+
+    @job("Recover Failed Site Update")
+    def update_site_recover_job(self, name, bench):
+        site = self.benches[bench].sites[name]
+        site.disable_maintenance_mode()
 
     @step("Move Site")
     def move_site(self, site, target):

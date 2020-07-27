@@ -346,19 +346,19 @@ def update_site_pull(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/update/recover",
+    "/benches/<string:bench>/sites/<string:site>/update/migrate/recover",
     methods=["POST"],
 )
-def update_site_recover(bench, site):
+def update_site_recover_migrate(bench, site):
     data = request.json
-    job = Server().update_site_recover_job(
+    job = Server().update_site_recover_migrate_job(
         site, bench, data["target"], data.get("activate", True)
     )
     return {"job": job}
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/update/recover_pull",
+    "/benches/<string:bench>/sites/<string:site>/update/pull/recover",
     methods=["POST"],
 )
 def update_site_recover_pull(bench, site):
@@ -366,6 +366,16 @@ def update_site_recover_pull(bench, site):
     job = Server().update_site_recover_pull_job(
         site, bench, data["target"], data.get("activate", True)
     )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/recover",
+    methods=["POST"],
+)
+def update_site_recover(bench, site):
+    data = request.json
+    job = Server().update_site_recover_job(site, bench, data["target"])
     return {"job": job}
 
 
