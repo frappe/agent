@@ -328,7 +328,9 @@ def backup_site(bench, site):
 )
 def update_site_migrate(bench, site):
     data = request.json
-    job = Server().update_site_migrate_job(site, bench, data["target"])
+    job = Server().update_site_migrate_job(
+        site, bench, data["target"], data.get("activate", True)
+    )
     return {"job": job}
 
 
@@ -337,7 +339,9 @@ def update_site_migrate(bench, site):
 )
 def update_site_pull(bench, site):
     data = request.json
-    job = Server().update_site_pull_job(site, bench, data["target"])
+    job = Server().update_site_pull_job(
+        site, bench, data["target"], data.get("activate", True)
+    )
     return {"job": job}
 
 
@@ -347,7 +351,9 @@ def update_site_pull(bench, site):
 )
 def update_site_recover(bench, site):
     data = request.json
-    job = Server().update_site_recover_job(site, bench, data["target"])
+    job = Server().update_site_recover_job(
+        site, bench, data["target"], data.get("activate", True)
+    )
     return {"job": job}
 
 

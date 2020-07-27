@@ -84,7 +84,7 @@ class Server(Base):
         self.execute(f"mv {bench.directory} {self.archived_directory}")
 
     @job("Update Site Pull")
-    def update_site_pull_job(self, name, source, target):
+    def update_site_pull_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
@@ -100,10 +100,11 @@ class Server(Base):
         site = Site(name, target)
         site.migrate()
 
-        site.disable_maintenance_mode()
+        if activate:
+            site.disable_maintenance_mode()
 
     @job("Update Site Migrate")
-    def update_site_migrate_job(self, name, source, target):
+    def update_site_migrate_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
@@ -122,10 +123,11 @@ class Server(Base):
         site = Site(name, target)
 
         site.migrate()
-        site.disable_maintenance_mode()
+        if activate:
+            site.disable_maintenance_mode()
 
     @job("Recover Failed Site Migration")
-    def update_site_recover_job(self, name, source, target):
+    def update_site_recover_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -139,7 +141,8 @@ class Server(Base):
         site = Site(name, target)
         site.restore_touched_tables()
 
-        site.disable_maintenance_mode()
+        if activate:
+            site.disable_maintenance_mode()
 
     @step("Move Site")
     def move_site(self, site, target):
