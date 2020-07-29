@@ -3,17 +3,17 @@ import json
 import traceback
 
 import wrapt
-from redis import Redis
-from rq import Queue, get_current_job
 from peewee import (
-    SqliteDatabase,
-    Model,
     CharField,
     DateTimeField,
-    TimeField,
-    TextField,
     ForeignKeyField,
+    Model,
+    SqliteDatabase,
+    TextField,
+    TimeField,
 )
+from redis import Redis
+from rq import Queue, get_current_job
 
 from agent.base import AgentException
 

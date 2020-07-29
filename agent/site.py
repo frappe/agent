@@ -1,12 +1,14 @@
-from agent.base import Base
-from agent.job import step, job
-import os
 import json
+import os
 import re
-import requests
 import shutil
 import time
 from datetime import datetime
+
+import requests
+
+from agent.base import Base
+from agent.job import job, step
 
 
 class Site(Base):

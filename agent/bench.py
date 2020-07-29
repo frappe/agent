@@ -1,14 +1,16 @@
 import json
 import os
 import shutil
+import tempfile
 import traceback
+from datetime import datetime
+
+import requests
+
 from agent.app import App
-from agent.base import Base, AgentException
+from agent.base import AgentException, Base
 from agent.job import job, step
 from agent.site import Site
-from datetime import datetime
-import requests
-import tempfile
 from agent.utils import download_file
 
 

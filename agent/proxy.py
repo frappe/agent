@@ -2,10 +2,10 @@ import json
 import os
 import shutil
 from hashlib import sha512 as sha
-
-from agent.server import Server
-from agent.job import step, job
 from pathlib import Path
+
+from agent.job import job, step
+from agent.server import Server
 
 
 class Proxy(Server):

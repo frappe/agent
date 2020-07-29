@@ -1,15 +1,15 @@
 import os
 import shutil
 import time
-
 from datetime import datetime
+
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
 
-from agent.base import Base, AgentException
-from agent.job import Job, Step, step, job
+from agent.base import AgentException, Base
 from agent.bench import Bench
+from agent.job import Job, Step, job, step
 from agent.site import Site
 
 

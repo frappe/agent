@@ -1,12 +1,13 @@
 import json
-from flask import Flask, jsonify, request
-from playhouse.shortcuts import model_to_dict
 from base64 import b64decode
+
+from flask import Flask, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from playhouse.shortcuts import model_to_dict
 
 from agent.job import JobModel
-from agent.server import Server
 from agent.proxy import Proxy
+from agent.server import Server
 
 application = Flask(__name__)
 

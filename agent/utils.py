@@ -1,6 +1,7 @@
 import os
-import requests
 from urllib.parse import urlparse
+
+import requests
 
 
 def download_file(url, prefix):

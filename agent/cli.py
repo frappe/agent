@@ -1,10 +1,11 @@
 import json
 import os
 import shutil
+
 import click
 
-from agent.server import Server
 from agent.proxy import Proxy
+from agent.server import Server
 
 
 @click.group()
