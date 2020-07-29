@@ -79,23 +79,24 @@ class Site(Base):
         apps,
         mariadb_root_password,
         admin_password,
-        database_file,
-        public_file,
-        private_file,
+        database,
+        public,
+        private,
     ):
+        files = self.bench.download_files(self.name, database, public, private)
         self.restore(
             mariadb_root_password,
             admin_password,
-            database_file,
-            public_file,
-            private_file,
+            files["database"],
+            files["public"],
+            files["private"],
         )
         self.uninstall_unavailable_apps(apps)
         self.migrate()
         self.set_admin_password(admin_password)
         self.enable_scheduler()
 
-        shutil.rmtree(os.path.dirname(database_file))
+        shutil.rmtree(os.path.dirname(files["database"]))
         return self.bench_execute("list-apps")
 
     @step("Reinstall Site")

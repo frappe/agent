@@ -8,6 +8,8 @@ from agent.job import job, step
 from agent.site import Site
 from datetime import datetime
 import requests
+import tempfile
+from agent.utils import download_file
 
 
 class Bench(Base):
@@ -155,19 +157,21 @@ class Bench(Base):
         apps,
         mariadb_root_password,
         admin_password,
-        database_file,
-        public_file,
-        private_file,
+        database,
+        public,
+        private,
     ):
+
+        files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.update_config(config)
         site.restore(
             mariadb_root_password,
             admin_password,
-            database_file,
-            public_file,
-            private_file,
+            files["database"],
+            files["public"],
+            files["private"],
         )
         site.uninstall_unavailable_apps(apps)
         site.migrate()
@@ -176,7 +180,7 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-        shutil.rmtree(os.path.dirname(database_file))
+        shutil.rmtree(os.path.dirname(files["database"]))
         return site.bench_execute("list-apps")
 
     @step("Archive Site")
@@ -185,6 +189,18 @@ class Bench(Base):
             f"bench drop-site {name} "
             f"--root-password {mariadb_root_password} --no-backup"
         )
+
+    @step("Download Backup Files")
+    def download_files(self, name, database_url, public_url, private_url):
+        folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
+        database_file = download_file(database_url, prefix=folder)
+        private_file = download_file(private_url, prefix=folder)
+        public_file = download_file(public_url, prefix=folder)
+        return {
+            "database": database_file,
+            "private": private_file,
+            "public": public_file,
+        }
 
     @job("Archive Site")
     def archive_site(self, name, mariadb_root_password):
