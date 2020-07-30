@@ -76,7 +76,7 @@ class Server(Base):
         self.move_bench_to_archived_directory(bench)
 
     @job("Cleanup Unused Files")
-    def cleanup_unused_files(self, name):
+    def cleanup_unused_files(self):
         self.remove_archived_benches()
         self.remove_temporary_files()
 
