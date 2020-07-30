@@ -104,7 +104,7 @@ class Server(Base):
                     continue
                 file_path = os.path.join(temp_directory, file)
                 if now - os.stat(file_path).st_mtime > 3600:
-                    removed[bench] = {"size": self._get_tree_size(file_path)}
+                    removed[file] = {"size": self._get_tree_size(file_path)}
                     shutil.rmtree(file_path)
         return {"files": removed[:100]}
 
@@ -497,5 +497,5 @@ class Server(Base):
         self.execute("sudo supervisorctl reread")
         self.execute("sudo supervisorctl update")
 
-    def _get_tree_size(path):
+    def _get_tree_size(self, path):
         return self.execute(f"du -sh {path}")["output"].split()[0]
