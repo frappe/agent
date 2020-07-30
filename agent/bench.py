@@ -207,7 +207,7 @@ class Bench(Base):
         }
 
     @step("Delete Downloaded Backup Files")
-    def delete_downloaded_files(self, name, database_file):
+    def delete_downloaded_files(self, database_file):
         shutil.rmtree(os.path.dirname(database_file))
 
     @job("Archive Site")
