@@ -105,13 +105,13 @@ class Server(Base):
         temp_directory = tempfile.gettempdir()
         now = datetime.now().timestamp()
         removed = []
-        patterns = ["frappe-pdf", "snyk-patch", "yarn-"]
+        patterns = ["frappe-pdf", "snyk-patch", "yarn-", "agent-upload"]
         if os.path.exists(temp_directory):
             for file in os.listdir(temp_directory):
                 if not list(filter(lambda x: x in file, patterns)):
                     continue
                 file_path = os.path.join(temp_directory, file)
-                if now - os.stat(file_path).st_mtime > 3600:
+                if now - os.stat(file_path).st_mtime > 7200:
                     removed.append(
                         {"file": file, "size": self._get_tree_size(file_path)}
                     )
