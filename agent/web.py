@@ -101,7 +101,8 @@ def get_server_status():
 
 @application.route("/server/cleanup", methods=["POST"])
 def cleanup_unused_files():
-    return Server().cleanup_unused_files()
+    job = Server().cleanup_unused_files()
+    return {"job": job}
 
 
 @application.route("/benches")
