@@ -94,7 +94,10 @@ class Server(Base):
                             "size": self._get_tree_size(bench_path),
                         }
                     )
-                    shutil.rmtree(bench_path)
+                    if os.path.isfile(bench_path):
+                        os.remove(bench_path)
+                    elif os.path.isdir(bench_path):
+                        shutil.rmtree(bench_path)
         return {"benches": removed[:100]}
 
     @step("Remove Temporary Files")
@@ -112,7 +115,10 @@ class Server(Base):
                     removed.append(
                         {"file": file, "size": self._get_tree_size(file_path)}
                     )
-                    shutil.rmtree(file_path)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
         return {"files": removed[:100]}
 
     @step("Move Bench to Archived Directory")
