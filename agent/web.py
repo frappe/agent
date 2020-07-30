@@ -99,6 +99,11 @@ def get_server_status():
     return Server().status(data["mariadb_root_password"])
 
 
+@application.route("/server/cleanup", methods=["POST"])
+def cleanup_unused_files():
+    return Server().cleanup_unused_files()
+
+
 @application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}

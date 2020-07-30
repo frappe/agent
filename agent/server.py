@@ -1,5 +1,6 @@
 import os
 import shutil
+import tempfile
 import time
 from datetime import datetime
 
@@ -73,6 +74,39 @@ class Server(Base):
         bench = Bench(name, self)
         bench.disable_production()
         self.move_bench_to_archived_directory(bench)
+
+    @job("Cleanup Unused Files")
+    def cleanup_unused_files(self, name):
+        self.remove_archived_benches()
+        self.remove_temporary_files()
+
+    @step("Remove Archived Benches")
+    def remove_archived_benches(self, bench):
+        now = datetime.now().timestamp()
+        removed = {}
+        if os.path.exists(self.archived_directory):
+            for bench in os.listdir(self.archived_directory):
+                bench_path = os.path.join(self.archived_directory, bench)
+                if now - os.stat(bench_path).st_mtime > 86400:
+                    removed[bench] = {"size": self._get_tree_size(bench_path)}
+                    shutil.rmtree(bench_path)
+        return {"benches": removed[:100]}
+
+    @step("Remove Temporary Files")
+    def remove_temporary_files(self, bench):
+        temp_directory = tempfile.gettempdir()
+        now = datetime.now().timestamp()
+        removed = {}
+        patterns = ["frappe-pdf", "snyk-patch", "yarn-"]
+        if os.path.exists(temp_directory):
+            for file in os.listdir(temp_directory):
+                if not list(filter(lambda x: x in file, patterns)):
+                    continue
+                file_path = os.path.join(temp_directory, file)
+                if now - os.stat(file_path).st_mtime > 3600:
+                    removed[bench] = {"size": self._get_tree_size(file_path)}
+                    shutil.rmtree(file_path)
+        return {"files": removed[:100]}
 
     @step("Move Bench to Archived Directory")
     def move_bench_to_archived_directory(self, bench):
@@ -462,3 +496,6 @@ class Server(Base):
     def _update_supervisor(self):
         self.execute("sudo supervisorctl reread")
         self.execute("sudo supervisorctl update")
+
+    def _get_tree_size(path):
+        return self.execute(f"du -sh {path}")["output"].split()[0]
