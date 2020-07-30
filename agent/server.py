@@ -83,12 +83,17 @@ class Server(Base):
     @step("Remove Archived Benches")
     def remove_archived_benches(self):
         now = datetime.now().timestamp()
-        removed = {}
+        removed = []
         if os.path.exists(self.archived_directory):
             for bench in os.listdir(self.archived_directory):
                 bench_path = os.path.join(self.archived_directory, bench)
                 if now - os.stat(bench_path).st_mtime > 86400:
-                    removed[bench] = {"size": self._get_tree_size(bench_path)}
+                    removed.append(
+                        {
+                            "bench": bench,
+                            "size": self._get_tree_size(bench_path),
+                        }
+                    )
                     shutil.rmtree(bench_path)
         return {"benches": removed[:100]}
 
@@ -96,7 +101,7 @@ class Server(Base):
     def remove_temporary_files(self):
         temp_directory = tempfile.gettempdir()
         now = datetime.now().timestamp()
-        removed = {}
+        removed = []
         patterns = ["frappe-pdf", "snyk-patch", "yarn-"]
         if os.path.exists(temp_directory):
             for file in os.listdir(temp_directory):
@@ -104,7 +109,9 @@ class Server(Base):
                     continue
                 file_path = os.path.join(temp_directory, file)
                 if now - os.stat(file_path).st_mtime > 3600:
-                    removed[file] = {"size": self._get_tree_size(file_path)}
+                    removed.append(
+                        {"file": file, "size": self._get_tree_size(file_path)}
+                    )
                     shutil.rmtree(file_path)
         return {"files": removed[:100]}
 
