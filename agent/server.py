@@ -81,7 +81,7 @@ class Server(Base):
         self.remove_temporary_files()
 
     @step("Remove Archived Benches")
-    def remove_archived_benches(self, bench):
+    def remove_archived_benches(self):
         now = datetime.now().timestamp()
         removed = {}
         if os.path.exists(self.archived_directory):
@@ -93,7 +93,7 @@ class Server(Base):
         return {"benches": removed[:100]}
 
     @step("Remove Temporary Files")
-    def remove_temporary_files(self, bench):
+    def remove_temporary_files(self):
         temp_directory = tempfile.gettempdir()
         now = datetime.now().timestamp()
         removed = {}
