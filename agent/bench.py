@@ -168,13 +168,16 @@ class Bench(Base):
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.update_config(config)
-        site.restore(
-            mariadb_root_password,
-            admin_password,
-            files["database"],
-            files["public"],
-            files["private"],
-        )
+        try:
+            site.restore(
+                mariadb_root_password,
+                admin_password,
+                files["database"],
+                files["public"],
+                files["private"],
+            )
+        finally:
+            self.delete_downloaded_files(files["database"])
         site.uninstall_unavailable_apps(apps)
         site.migrate()
         site.set_admin_password(admin_password)
@@ -182,7 +185,6 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-        shutil.rmtree(os.path.dirname(files["database"]))
         return site.bench_execute("list-apps")
 
     @step("Archive Site")
@@ -203,6 +205,10 @@ class Bench(Base):
             "private": private_file,
             "public": public_file,
         }
+
+    @step("Delete Downloaded Backup Files")
+    def delete_downloaded_files(self, name, database_file):
+        shutil.rmtree(os.path.dirname(database_file))
 
     @job("Archive Site")
     def archive_site(self, name, mariadb_root_password):
