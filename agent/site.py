@@ -103,6 +103,10 @@ class Site(Base):
 
         return self.bench_execute("list-apps")
 
+    @job("Migrate Site")
+    def migrate_job(self,):
+        return self.migrate()
+
     @step("Reinstall Site")
     def reinstall(
         self, mariadb_root_password, admin_password,
