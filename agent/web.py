@@ -401,6 +401,24 @@ def site_update_config(bench, site):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/domains", methods=["POST"]
+)
+def site_add_domain(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].add_domain(data["domain"])
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/domains/<string:domain>",
+    methods=["POST"],
+)
+def site_remove_domain(bench, site, domain):
+    job = Server().benches[bench].sites[site].remove_domain(domain)
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json
