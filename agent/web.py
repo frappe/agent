@@ -412,7 +412,7 @@ def site_add_domain(bench, site):
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/domains/<string:domain>",
-    methods=["POST"],
+    methods=["DELETE"],
 )
 def site_remove_domain(bench, site, domain):
     job = Server().benches[bench].sites[site].remove_domain(domain)
