@@ -137,6 +137,22 @@ class Site(Base):
         new_config.update(value)
         self.setconfig(new_config)
 
+    @job("Add Domain")
+    def add_domain(self, domain):
+        domains = set(self.config.get("domains", []))
+        domains.add(domain)
+        self.update_config({"domains": list(domains)})
+        self.bench.setup_nginx()
+        self.bench.server.reload_nginx()
+
+    @job("Remove Domain")
+    def remove_domain(self, domain):
+        domains = set(self.config.get("domains", []))
+        domains.discard(domain)
+        self.update_config({"domains": list(domains)})
+        self.bench.setup_nginx()
+        self.bench.server.reload_nginx()
+
     @job("Update Site Configuration")
     def update_config_job(self, value):
         self.update_config(value)
