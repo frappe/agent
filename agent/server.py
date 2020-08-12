@@ -72,6 +72,8 @@ class Server(Base):
     @job("Archive Bench")
     def archive_bench(self, name):
         bench = Bench(name, self)
+        if bench.sites:
+            raise Exception("Bench has sites")
         bench.disable_production()
         self.move_bench_to_archived_directory(bench)
 
