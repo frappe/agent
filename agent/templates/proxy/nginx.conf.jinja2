@@ -77,6 +77,7 @@ server {
 		proxy_http_version 1.1;
 
 		proxy_cache proxy_cache_zone;
+		proxy_cache_key $scheme$host$request_uri;
 		proxy_cache_valid 200 302 2m;
 		proxy_cache_valid 404 1m;
 		proxy_cache_bypass $http_secret_cache_purge;
