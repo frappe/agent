@@ -1,4 +1,5 @@
 import json
+import logging
 from base64 import b64decode
 
 from flask import Flask, jsonify, request
@@ -10,6 +11,10 @@ from agent.proxy import Proxy
 from agent.server import Server
 
 application = Flask(__name__)
+
+
+log = logging.getLogger("werkzeug")
+log.propagate = False
 
 
 @application.before_request
