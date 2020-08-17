@@ -14,7 +14,7 @@ application = Flask(__name__)
 
 
 log = logging.getLogger("werkzeug")
-log.propagate = False
+log.handlers = []
 
 
 @application.before_request
