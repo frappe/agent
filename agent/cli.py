@@ -36,6 +36,7 @@ def config(name, user, workers):
         "redis_port": 25025,
         "user": user,
         "workers": workers,
+        "gunicorn_workers": 2,
         "web_port": 25052,
     }
     json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)

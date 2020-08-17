@@ -491,6 +491,7 @@ class Server(Base):
             {
                 "web_port": self.config["web_port"],
                 "redis_port": self.config["redis_port"],
+                "gunicorn_workers": self.config.get("gunicorn_workers", 2),
                 "workers": self.config["workers"],
                 "directory": self.directory,
                 "user": self.config["user"],
