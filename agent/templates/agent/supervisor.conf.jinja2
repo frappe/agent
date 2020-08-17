@@ -9,7 +9,7 @@ user={{ user }}
 directory={{ directory }}
 
 [program:redis]
-command=redis-server --port {{ redis_port }}
+command=redis-server redis.conf
 autostart=true
 autorestart=true
 stdout_logfile={{ directory }}/logs/redis.log

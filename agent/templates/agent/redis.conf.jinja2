@@ -1,0 +1,6 @@
+dbfilename redis.rdb
+bind 127.0.0.1
+port {{ redis_port }}
+appendonly yes
+appendfilename "redis.aof"
+save 60 1

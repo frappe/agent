@@ -255,6 +255,7 @@ class Server(Base):
         self._reload_nginx()
 
     def setup_supervisor(self):
+        self._generate_redis_config()
         self._generate_supervisor_config()
         self._update_supervisor()
 
@@ -311,8 +312,7 @@ class Server(Base):
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self.execute("sudo supervisorctl restart agent:")
-        self._generate_supervisor_config()
-        self._update_supervisor()
+        self.setup_supervisor()
 
         self._generate_nginx_config()
         self._generate_agent_nginx_config()
@@ -482,6 +482,14 @@ class Server(Base):
                 "tls_directory": self.config["tls_directory"],
             },
             agent_nginx_config,
+        )
+
+    def _generate_redis_config(self):
+        redis_config = os.path.join(self.directory, "redis.conf")
+        self._render_template(
+            "agent/redis.conf.jinja2",
+            {"redis_port": self.config["redis_port"]},
+            redis_config,
         )
 
     def _generate_supervisor_config(self):
