@@ -373,5 +373,5 @@ class Bench(Base):
     def get_usage(self):
         return {
             "storage": get_size(self.directory),
-            "database": sum([site.get_database_size() for site in self.sites])
+            "database": sum([site.get_database_size() for site in self.sites.values()])
         }

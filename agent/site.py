@@ -379,7 +379,7 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": get_database_size(),
+            "database": self.get_database_size(),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
             "backups": backup_directory_size
