@@ -27,8 +27,8 @@ def connection():
     return Redis(port=port)
 
 
-def queue():
-    return Queue(connection=connection())
+def queue(name):
+    return Queue(name, connection=connection())
 
 
 @wrapt.decorator
@@ -109,7 +109,7 @@ def step(name):
     return wrapper
 
 
-def job(name):
+def job(name, priority="default"):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         if get_current_job(connection=connection()):
@@ -129,7 +129,7 @@ def job(name):
             return result
         else:
             instance.job_record.enqueue(name, wrapped, args, kwargs)
-            queue().enqueue_call(
+            queue(priority).enqueue_call(
                 wrapped, args=args, kwargs=kwargs, timeout=3600, result_ttl=-1
             )
             return instance.job_record.model.id

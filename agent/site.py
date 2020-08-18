@@ -137,7 +137,7 @@ class Site(Base):
         new_config.update(value)
         self.setconfig(new_config)
 
-    @job("Add Domain")
+    @job("Add Domain", priority="high")
     def add_domain(self, domain):
         domains = set(self.config.get("domains", []))
         domains.add(domain)
@@ -145,7 +145,7 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
-    @job("Remove Domain")
+    @job("Remove Domain", priority="high")
     def remove_domain(self, domain):
         domains = set(self.config.get("domains", []))
         domains.discard(domain)
@@ -153,7 +153,7 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
-    @job("Update Site Configuration")
+    @job("Update Site Configuration", priority="high")
     def update_config_job(self, value):
         self.update_config(value)
 
@@ -337,7 +337,7 @@ print(">>>" + frappe.session.sid + "<<<")
         with open(self.touched_tables_file, "r") as f:
             return json.load(f)
 
-    @job("Backup Site")
+    @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
         uploaded_files = self.upload_offsite_backup(backup_files, offsite)

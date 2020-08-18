@@ -56,7 +56,7 @@ class Server(Base):
             "config": self.config,
         }
 
-    @job("New Bench")
+    @job("New Bench", priority="low")
     def new_bench(self, name, python, config, apps, clone):
         frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
         self.bench_init(name, python, frappe["url"], frappe["branch"], clone)
@@ -69,7 +69,7 @@ class Server(Base):
         bench.build()
         bench.setup_production()
 
-    @job("Archive Bench")
+    @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench = Bench(name, self)
         if bench.sites:
@@ -77,7 +77,7 @@ class Server(Base):
         bench.disable_production()
         self.move_bench_to_archived_directory(bench)
 
-    @job("Cleanup Unused Files")
+    @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self):
         self.remove_archived_benches()
         self.remove_temporary_files()
@@ -132,7 +132,7 @@ class Server(Base):
             shutil.rmtree(target)
         self.execute(f"mv {bench.directory} {self.archived_directory}")
 
-    @job("Update Site Pull")
+    @job("Update Site Pull", priority="low")
     def update_site_pull_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -158,7 +158,7 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
-    @job("Update Site Migrate")
+    @job("Update Site Migrate", priority="low")
     def update_site_migrate_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -189,7 +189,7 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
-    @job("Recover Failed Site Migrate")
+    @job("Recover Failed Site Migrate", priority="high")
     def update_site_recover_migrate_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -207,7 +207,7 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
-    @job("Recover Failed Site Pull")
+    @job("Recover Failed Site Pull", priority="high")
     def update_site_recover_pull_job(self, name, source, target, activate):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -224,7 +224,7 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
-    @job("Recover Failed Site Update")
+    @job("Recover Failed Site Update", priority="high")
     def update_site_recover_job(self, name, bench):
         site = self.benches[bench].sites[name]
         site.disable_maintenance_mode()

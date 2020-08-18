@@ -140,7 +140,7 @@ class Bench(Base):
 
         return status
 
-    @job("New Site")
+    @job("New Site", priority="high")
     def new_site(
         self, name, config, apps, mariadb_root_password, admin_password
     ):
@@ -151,7 +151,7 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @job("New Site from Backup")
+    @job("New Site from Backup", priority="high")
     def new_site_from_backup(
         self,
         name,
@@ -344,7 +344,7 @@ class Bench(Base):
         new_config.update(value)
         self.setconfig(new_config)
 
-    @job("Update Bench Configuration")
+    @job("Update Bench Configuration", priority="high")
     def update_config_job(self, value):
         self.update_config(value)
         self.setup_supervisor()
