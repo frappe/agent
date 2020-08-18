@@ -17,3 +17,19 @@ def download_file(url, prefix):
                 f.write(chunk)
 
     return local_filename
+
+
+def get_size(folder):
+    """Returns the size of the folder in bytes. Ignores symlinks"""
+    total_size = os.path.getsize(folder)
+
+    for item in os.listdir(folder):
+        itempath = os.path.join(folder, item)
+
+        if not os.path.islink(itempath):
+            if os.path.isfile(itempath):
+                total_size += os.path.getsize(itempath)
+            elif os.path.isdir(itempath):
+                total_size += get_size(itempath)
+
+    return total_size
