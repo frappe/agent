@@ -291,8 +291,13 @@ class Server(Base):
         )
 
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
+
+        self._generate_redis_config()
+        self._generate_supervisor_config()
+        self.execute("sudo supervisorctl reread")
         self.execute("sudo supervisorctl restart agent:redis")
 
+        self.setup_nginx()
         for worker in range(self.config["workers"]):
             worker_name = f"agent:worker-{worker}"
             self.execute(f"sudo supervisorctl restart {worker_name}")
@@ -313,9 +318,7 @@ class Server(Base):
         self.execute("sudo supervisorctl restart agent:")
         self.setup_supervisor()
 
-        self._generate_nginx_config()
-        self._generate_agent_nginx_config()
-        self._reload_nginx()
+        self.setup_nginx()
 
     def status(self, mariadb_root_password):
         return {
