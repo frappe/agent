@@ -291,7 +291,6 @@ class Server(Base):
         )
 
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
-        # TODO: Handle jobs lost because of this. Nobody likes unemployment
         self.execute("sudo supervisorctl restart agent:redis")
 
         for worker in range(self.config["workers"]):
