@@ -378,20 +378,23 @@ print(">>>" + frappe.session.sid + "<<<")
         private_directory = os.path.join(self.directory, "private")
         backup_directory_size = get_size(backup_directory)
 
+        return {
+            "database": get_database_size(),
+            "public": get_size(public_directory),
+            "private": get_size(private_directory) - backup_directory_size,
+            "backups": backup_directory_size
+        }
+
+    def get_database_size(self):
         # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
         db_sql = self.execute("""mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'""" % (self.user, self.password, self.database)).get("output")
 
         try:
             database_size = db_sql.split()[-1]
         except (AttributeError, IndexError):
-            database_size = ""
+            database_size = "0.0"
 
-        return {
-            "database": database_size,
-            "public": get_size(public_directory),
-            "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size
-        }
+        return float(database_size)
 
     @property
     def job_record(self):
