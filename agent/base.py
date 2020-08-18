@@ -15,6 +15,8 @@ class Base:
 
     def execute(self, command, directory=None, input=None):
         directory = directory or self.directory
+        self.log("Command", command)
+        self.log("Directory", directory)
         start = datetime.now()
         data = {"command": command, "directory": directory, "start": start}
         try:
@@ -30,9 +32,11 @@ class Base:
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
+            output = self.remove_crs(e.output)
+            self.log("Output", output)
             data.update(
                 {
-                    "output": self.remove_crs(e.output),
+                    "output": output,
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
@@ -40,13 +44,9 @@ class Base:
             raise AgentException(data)
 
         end = datetime.now()
-        data.update(
-            {
-                "duration": end - start,
-                "end": end,
-                "output": self.remove_crs(process.stdout),
-            }
-        )
+        output = self.remove_crs(process.stdout)
+        self.log("Output", output)
+        data.update({"duration": end - start, "end": end, "output": output})
         return data
 
     @property
@@ -61,6 +61,9 @@ class Base:
     def remove_crs(self, input):
         output = subprocess.check_output(["col", "-b"], input=input)
         return output.decode().strip()
+
+    def log(self, *args):
+        print(*args)
 
 
 class AgentException(Exception):
