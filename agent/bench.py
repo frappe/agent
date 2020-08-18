@@ -11,7 +11,7 @@ from agent.app import App
 from agent.base import AgentException, Base
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file
+from agent.utils import download_file, get_size
 
 
 class Bench(Base):
@@ -369,3 +369,9 @@ class Bench(Base):
     @property
     def step_record(self):
         return self.server.step_record
+
+    def get_usage(self):
+        return {
+            "storage": get_size(self.directory),
+            "database": sum([site.get_database_size() for site in self.sites])
+        }
