@@ -176,9 +176,9 @@ class Bench(Base):
                 files["public"],
                 files["private"],
             )
-            config_file = files["site_config"]
+            config_file = files["config"]
             if config_file:
-                site_config = json.load(open(site_config))
+                site_config = json.load(open(config_file))
                 site.update_config(site_config)
         finally:
             self.delete_downloaded_files(files["database"])
@@ -206,7 +206,7 @@ class Bench(Base):
         private_file = download_file(private_url, prefix=folder)
         public_file = download_file(public_url, prefix=folder)
         return {
-            "config": config_file
+            "config": config_file,
             "database": database_file,
             "private": private_file,
             "public": public_file,
