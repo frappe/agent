@@ -164,7 +164,7 @@ class Bench(Base):
         public,
         private,
     ):
-        files = self.download_files(name, site_config, database, public, private)
+        files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.update_config(default_config)
@@ -176,9 +176,8 @@ class Bench(Base):
                 files["public"],
                 files["private"],
             )
-            config_file = files["config"]
-            if config_file:
-                site_config = json.load(open(config_file))
+            if site_config:
+                site_config = json.loads(site_config)
                 site.update_config(site_config)
         finally:
             self.delete_downloaded_files(files["database"])
@@ -199,14 +198,12 @@ class Bench(Base):
         )
 
     @step("Download Backup Files")
-    def download_files(self, name, config_url, database_url, public_url, private_url):
+    def download_files(self, name, database_url, public_url, private_url):
         folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
-        config_file = download_file(config_url, prefix=folder) if config_url else None
         database_file = download_file(database_url, prefix=folder)
         private_file = download_file(private_url, prefix=folder)
         public_file = download_file(public_url, prefix=folder)
         return {
-            "config": config_file,
             "database": database_file,
             "private": private_file,
             "public": public_file,
