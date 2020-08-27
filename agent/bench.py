@@ -155,19 +155,19 @@ class Bench(Base):
     def new_site_from_backup(
         self,
         name,
-        config,
+        default_config,
         apps,
         mariadb_root_password,
         admin_password,
+        site_config,
         database,
         public,
         private,
     ):
-
         files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
-        site.update_config(config)
+        site.update_config(default_config)
         try:
             site.restore(
                 mariadb_root_password,
@@ -176,6 +176,9 @@ class Bench(Base):
                 files["public"],
                 files["private"],
             )
+            if site_config:
+                site_config = json.loads(site_config)
+                site.update_config(site_config)
         finally:
             self.delete_downloaded_files(files["database"])
         site.uninstall_unavailable_apps(apps)
