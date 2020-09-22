@@ -133,51 +133,20 @@ class Site(Base):
         self.uninstall_app(app)
 
     @step("Update Site Configuration")
-    def update_config(self, value, refresh=False):
+    def update_config(self, value, remove):
         """Pass Site Config value to update or replace existing site config.
 
         Args:
             value (dict): Site Config
             refresh (bool, optional): If set, replaces the existing file compeletely with `value`. Defaults to False.
         """
-        if refresh:
-            # From current Blacklisted keys at Press
-            blacklisted_keys = {
-                'admin_password',
-                'allow_tests',
-                'db_host',
-                'db_name',
-                'db_password',
-                'db_port',
-                'db_ssl_ca',
-                'db_ssl_cert',
-                'db_ssl_key',
-                'db_type',
-                'developer_mode',
-                'http_port',
-                'keep_backups_for_hours',
-                'maintenance_mode',
-                'monitor',
-                'rate_limit',
-                'rds_db',
-                'root_login',
-                'root_password',
-                'socketio_port',
-                'webserver_port'
-            }
-            current_config = self.config
-            received_config = value
-            new_config = {}
+        new_config = self.config
+        new_config.update(value)
 
-            for key in blacklisted_keys:
-                if (key in current_config) and (key not in received_config):
-                    new_config[key] = current_config[key]
+        if remove:
+            for key in remove:
+                new_config.pop(key, None)
 
-            new_config.update(received_config)
-
-        else:
-            new_config = self.config
-            new_config.update(value)
         self.setconfig(new_config)
 
     @job("Add Domain", priority="high")
@@ -197,8 +166,8 @@ class Site(Base):
         self.bench.server.reload_nginx()
 
     @job("Update Site Configuration", priority="high")
-    def update_config_job(self, value):
-        self.update_config(value, refresh=True)
+    def update_config_job(self, value, remove):
+        self.update_config(value, remove)
 
     @step("Backup Site")
     def backup(self, with_files=False):
