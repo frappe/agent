@@ -87,6 +87,7 @@ class Site(Base):
         private,
     ):
         files = self.bench.download_files(self.name, database, public, private)
+        files = self.bench.verify_files(files)
         try:
             self.restore(
                 mariadb_root_password,

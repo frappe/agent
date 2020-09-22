@@ -165,6 +165,7 @@ class Bench(Base):
         private,
     ):
         files = self.download_files(name, database, public, private)
+        files = self.verify_files(files)
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.update_config(default_config)
@@ -208,6 +209,26 @@ class Bench(Base):
             "private": private_file,
             "public": public_file,
         }
+
+    @step("Verify Downloaded Backup Files")
+    def verify_files(self, files):
+
+        # test if files are valid
+        for file in files.values():
+
+            if file.endswith(("tar", "tgz")):
+                # GNU tar takes care of usage of ../ in the file path so we don't have to worry about that here
+                self.execute(f"tar -tzf {file}")
+
+            if file.endswith("sql.gz"):
+                import shutil
+
+                self.execute(f"gzip -t {file}")
+                file_size = round(int(self.execute(f"gzip -c {file} | wc --bytes")["output"]) / 1024 ** 3)
+                available = round(shutil.disk_space("/").free / 1024 ** 3)
+
+                if file_size > available:
+                    raise AgentException(f"Decompressing File of size {file_size}G will require more than the available {available}G")
 
     @step("Delete Downloaded Backup Files")
     def delete_downloaded_files(self, database_file):
