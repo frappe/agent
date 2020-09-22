@@ -141,7 +141,40 @@ class Site(Base):
             refresh (bool, optional): If set, replaces the existing file compeletely with `value`. Defaults to False.
         """
         if refresh:
-            new_config = value
+            # From current Blacklisted keys at Press
+            blacklisted_keys = {
+                'admin_password',
+                'allow_tests',
+                'db_host',
+                'db_name',
+                'db_password',
+                'db_port',
+                'db_ssl_ca',
+                'db_ssl_cert',
+                'db_ssl_key',
+                'db_type',
+                'developer_mode',
+                'http_port',
+                'keep_backups_for_hours',
+                'maintenance_mode',
+                'monitor',
+                'rate_limit',
+                'rds_db',
+                'root_login',
+                'root_password',
+                'socketio_port',
+                'webserver_port'
+            }
+            current_config = self.config
+            received_config = value
+            new_config = {}
+
+            for key in blacklisted_keys:
+                if (key in current_config) and (key not in received_config):
+                    new_config[key] = current_config[key]
+
+            new_config.update(received_config)
+
         else:
             new_config = self.config
             new_config.update(value)
