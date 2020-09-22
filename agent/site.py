@@ -166,9 +166,6 @@ class Site(Base):
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite):
-        if not (offsite and backup_files):
-            return {}
-
         import boto3
 
         offsite_files = {}
@@ -341,7 +338,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
-        uploaded_files = self.upload_offsite_backup(backup_files, offsite)
+        uploaded_files = self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
