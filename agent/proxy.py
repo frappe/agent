@@ -109,6 +109,23 @@ class Proxy(Server):
         with open(site_file, "w") as f:
             f.write(status)
 
+    @job("Setup Redirect on Host")
+    def setup_redirect_job(self, host, target):
+        self.setup_redirect(host, target)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Setup Redirect on Host")
+    def setup_redirect(self, host, target):
+        host_directory = os.path.join(self.hosts_directory, host)
+        redirect_file = os.path.join(host_directory, "redirect.json")
+        if os.path.exists(redirect_file):
+            redirects = json.load(open(redirect_file))
+        else:
+            redirects = {}
+        redirects[host] = target
+        json.dump(redirects, open(redirect_file, "w"), indent=4)
+
     @step("Reload NGINX")
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
@@ -184,4 +201,16 @@ class Proxy(Server):
             map_file = os.path.join(host_directory, "map.json")
             if os.path.exists(map_file):
                 hosts[host] = json.load(open(map_file))
+            redirect_file = os.path.join(host_directory, "redirect.json")
+            if os.path.exists(redirect_file):
+                redirects = json.load(open(redirect_file))
+                for _from, to in redirects.items():
+                    if "*" in host:
+                        hosts[_from] = {_from: _from}
+                    hosts[_from]["redirect"] = to
+
+            from pprint import pprint
+
+            print("*" * 20)
+            pprint(hosts)
         return hosts

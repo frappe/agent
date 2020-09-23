@@ -441,6 +441,13 @@ def proxy_add_host():
     return {"job": job}
 
 
+@application.route("/proxy/hosts/<string:host>/redirect", methods=["POST"])
+def proxy_setup_redirect(host):
+    data = request.json
+    job = Proxy().setup_redirect_job(host, data["target"])
+    return {"job": job}
+
+
 @application.route("/proxy/hosts/<string:host>", methods=["DELETE"])
 def proxy_remove_host(host):
     job = Proxy().remove_host_job(host)
