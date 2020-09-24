@@ -73,7 +73,7 @@ server {
 	add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
 	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
-	{% host.redirect %}
+	{% if host.redirect %}
 
 	location / {
 		return 301 https://{{ host.redirect }}$request_uri;
