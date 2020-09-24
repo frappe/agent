@@ -133,9 +133,20 @@ class Site(Base):
         self.uninstall_app(app)
 
     @step("Update Site Configuration")
-    def update_config(self, value):
+    def update_config(self, value, remove):
+        """Pass Site Config value to update or replace existing site config.
+
+        Args:
+            value (dict): Site Config
+            refresh (bool, optional): If set, replaces the existing file compeletely with `value`. Defaults to False.
+        """
         new_config = self.config
         new_config.update(value)
+
+        if remove:
+            for key in remove:
+                new_config.pop(key, None)
+
         self.setconfig(new_config)
 
     @job("Add Domain", priority="high")
@@ -155,8 +166,8 @@ class Site(Base):
         self.bench.server.reload_nginx()
 
     @job("Update Site Configuration", priority="high")
-    def update_config_job(self, value):
-        self.update_config(value)
+    def update_config_job(self, value, remove):
+        self.update_config(value, remove)
 
     @step("Backup Site")
     def backup(self, with_files=False):

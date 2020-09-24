@@ -403,7 +403,7 @@ def archive_site(bench, site):
 )
 def site_update_config(bench, site):
     data = request.json
-    job = Server().benches[bench].sites[site].update_config_job(data["config"])
+    job = Server().benches[bench].sites[site].update_config_job(data["config"], data["remove"])
     return {"job": job}
 
 
