@@ -138,7 +138,8 @@ class Site(Base):
 
         Args:
             value (dict): Site Config
-            refresh (bool, optional): If set, replaces the existing file compeletely with `value`. Defaults to False.
+            remove (list, optional): Keys sent in the form of a list will be
+                popped from the existing site config. Defaults to None.
         """
         new_config = self.config
         new_config.update(value)
