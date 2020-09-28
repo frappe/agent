@@ -112,7 +112,7 @@ server {
 	location / {
 		proxy_http_version 1.1;
 
-		proxy_read_timeout 120;
+		proxy_read_timeout 300;
 		proxy_buffering off;
 		proxy_buffer_size 128k;
 		proxy_buffers 100 128k;
