@@ -133,7 +133,7 @@ class Site(Base):
         self.uninstall_app(app)
 
     @step("Update Site Configuration")
-    def update_config(self, value, remove):
+    def update_config(self, value, remove=None):
         """Pass Site Config value to update or replace existing site config.
 
         Args:
