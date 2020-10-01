@@ -120,6 +120,11 @@ def get_bench(bench):
     return Server().benches[bench].dump()
 
 
+@application.route("/benches/<string:bench>/info")
+def fetch_sites_info(bench):
+    return Server().benches[bench].fetch_sites_info()
+
+
 @application.route("/benches/<string:bench>/sites")
 def get_sites(bench):
     sites = Server().benches[bench].sites
