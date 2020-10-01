@@ -45,6 +45,12 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
+    def fetch_sites_info(self):
+        info = {}
+        for name, site in self.sites.items():
+            info[name] = site.fetch_site_info()
+        return info
+
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
