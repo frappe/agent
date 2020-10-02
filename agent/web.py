@@ -122,7 +122,8 @@ def get_bench(bench):
 
 @application.route("/benches/<string:bench>/info")
 def fetch_sites_info(bench):
-    return Server().benches[bench].fetch_sites_info()
+    job = Server().benches[bench].fetch_sites_info()
+    return {"job": job}
 
 
 @application.route("/benches/<string:bench>/sites")

@@ -45,7 +45,12 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
+    @job("Fetch Sites Info")
     def fetch_sites_info(self):
+        return self._fetch_sites_info()
+
+    @step("Fetch Sites Info")
+    def _fetch_sites_info(self):
         info = {}
         for name, site in self.sites.items():
             info[name] = site.fetch_site_info()
