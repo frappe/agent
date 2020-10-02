@@ -57,8 +57,8 @@ class Bench(Base):
         if mariadb_root_password:
             tables = self.execute("""mysql -uroot -p{0} -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables GROUP BY `table_schema`'""".format(mariadb_root_password)).get("output")
             if tables:
-                info = data.replace("|", "").replace("-", "").replace("+++", "").split()
-                ddump = {info[i]: info[i + 1] for i in range(0, len(info), 2)}
+                _info = tables.replace("|", "").replace("-", "").replace("+++", "").split()
+                ddump = {_info[i]: _info[i + 1] for i in range(0, len(_info), 2)}
 
         for name, site in self.sites.items():
             info[name] = site.fetch_site_info(ddump=ddump)
@@ -394,8 +394,6 @@ class Bench(Base):
         return self.server.step_record
 
     def get_usage(self):
-        all_tables = data.replace("|", "").replace("-", "").replace("+++", "").split()
-        ddump = {all_tables[i]: all_tables[i + 1] for i in range(0, len(all_tables), 2)}
         return {
             "storage": get_size(self.directory),
             "database": sum([site.get_database_size() for site in self.sites.values()])
