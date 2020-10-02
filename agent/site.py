@@ -312,8 +312,8 @@ class Site(Base):
 
         return data
 
-    def fetch_site_info(self):
-        data = {"config": self.config, "timezone": self.timezone, "usage": self.get_usage()}
+    def fetch_site_info(self, ddump=None):
+        data = {"config": self.config, "timezone": self.timezone, "usage": self.get_usage(ddump=ddump)}
         return data
 
     def sid(self):
@@ -383,7 +383,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return backups
 
-    def get_usage(self):
+    def get_usage(self, ddump=None):
         """Returns Usage in bytes"""
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
@@ -391,20 +391,22 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": self.get_database_size(),
+            "database": self.get_database_size(ddump=ddump),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
             "backups": backup_directory_size
         }
 
-    def get_database_size(self):
+    def get_database_size(self, ddump=None):
         # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
-        db_sql = self.execute("""mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'""" % (self.user, self.password, self.database)).get("output")
-
-        try:
-            database_size = db_sql.split()[-1]
-        except (AttributeError, IndexError):
-            database_size = "0.0"
+        if ddump:
+            database_size = ddump.get(self.database)
+        else:
+            db_sql = self.execute("""mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'""" % (self.user, self.password, self.database)).get("output")
+            try:
+                database_size = db_sql.split()[-1]
+            except (AttributeError, IndexError):
+                database_size = "0.0"
 
         return float(database_size)
 
