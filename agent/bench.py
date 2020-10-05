@@ -55,10 +55,25 @@ class Bench(Base):
         info = {}
 
         if mariadb_root_password:
-            tables = self.execute("""mysql -uroot -p{0} -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables GROUP BY `table_schema`'""".format(mariadb_root_password)).get("output")
-            if tables:
-                _info = tables.replace("|", "").replace("-", "").replace("+++", "").split()
-                ddump = {_info[i]: _info[i + 1] for i in range(0, len(_info), 2)}
+            databases = tuple([site.database for site in self.sites.values()])
+            databases_format = '(' + ", ".join(['"{0}"'.format(d) for d in databases]) + ')'
+
+            time_zone_command = " UNION ALL ".join(["select '{0}', defvalue from {0}.tabDefaultValue where defkey = 'time_zone'".format(database) for database in databases])
+            time_zones_data = self.execute('mysql -uroot -p{0} -sN -e "{1}"'.format(mariadb_root_password, time_zone_command)).get("output").strip().split()
+            time_zones = {time_zones_data[i]: {"time_zone": time_zones_data[i + 1]} for i in range(0, len(time_zones_data), 2)}
+
+            usage_data = self.execute("""mysql -uroot -p{0} -sN -e 'SELECT `table_schema`, SUM(`data_length` + `index_length`) FROM information_schema.tables WHERE `table_schema` IN {1} GROUP BY `table_schema`'""".format(mariadb_root_password, databases_format)).get("output").strip().split()
+            usage = {usage_data[i]: {"usage": usage_data[i + 1]} for i in range(0, len(usage_data), 2)}
+
+            if len(time_zones) > len(usage):
+                ddump = time_zones.copy()
+                pending = usage
+            else:
+                ddump = usage.copy()
+                pending = time_zones
+
+            for key, val in ddump.items():
+                ddump[key].update(pending.get(key, {}))
 
         for name, site in self.sites.items():
             info[name] = site.fetch_site_info(ddump=ddump)
