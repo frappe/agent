@@ -471,7 +471,9 @@ class Server(Base):
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
         self._render_template(
-            "nginx/nginx.conf.jinja2", {}, nginx_config,
+            "nginx/nginx.conf.jinja2",
+            {},
+            nginx_config,
         )
 
     def _generate_agent_nginx_config(self):

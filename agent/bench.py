@@ -62,19 +62,21 @@ class Bench(Base):
                 for database in databases
             ]
             time_zone_union_query = " UNION ALL ".join(time_zone_queries)
-            time_zones_data = self.execute(
-                f'mysql -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
-            ).get("output").strip().split()
+            time_zones_data = (
+                self.execute(
+                    f'mysql -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
+                )
+                .get("output")
+                .strip()
+                .split()
+            )
             time_zones = {
-                time_zones_data[i]: {
-                    "time_zone": time_zones_data[i + 1]
-                } for i in range(0, len(time_zones_data), 2)
+                time_zones_data[i]: {"time_zone": time_zones_data[i + 1]}
+                for i in range(0, len(time_zones_data), 2)
             }
 
             databases_format = (
-                '('
-                + ", ".join(['"{0}"'.format(d) for d in databases])
-                + ')'
+                "(" + ", ".join(['"{0}"'.format(d) for d in databases]) + ")"
             )
             usage_query = (
                 "SELECT `table_schema`, SUM(`data_length` + `index_length`)"
@@ -83,13 +85,17 @@ class Bench(Base):
                 f" IN {databases_format}"
                 " GROUP BY `table_schema`"
             )
-            usage_data = self.execute(
-                f"mysql -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
-            ).get("output").strip().split()
+            usage_data = (
+                self.execute(
+                    f"mysql -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
+                )
+                .get("output")
+                .strip()
+                .split()
+            )
             usage = {
-                usage_data[i]: {
-                    "usage": usage_data[i + 1]
-                } for i in range(0, len(usage_data), 2)
+                usage_data[i]: {"usage": usage_data[i + 1]}
+                for i in range(0, len(usage_data), 2)
             }
 
             if len(time_zones) > len(usage):
@@ -126,9 +132,13 @@ class Bench(Base):
                 self.directory, "logs", "monitor.json.log"
             )
             time = datetime.utcnow().isoformat()
-            logs_directory = os.path.join(self.server.directory, "logs",)
+            logs_directory = os.path.join(
+                self.server.directory,
+                "logs",
+            )
             target_file = os.path.join(
-                logs_directory, f"{self.name}-{time}-monitor.json.log",
+                logs_directory,
+                f"{self.name}-{time}-monitor.json.log",
             )
             if os.path.exists(monitor_log_file):
                 shutil.move(monitor_log_file, target_file)
@@ -438,5 +448,7 @@ class Bench(Base):
     def get_usage(self):
         return {
             "storage": get_size(self.directory),
-            "database": sum([site.get_database_size() for site in self.sites.values()])
+            "database": sum(
+                [site.get_database_size() for site in self.sites.values()]
+            ),
         }

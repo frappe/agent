@@ -105,12 +105,16 @@ class Site(Base):
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
-    def migrate_job(self,):
+    def migrate_job(
+        self,
+    ):
         return self.migrate()
 
     @step("Reinstall Site")
     def reinstall(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.bench_execute(
             f"reinstall --yes "
@@ -120,7 +124,9 @@ class Site(Base):
 
     @job("Reinstall Site")
     def reinstall_job(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.reinstall(mariadb_root_password, admin_password)
 
@@ -318,7 +324,11 @@ class Site(Base):
         return self.timezone
 
     def fetch_site_info(self, ddump=None):
-        data = {"config": self.config, "timezone": self.get_timezone(ddump=ddump), "usage": self.get_usage(ddump=ddump)}
+        data = {
+            "config": self.config,
+            "timezone": self.get_timezone(ddump=ddump),
+            "usage": self.get_usage(ddump=ddump),
+        }
         return data
 
     def sid(self):
@@ -399,7 +409,7 @@ print(">>>" + frappe.session.sid + "<<<")
             "database": self.get_database_size(ddump=ddump),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size
+            "backups": backup_directory_size,
         }
 
     def get_database_size(self, ddump=None):
@@ -408,10 +418,10 @@ print(">>>" + frappe.session.sid + "<<<")
             database_size = ddump.get(self.database, {}).get("usage")
         else:
             query = (
-                'SELECT SUM(`data_length` + `index_length`)'
-                ' FROM information_schema.tables'
+                "SELECT SUM(`data_length` + `index_length`)"
+                " FROM information_schema.tables"
                 f' WHERE `table_schema` = "{self.database}"'
-                ' GROUP BY `table_schema`'
+                " GROUP BY `table_schema`"
             )
             command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
