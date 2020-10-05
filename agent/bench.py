@@ -56,14 +56,41 @@ class Bench(Base):
 
         if mariadb_root_password:
             databases = tuple([site.database for site in self.sites.values()])
-            databases_format = '(' + ", ".join(['"{0}"'.format(d) for d in databases]) + ')'
 
-            time_zone_command = " UNION ALL ".join(["select '{0}', defvalue from {0}.tabDefaultValue where defkey = 'time_zone'".format(database) for database in databases])
-            time_zones_data = self.execute('mysql -uroot -p{0} -sN -e "{1}"'.format(mariadb_root_password, time_zone_command)).get("output").strip().split()
-            time_zones = {time_zones_data[i]: {"time_zone": time_zones_data[i + 1]} for i in range(0, len(time_zones_data), 2)}
+            time_zone_queries = [
+                f"select '{database}', defvalue from {database}.tabDefaultValue where defkey = 'time_zone'"
+                for database in databases
+            ]
+            time_zone_union_query = " UNION ALL ".join(time_zone_queries)
+            time_zones_data = self.execute(
+                f'mysql -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
+            ).get("output").strip().split()
+            time_zones = {
+                time_zones_data[i]: {
+                    "time_zone": time_zones_data[i + 1]
+                } for i in range(0, len(time_zones_data), 2)
+            }
 
-            usage_data = self.execute("""mysql -uroot -p{0} -sN -e 'SELECT `table_schema`, SUM(`data_length` + `index_length`) FROM information_schema.tables WHERE `table_schema` IN {1} GROUP BY `table_schema`'""".format(mariadb_root_password, databases_format)).get("output").strip().split()
-            usage = {usage_data[i]: {"usage": usage_data[i + 1]} for i in range(0, len(usage_data), 2)}
+            databases_format = (
+                '('
+                + ", ".join(['"{0}"'.format(d) for d in databases])
+                + ')'
+            )
+            usage_query = (
+                "SELECT `table_schema`, SUM(`data_length` + `index_length`)"
+                " FROM information_schema.tables"
+                " WHERE `table_schema`"
+                f" IN {databases_format}"
+                " GROUP BY `table_schema`"
+            )
+            usage_data = self.execute(
+                f"mysql -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
+            ).get("output").strip().split()
+            usage = {
+                usage_data[i]: {
+                    "usage": usage_data[i + 1]
+                } for i in range(0, len(usage_data), 2)
+            }
 
             if len(time_zones) > len(usage):
                 ddump = time_zones.copy()

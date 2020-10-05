@@ -407,13 +407,19 @@ print(">>>" + frappe.session.sid + "<<<")
         if ddump:
             database_size = ddump.get(self.database, {}).get("usage")
         else:
-            db_sql = self.execute("""mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'""" % (self.user, self.password, self.database)).get("output")
-            try:
-                database_size = db_sql.split()[-1]
-            except (AttributeError, IndexError):
-                database_size = "0.0"
+            query = (
+                'SELECT SUM(`data_length` + `index_length`)'
+                ' FROM information_schema.tables'
+                f' WHERE `table_schema` = "{self.database}"'
+                ' GROUP BY `table_schema`'
+            )
+            command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
+            database_size = self.execute(command).get("output")
 
-        return float(database_size)
+        try:
+            return int(database_size)
+        except Exception:
+            return 0
 
     @property
     def job_record(self):
