@@ -25,6 +25,7 @@ class Bench(Base):
         self.config_file = os.path.join(
             self.directory, "sites", "common_site_config.json"
         )
+        self.host = self.config.get("db_host", "localhost")
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.apps_directory)
@@ -64,7 +65,7 @@ class Bench(Base):
             time_zone_union_query = " UNION ALL ".join(time_zone_queries)
             time_zones_data = (
                 self.execute(
-                    f'mysql -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
+                    f'mysql -h {self.host} -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
                 )
                 .get("output")
                 .strip()
@@ -87,7 +88,7 @@ class Bench(Base):
             )
             usage_data = (
                 self.execute(
-                    f"mysql -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
+                    f"mysql -h {self.host} -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
                 )
                 .get("output")
                 .strip()

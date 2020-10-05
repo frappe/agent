@@ -30,6 +30,7 @@ class Site(Base):
         self.database = self.config["db_name"]
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
+        self.host = self.config.get("db_host", self.bench.host)
 
     def bench_execute(self, command, input=None):
         return self.bench.execute(
@@ -251,7 +252,8 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
                 f"mysqldump --single-transaction --quick --lock-tables=false "
-                f"-u {self.user} -p{self.password} {self.database} '{table}' "
+                f"-h {self.host} -u {self.user} -p{self.password} "
+                f"{self.database} '{table}' "
                 f"> '{backup_file}'"
             )
             data["tables"][table] = output
@@ -282,8 +284,8 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             if os.path.exists(backup_file):
                 output = self.execute(
-                    f"mysql -u {self.user} -p{self.password} {self.database} "
-                    f"< '{backup_file}'"
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"{self.database} < '{backup_file}'"
                 )
                 data["tables"][table] = output
         return data
@@ -357,7 +359,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def tables(self):
         return self.execute(
             f"mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-u {self.user} -p{self.password} {self.database}"
+            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -413,7 +415,8 @@ print(">>>" + frappe.session.sid + "<<<")
         }
 
     def get_database_size(self, ddump=None):
-        # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
+        # only specific to mysql. use a different query for postgres.
+        # or try using frappe.db.get_database_size if possible
         if ddump:
             database_size = ddump.get(self.database, {}).get("usage")
         else:
@@ -423,7 +426,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 f' WHERE `table_schema` = "{self.database}"'
                 " GROUP BY `table_schema`"
             )
-            command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
+            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
 
         try:
