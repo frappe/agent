@@ -4,6 +4,7 @@ import shutil
 from hashlib import sha512 as sha
 from pathlib import Path
 
+from typing import Dict
 from agent.job import job, step
 from agent.server import Server
 
@@ -194,7 +195,7 @@ class Proxy(Server):
         return upstreams
 
     @property
-    def hosts(self):
+    def hosts(self) -> Dict[str, Dict[str, str]]:
         hosts = {}
         for host in os.listdir(self.hosts_directory):
             host_directory = os.path.join(self.hosts_directory, host)
