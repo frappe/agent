@@ -31,7 +31,7 @@ map $actual_host $upstream_server_hash {
 
 map $host $actual_host {
 {% for host in hosts.values() -%}
-	{% for from, to in host.items() %}
+	{% for from, to in host.items() if from != 'redirect'%}
 	{{ from }} {{ to }};
 	{%- endfor %}
 {%- endfor %}
@@ -39,7 +39,8 @@ map $host $actual_host {
 
 proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;
 
-{% for host in hosts %}
+{% for host, host_options in hosts.items() %}
+
 server {
 	listen 443 http2 ssl{% if host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ host }};
@@ -73,10 +74,10 @@ server {
 	add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
 	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
-	{% if host.redirect %}
+	{% if host_options.redirect %}
 
 	location / {
-		return 301 https://{{ host.redirect }}$request_uri;
+		return 301 https://{{ host_options.redirect }}$request_uri;
 	}
 
 	{% else %}
