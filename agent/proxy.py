@@ -209,9 +209,4 @@ class Proxy(Server):
                     if "*" in host:
                         hosts[_from] = {_from: _from}
                     hosts[_from]["redirect"] = to
-
-            from pprint import pprint
-
-            print("*" * 20)
-            pprint(hosts)
         return hosts
