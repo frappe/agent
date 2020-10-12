@@ -448,6 +448,12 @@ def proxy_setup_redirect(host):
     return {"job": job}
 
 
+@application.route("/proxy/hosts/<string:host>/redirect", methods=["DELETE"])
+def proxy_remove_redirect(host):
+    job = Proxy().remove_redirect_job(host)
+    return {"job": job}
+
+
 @application.route("/proxy/hosts/<string:host>", methods=["DELETE"])
 def proxy_remove_host(host):
     job = Proxy().remove_host_job(host)

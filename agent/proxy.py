@@ -127,6 +127,19 @@ class Proxy(Server):
         redirects[host] = target
         json.dump(redirects, open(redirect_file, "w"), indent=4)
 
+    @job("Remove Redirect on Host")
+    def remove_redirect_job(self, host):
+        self.remove_redirect(host)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Remove Redirect on Host")
+    def remove_redirect(self, host):
+        host_directory = os.path.join(self.hosts_directory, host)
+        redirect_file = os.path.join(host_directory, "redirect.json")
+        if os.path.exists(redirect_file):
+            os.remove(redirect_file)
+
     @step("Reload NGINX")
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
