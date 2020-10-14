@@ -123,8 +123,8 @@ def get_bench(bench):
 @application.route("/benches/<string:bench>/info")
 def fetch_sites_info(bench):
     data = request.json
-    mariadb_root_password = data.get("mariadb_root_password")
-    job = Server().benches[bench].fetch_sites_info(mariadb_root_password)
+    since = data.get("since") if data else None
+    job = Server().benches[bench].fetch_sites_info(since=since)
     return {"job": job}
 
 

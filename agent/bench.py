@@ -54,7 +54,7 @@ class Bench(Base):
     @step("Fetch Sites Info")
     def _fetch_sites_info(self, since):
         from agent.usage import UsageModel
-        return UsageModel.select().where("timestamp" > since)
+        return UsageModel.select().where(UsageModel.timestamp > since)
 
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
