@@ -1,15 +1,15 @@
 import datetime
 
 from peewee import (
-    CharField,
     DateTimeField,
     IntegerField,
     Model,
     SqliteDatabase,
-    TextField
+    TextField,
 )
 
 usage_database = SqliteDatabase("usage.sqlite3")
+
 
 class UsageModel(Model):
     site = TextField()
@@ -32,8 +32,6 @@ if __name__ == "__main__":
 
     for bench in server.benches.values():
         for site in bench.sites.values():
-            UsageModel.insert(**{
-                "site": site.name,
-                "time_zone": site.timezone,
-                **site.get_usage()
-            }).execute()
+            UsageModel.insert(
+                **{"site": site.name, "time_zone": site.timezone, **site.get_usage()}
+            ).execute()
