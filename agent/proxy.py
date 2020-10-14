@@ -27,6 +27,16 @@ class Proxy(Server):
         self.job = None
         self.step = None
 
+    def _is_default_domain(self, host) -> bool:
+        """
+        Check if given host is a Default Site Domain.
+
+        Default Site Domains are subdomains of the main domain.
+        """
+        if host.endswith("." + self.config['domain']):
+            return True
+        return False
+
     @job("Add Host to Proxy")
     def add_host_job(self, host, target, certificate):
         self.add_host(host, target, certificate)
@@ -119,6 +129,8 @@ class Proxy(Server):
     @step("Setup Redirect on Host")
     def setup_redirect(self, host, target):
         host_directory = os.path.join(self.hosts_directory, host)
+        if not os.path.exists(host_directory):
+            os.mkdir(host_directory)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
             redirects = json.load(open(redirect_file))
@@ -139,6 +151,8 @@ class Proxy(Server):
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
             os.remove(redirect_file)
+        if self._is_default_domain(host):
+            os.rmdir(host_directory)
 
     @step("Reload NGINX")
     def reload_nginx(self):
