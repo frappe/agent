@@ -330,7 +330,8 @@ def backup_site(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/migrate", methods=["POST"],
+    "/benches/<string:bench>/sites/<string:site>/migrate",
+    methods=["POST"],
 )
 def migrate_site(bench, site):
     job = Server().benches[bench].sites[site].migrate_job()
@@ -411,7 +412,12 @@ def archive_site(bench, site):
 )
 def site_update_config(bench, site):
     data = request.json
-    job = Server().benches[bench].sites[site].update_config_job(data["config"], data["remove"])
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .update_config_job(data["config"], data["remove"])
+    )
     return {"job": job}
 
 

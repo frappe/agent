@@ -30,6 +30,7 @@ class Site(Base):
         self.database = self.config["db_name"]
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
+        self.host = self.config.get("db_host", self.bench.host)
 
     def bench_execute(self, command, input=None):
         return self.bench.execute(
@@ -105,12 +106,16 @@ class Site(Base):
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
-    def migrate_job(self,):
+    def migrate_job(
+        self,
+    ):
         return self.migrate()
 
     @step("Reinstall Site")
     def reinstall(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.bench_execute(
             f"reinstall --yes "
@@ -120,7 +125,9 @@ class Site(Base):
 
     @job("Reinstall Site")
     def reinstall_job(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.reinstall(mariadb_root_password, admin_password)
 
@@ -178,9 +185,6 @@ class Site(Base):
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite):
-        if not (offsite and backup_files):
-            return {}
-
         import boto3
 
         offsite_files = {}
@@ -245,7 +249,8 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
                 f"mysqldump --single-transaction --quick --lock-tables=false "
-                f"-u {self.user} -p{self.password} {self.database} '{table}' "
+                f"-h {self.host} -u {self.user} -p{self.password} "
+                f"{self.database} '{table}' "
                 f"> '{backup_file}'"
             )
             data["tables"][table] = output
@@ -276,8 +281,8 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             if os.path.exists(backup_file):
                 output = self.execute(
-                    f"mysql -u {self.user} -p{self.password} {self.database} "
-                    f"< '{backup_file}'"
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"{self.database} < '{backup_file}'"
                 )
                 data["tables"][table] = output
         return data
@@ -348,7 +353,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def tables(self):
         return self.execute(
             f"mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-u {self.user} -p{self.password} {self.database}"
+            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -359,7 +364,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
-        uploaded_files = self.upload_offsite_backup(backup_files, offsite)
+        uploaded_files = self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
@@ -400,7 +405,7 @@ print(">>>" + frappe.session.sid + "<<<")
             "database": self.get_database_size(),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size
+            "backups": backup_directory_size,
         }
 
     def get_database_size(self):
