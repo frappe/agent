@@ -73,6 +73,7 @@ class Bench(Base):
                         "public": d.public,
                         "private": d.private,
                         "backups": d.backups,
+                        "timestamp": d.timestamp,
                     }
                     for d in usage_data
                 ],
