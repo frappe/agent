@@ -45,6 +45,11 @@ server {
 	listen 443 http2 ssl{% if host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ host }};
 
+	{%- if host.endswith("." + domain) -%}
+		{% set host = host|get_wildcard_domain %}
+		{# to use same certificate as root domain #}
+	{%- endif %}
+
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
 	ssl_certificate_key {{ nginx_directory }}/hosts/{{ host }}/privkey.pem;
 	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ host }}/chain.pem;
