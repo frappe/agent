@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 
@@ -46,66 +46,15 @@ class Bench(Base):
         }
 
     @job("Fetch Sites Info")
-    def fetch_sites_info(self, mariadb_root_password=None):
-        return self._fetch_sites_info(mariadb_root_password)
+    def fetch_sites_info(self, since=None):
+        if not since:
+            since = datetime.utcnow() - timedelta(days=30)
+        return self._fetch_sites_info(since=since)
 
     @step("Fetch Sites Info")
-    def _fetch_sites_info(self, mariadb_root_password=None):
-        ddump = None
-        info = {}
-
-        if mariadb_root_password:
-            databases = tuple([site.database for site in self.sites.values()])
-
-            time_zone_queries = [
-                f"select '{database}', defvalue from {database}.tabDefaultValue where defkey = 'time_zone'"
-                for database in databases
-            ]
-            time_zone_union_query = " UNION ALL ".join(time_zone_queries)
-            time_zones_data = self.execute(
-                f'mysql -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
-            ).get("output").strip().split()
-            time_zones = {
-                time_zones_data[i]: {
-                    "time_zone": time_zones_data[i + 1]
-                } for i in range(0, len(time_zones_data), 2)
-            }
-
-            databases_format = (
-                '('
-                + ", ".join(['"{0}"'.format(d) for d in databases])
-                + ')'
-            )
-            usage_query = (
-                "SELECT `table_schema`, SUM(`data_length` + `index_length`)"
-                " FROM information_schema.tables"
-                " WHERE `table_schema`"
-                f" IN {databases_format}"
-                " GROUP BY `table_schema`"
-            )
-            usage_data = self.execute(
-                f"mysql -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
-            ).get("output").strip().split()
-            usage = {
-                usage_data[i]: {
-                    "usage": usage_data[i + 1]
-                } for i in range(0, len(usage_data), 2)
-            }
-
-            if len(time_zones) > len(usage):
-                ddump = time_zones.copy()
-                pending = usage
-            else:
-                ddump = usage.copy()
-                pending = time_zones
-
-            for key, val in ddump.items():
-                ddump[key].update(pending.get(key, {}))
-
-        for name, site in self.sites.items():
-            info[name] = site.fetch_site_info(ddump=ddump)
-
-        return info
+    def _fetch_sites_info(self, since):
+        from agent.usage import UsageModel
+        return UsageModel.select().where("timestamp" > since)
 
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)

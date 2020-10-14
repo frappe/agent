@@ -32,10 +32,8 @@ if __name__ == "__main__":
 
     for bench in server.benches.values():
         for site in bench.sites.values():
-            query = f"select defvalue from {site.database}.tabDefaultValue where defkey = 'time_zone'"
-            time_zone = server.execute(f'mysql -u{site.database} -p{site.password} -sN -e "{query}"').get("output").strip()
             UsageModel.insert(**{
                 "site": site.name,
-                "time_zone": time_zone,
+                "time_zone": site.timezone,
                 **site.get_usage()
             }).execute()

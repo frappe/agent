@@ -340,8 +340,11 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def timezone(self):
-        timezone = self.bench_execute("execute frappe.client.get_time_zone")
-        return json.loads(timezone["output"].splitlines()[-1])["time_zone"]
+        query = f"select defvalue from {self.database}.tabDefaultValue where defkey = 'time_zone'"
+        timezone = self.execute(
+            f'mysql -u{self.database} -p{self.password} -sN -e "{query}"'
+        )["output"].strip()
+        return timezone
 
     @property
     def tables(self):
@@ -402,19 +405,16 @@ print(">>>" + frappe.session.sid + "<<<")
             "backups": backup_directory_size
         }
 
-    def get_database_size(self, ddump=None):
+    def get_database_size(self):
         # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
-        if ddump:
-            database_size = ddump.get(self.database, {}).get("usage")
-        else:
-            query = (
-                'SELECT SUM(`data_length` + `index_length`)'
-                ' FROM information_schema.tables'
-                f' WHERE `table_schema` = "{self.database}"'
-                ' GROUP BY `table_schema`'
-            )
-            command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
-            database_size = self.execute(command).get("output")
+        query = (
+            'SELECT SUM(`data_length` + `index_length`)'
+            ' FROM information_schema.tables'
+            f' WHERE `table_schema` = "{self.database}"'
+            ' GROUP BY `table_schema`'
+        )
+        command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
+        database_size = self.execute(command).get("output")
 
         try:
             return int(database_size)
