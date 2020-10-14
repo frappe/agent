@@ -312,13 +312,11 @@ class Site(Base):
 
         return data
 
-    def get_timezone(self, ddump=None):
-        if ddump:
-            return ddump.get(self.database, {}).get("time_zone")
+    def get_timezone(self):
         return self.timezone
 
-    def fetch_site_info(self, ddump=None):
-        data = {"config": self.config, "timezone": self.get_timezone(ddump=ddump), "usage": self.get_usage(ddump=ddump)}
+    def fetch_site_info(self):
+        data = {"config": self.config, "timezone": self.get_timezone(), "usage": self.get_usage()}
         return data
 
     def sid(self):
@@ -391,7 +389,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return backups
 
-    def get_usage(self, ddump=None):
+    def get_usage(self):
         """Returns Usage in bytes"""
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
@@ -399,7 +397,7 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": self.get_database_size(ddump=ddump),
+            "database": self.get_database_size(),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
             "backups": backup_directory_size
