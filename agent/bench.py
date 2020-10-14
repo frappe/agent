@@ -62,8 +62,12 @@ class Bench(Base):
                 (UsageModel.timestamp > since)
                 & (UsageModel.site == site.name)
             ).execute()
-            timezone_data = {d.timestamp: d.time_zone for d in usage_data}
-            timezone = timezone_data[max(timezone_data)]
+
+            try:
+                timezone_data = {d.timestamp: d.time_zone for d in usage_data}
+                timezone = timezone_data[max(timezone_data)]
+            except Exception:
+                timezone = None
 
             info[site.name] = {
                 "config": site.config,
