@@ -54,7 +54,20 @@ class Bench(Base):
     @step("Fetch Sites Info")
     def _fetch_sites_info(self, since):
         from agent.usage import UsageModel
-        return UsageModel.select().where(UsageModel.timestamp > since)
+
+        data = UsageModel.select().where(UsageModel.timestamp > since).execute()
+        return [
+            {
+                "site": d.site,
+                "timestamp": d.timestamp,
+                "time_zone": d.time_zone,
+                "database": d.database,
+                "public": d.public,
+                "private": d.private,
+                "backups": d.backups,
+            }
+            for d in data
+        ]
 
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
