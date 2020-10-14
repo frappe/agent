@@ -77,6 +77,38 @@ def database():
     database.create_tables([JobModel, StepModel])
 
 
+@setup.command()
+def usage():
+    from agent.usage import usage_database
+    from agent.usage import UsageModel
+    from crontab import CronTab
+    from datetime import datetime
+
+    import sys
+    import os
+
+    script = os.path.join(
+        os.path.dirname(__file__),
+        "usage.py"
+    )
+
+    if os.path.exists(usage_database.database):
+        _temp = list(os.path.splitext(usage_database.database))
+        _temp.insert(-1, str(datetime.utcnow()).replace(' ', '--'))
+        new_name = ".".join(_temp).replace("..", ".")
+        os.rename(usage_database.database, new_name)
+
+    usage_database.create_tables([UsageModel])
+    cron = CronTab(user=True)
+    command = f"{sys.executable} {script}"
+
+    if command not in str(cron):
+        job = cron.new(command=command)
+        job.every(6).hours()
+        job.minute.on(30)
+        cron.write()
+
+
 @cli.group()
 def run():
     pass
