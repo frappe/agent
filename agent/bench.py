@@ -55,19 +55,32 @@ class Bench(Base):
     def _fetch_sites_info(self, since):
         from agent.usage import UsageModel
 
-        data = UsageModel.select().where(UsageModel.timestamp > since).execute()
-        return [
-            {
-                "site": d.site,
-                "timestamp": d.timestamp,
-                "time_zone": d.time_zone,
-                "database": d.database,
-                "public": d.public,
-                "private": d.private,
-                "backups": d.backups,
+        info = {}
+
+        for site in self.sites.values():
+            usage_data = UsageModel.select().where(
+                (UsageModel.timestamp > since)
+                & (UsageModel.site == site.name)
+            ).execute()
+            timezone_data = {d.timestamp: d.time_zone for d in usage_data}
+            timezone = timezone_data[max(timezone_data)]
+
+            info[site.name] = {
+                "config": site.config,
+                "usage": [
+                    {
+                        "database": d.database,
+                        "public": d.public,
+                        "private": d.private,
+                        "backups": d.backups,
+                    }
+                    for d in usage_data
+                ],
+                "time_zone": timezone,
             }
-            for d in data
-        ]
+
+        return info
+
 
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
