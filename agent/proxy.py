@@ -3,8 +3,9 @@ import os
 import shutil
 from hashlib import sha512 as sha
 from pathlib import Path
-
 from typing import Dict
+from collections import defaultdict
+
 from agent.job import job, step
 from agent.server import Server
 
@@ -223,7 +224,7 @@ class Proxy(Server):
 
     @property
     def hosts(self) -> Dict[str, Dict[str, str]]:
-        hosts = {}
+        hosts = defaultdict(lambda: defaultdict(str))
         for host in os.listdir(self.hosts_directory):
             host_directory = os.path.join(self.hosts_directory, host)
             map_file = os.path.join(host_directory, "map.json")
