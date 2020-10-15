@@ -49,11 +49,10 @@ class Bench(Base):
 
     def fetch_sites_info(self, since=None):
         if not since:
-            since = datetime.utcnow() - timedelta(days=30)
+            since = (datetime.utcnow() - timedelta(days=30)).timestamp()
 
         info = {}
         usage_data = []
-        since = since.timestamp()
         log_files = glob(
             os.path.join(
                 self.server.directory,
