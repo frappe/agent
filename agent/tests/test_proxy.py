@@ -46,8 +46,11 @@ class ProxyTest(unittest.TestCase):
         self.hosts_directory = os.path.join(self.test_files_dir, "nginx/hosts")
         self._create_needed_files()
 
-    def test_hosts_has_redirect_if_default_domain_not_in_a_target(self):
-        """Ensure hosts property redirects default domain."""
+    def test_hosts_redirects_default_domain(self):
+        """
+        Ensure hosts property redirects default domain when redirect.json is
+        present.
+        """
 
         def __init__(self):
             pass
