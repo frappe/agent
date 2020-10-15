@@ -47,18 +47,14 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
-    @job("Fetch Sites Info")
     def fetch_sites_info(self, since=None):
-        if not since:
-            since = datetime.utcnow() - timedelta(days=30)
-        return self._fetch_sites_info(since=since)
-
-    @step("Fetch Sites Info")
-    def _fetch_sites_info(self, since):
         info = {}
         usage_data = []
 
-        log_files = glob(os.path.join(self.server, "logs", "usage-*-.json.log"))
+        if not since:
+            since = datetime.utcnow() - timedelta(days=30)
+
+        log_files = glob(os.path.join(self.server.directory, "logs", "usage-*-.json.log"))
         valid_files = [file for file in log_files if os.stat(file).st_mtime < since]
 
         for file in log_files:
@@ -69,12 +65,6 @@ class Bench(Base):
                 usage_data.extend(json.load(file))
 
         for site in self.sites.values():
-
-            usage_data = UsageModel.select().where(
-                (UsageModel.timestamp > since)
-                & (UsageModel.site == site.name)
-            ).execute()
-
             try:
                 timezone_data = {d.timestamp: d.time_zone for d in usage_data}
                 timezone = timezone_data[max(timezone_data)]
