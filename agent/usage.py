@@ -1,37 +1,21 @@
-import datetime
-
-from peewee import (
-    DateTimeField,
-    IntegerField,
-    Model,
-    SqliteDatabase,
-    TextField,
-)
-
-usage_database = SqliteDatabase("usage.sqlite3")
-
-
-class UsageModel(Model):
-    site = TextField()
-    timestamp = DateTimeField(default=datetime.datetime.now)
-    time_zone = TextField(null=True)
-    database = IntegerField(null=True, default=0)
-    public = IntegerField(null=True, default=0)
-    private = IntegerField(null=True, default=0)
-    backups = IntegerField(null=True, default=0)
-
-    class Meta:
-        database = usage_database
+import json
+import os
+from agent.server import Server
+from datetime import datetime
 
 
 if __name__ == "__main__":
-    from agent.server import Server
-
-    databases = {}
+    info = []
     server = Server()
+    time = datetime.utcnow().isoformat()
+    target_file = os.path.join(
+        server.directory,
+        "logs",
+        f"usage-{time}.json.log",
+    )
 
     for bench in server.benches.values():
         for site in bench.sites.values():
-            UsageModel.insert(
-                **{"site": site.name, "time_zone": site.timezone, **site.get_usage()}
-            ).execute()
+            info.append({"site": site.name, "time_zone": site.timezone, **site.get_usage()})
+
+    json.dump(info, open(target_file, "w"), indent=4)

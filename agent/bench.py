@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import traceback
 from datetime import datetime, timedelta
+from glob import glob
 
 import requests
 
@@ -54,11 +55,21 @@ class Bench(Base):
 
     @step("Fetch Sites Info")
     def _fetch_sites_info(self, since):
-        from agent.usage import UsageModel
-
         info = {}
+        usage_data = []
+
+        log_files = glob(os.path.join(self.server, "logs", "usage-*-.json.log"))
+        valid_files = [file for file in log_files if os.stat(file).st_mtime < since]
+
+        for file in log_files:
+            if file not in valid_files:
+                print(f"Deleting {file}")
+                os.remove(file)
+            else:
+                usage_data.extend(json.load(file))
 
         for site in self.sites.values():
+
             usage_data = UsageModel.select().where(
                 (UsageModel.timestamp > since)
                 & (UsageModel.site == site.name)
@@ -74,13 +85,13 @@ class Bench(Base):
                 "config": site.config,
                 "usage": [
                     {
-                        "database": d.database,
-                        "public": d.public,
-                        "private": d.private,
-                        "backups": d.backups,
-                        "timestamp": d.timestamp,
+                        "database": d["database"],
+                        "public": d["public"],
+                        "private": d["private"],
+                        "backups": d["backups"],
+                        "timestamp": d["timestamp"],
                     }
-                    for d in usage_data
+                    for d in usage_data if d["site"] == site.name
                 ],
                 "time_zone": timezone,
             }
