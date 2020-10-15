@@ -120,12 +120,11 @@ def get_bench(bench):
     return Server().benches[bench].dump()
 
 
-@application.route("/benches/<string:bench>/info")
+@application.route("/benches/<string:bench>/info", methods=["POST"])
 def fetch_sites_info(bench):
     data = request.json
     since = data.get("since") if data else None
-    job = Server().benches[bench].fetch_sites_info(since=since)
-    return {"job": job}
+    return Server().benches[bench].fetch_sites_info(since=since)
 
 
 @application.route("/benches/<string:bench>/sites")
