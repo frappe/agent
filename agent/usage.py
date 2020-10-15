@@ -11,7 +11,7 @@ if __name__ == "__main__":
     target_file = os.path.join(
         server.directory,
         "logs",
-        f"usage-{time}.json.log",
+        f"{server.name}-usage-{time}.json.log",
     )
 
     for bench in server.benches.values():

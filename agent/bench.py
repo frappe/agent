@@ -54,7 +54,13 @@ class Bench(Base):
         if not since:
             since = datetime.utcnow() - timedelta(days=30)
 
-        log_files = glob(os.path.join(self.server.directory, "logs", "usage-*-.json.log"))
+        log_files = glob(
+            os.path.join(
+                self.server.directory,
+                "logs",
+                f"{self.server.name}-usage-*.json.log"
+            )
+        )
         valid_files = [file for file in log_files if os.stat(file).st_mtime < since]
 
         for file in log_files:
