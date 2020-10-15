@@ -48,12 +48,12 @@ class Bench(Base):
         }
 
     def fetch_sites_info(self, since=None):
-        info = {}
-        usage_data = []
-
         if not since:
             since = datetime.utcnow() - timedelta(days=30)
 
+        info = {}
+        usage_data = []
+        since = since.timestamp()
         log_files = glob(
             os.path.join(
                 self.server.directory,
@@ -61,7 +61,7 @@ class Bench(Base):
                 f"{self.server.name}-usage-*.json.log"
             )
         )
-        valid_files = [file for file in log_files if os.stat(file).st_mtime < since]
+        valid_files = [file for file in log_files if os.stat(file).st_mtime > since]
 
         for file in log_files:
             if file not in valid_files:
