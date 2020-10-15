@@ -16,6 +16,11 @@ if __name__ == "__main__":
 
     for bench in server.benches.values():
         for site in bench.sites.values():
-            info.append({"site": site.name, "time_zone": site.timezone, **site.get_usage()})
+            info.append({
+                "site": site.name,
+                "timestamp": datetime.utcnow(),
+                "time_zone": site.timezone,
+                **site.get_usage()
+            })
 
     json.dump(info, open(target_file, "w"), indent=4)

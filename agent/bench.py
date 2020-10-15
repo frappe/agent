@@ -68,7 +68,7 @@ class Bench(Base):
                 print(f"Deleting {file}")
                 os.remove(file)
             else:
-                usage_data.extend(json.load(file))
+                usage_data.extend(json.load(open(file)))
 
         for site in self.sites.values():
             try:
