@@ -83,10 +83,7 @@ def usage():
     import os
     from crontab import CronTab
 
-    script = os.path.join(
-        os.path.dirname(__file__),
-        "usage.py"
-    )
+    script = os.path.join(os.path.dirname(__file__), "usage.py")
 
     cron = CronTab(user=True)
     command = f"{sys.executable} {script}"

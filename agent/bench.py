@@ -57,10 +57,12 @@ class Bench(Base):
             os.path.join(
                 self.server.directory,
                 "logs",
-                f"{self.server.name}-usage-*.json.log"
+                f"{self.server.name}-usage-*.json.log",
             )
         )
-        valid_files = [file for file in log_files if os.stat(file).st_mtime > since]
+        valid_files = [
+            file for file in log_files if os.stat(file).st_mtime > since
+        ]
 
         for file in log_files:
             if file not in valid_files:
@@ -86,13 +88,13 @@ class Bench(Base):
                         "backups": d["backups"],
                         "timestamp": d["timestamp"],
                     }
-                    for d in usage_data if d["site"] == site.name
+                    for d in usage_data
+                    if d["site"] == site.name
                 ],
                 "time_zone": timezone,
             }
 
         return info
-
 
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
@@ -100,7 +102,7 @@ class Bench(Base):
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
         return self.execute(
-            f"bench new-site "
+            "bench new-site "
             f"--admin-password {admin_password} "
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"

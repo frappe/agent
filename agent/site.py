@@ -70,7 +70,7 @@ class Site(Base):
         private_file,
     ):
         return self.bench_execute(
-            f"--force restore "
+            "--force restore "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
@@ -118,7 +118,7 @@ class Site(Base):
         admin_password,
     ):
         return self.bench_execute(
-            f"reinstall --yes "
+            "reinstall --yes "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password}"
         )
@@ -248,7 +248,7 @@ class Site(Base):
         for table in self.tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
-                f"mysqldump --single-transaction --quick --lock-tables=false "
+                "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
                 f"> '{backup_file}'"
@@ -321,7 +321,11 @@ class Site(Base):
         return self.timezone
 
     def fetch_site_info(self):
-        data = {"config": self.config, "timezone": self.get_timezone(), "usage": self.get_usage()}
+        data = {
+            "config": self.config,
+            "timezone": self.get_timezone(),
+            "usage": self.get_usage(),
+        }
         return data
 
     def sid(self):
@@ -343,7 +347,10 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def timezone(self):
-        query = f"select defvalue from {self.database}.tabDefaultValue where defkey = 'time_zone'"
+        query = (
+            f"select defvalue from {self.database}.tabDefaultValue where"
+            " defkey = 'time_zone'"
+        )
         timezone = self.execute(
             f'mysql -u{self.database} -p{self.password} -sN -e "{query}"'
         )["output"].strip()
@@ -352,7 +359,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def tables(self):
         return self.execute(
-            f"mysql --disable-column-names -B -e 'SHOW TABLES' "
+            "mysql --disable-column-names -B -e 'SHOW TABLES' "
             f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
@@ -364,7 +371,11 @@ print(">>>" + frappe.session.sid + "<<<")
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
-        uploaded_files = self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
+        uploaded_files = (
+            self.upload_offsite_backup(backup_files, offsite)
+            if (offsite and backup_files)
+            else {}
+        )
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
@@ -409,12 +420,13 @@ print(">>>" + frappe.session.sid + "<<<")
         }
 
     def get_database_size(self):
-        # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
+        # only specific to mysql. use a different query for postgres.
+        # or try using frappe.db.get_database_size if possible
         query = (
-            'SELECT SUM(`data_length` + `index_length`)'
-            ' FROM information_schema.tables'
+            "SELECT SUM(`data_length` + `index_length`)"
+            " FROM information_schema.tables"
             f' WHERE `table_schema` = "{self.database}"'
-            ' GROUP BY `table_schema`'
+            " GROUP BY `table_schema`"
         )
         command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
         database_size = self.execute(command).get("output")
