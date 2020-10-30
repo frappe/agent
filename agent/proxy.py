@@ -132,7 +132,8 @@ class Proxy(Server):
             os.mkdir(host_directory)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
-            redirects = json.load(open(redirect_file))
+            with open(redirect_file) as r:
+                redirects = json.load(r)
         else:
             redirects = {}
         redirects[host] = target
@@ -225,12 +226,17 @@ class Proxy(Server):
         hosts = defaultdict(lambda: defaultdict(str))
         for host in os.listdir(self.hosts_directory):
             host_directory = os.path.join(self.hosts_directory, host)
+
             map_file = os.path.join(host_directory, "map.json")
             if os.path.exists(map_file):
-                hosts[host] = json.load(open(map_file))
+                with open(map_file) as m:
+                    hosts[host] = json.load(m)
+
             redirect_file = os.path.join(host_directory, "redirect.json")
             if os.path.exists(redirect_file):
-                redirects = json.load(open(redirect_file))
+                with open(redirect_file) as r:
+                    redirects = json.load(r)
+
                 for _from, to in redirects.items():
                     if "*" in host:
                         hosts[_from] = {_from: _from}
