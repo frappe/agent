@@ -34,9 +34,7 @@ class Proxy(Server):
 
         Default Site Domains are subdomains of the main domain.
         """
-        if host.endswith("." + self.config['domain']):
-            return True
-        return False
+        return host.endswith("." + self.config['domain'])
 
     @job("Add Host to Proxy")
     def add_host_job(self, host, target, certificate):
