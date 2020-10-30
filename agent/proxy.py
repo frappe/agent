@@ -44,12 +44,8 @@ class Proxy(Server):
 
     @step("Add Host to Proxy")
     def add_host(self, host, target, certificate):
-        if not os.path.exists(self.hosts_directory):
-            os.mkdir(self.hosts_directory)
-
         host_directory = os.path.join(self.hosts_directory, host)
-        if not os.path.exists(host_directory):
-            os.mkdir(host_directory)
+        os.makedirs(host_directory, exist_ok=True)
 
         map_file = os.path.join(host_directory, "map.json")
         json.dump({host: target}, open(map_file, "w"), indent=4)
@@ -78,10 +74,8 @@ class Proxy(Server):
 
     @step("Add Upstream Directory")
     def add_upstream(self, upstream):
-        if not os.path.exists(self.upstreams_directory):
-            os.mkdir(self.upstreams_directory)
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
-        os.mkdir(upstream_directory)
+        os.makedirs(upstream_directory, exist_ok=True)
 
     @job("Remove Host from Proxy")
     def remove_host_job(self, host):
@@ -128,8 +122,7 @@ class Proxy(Server):
     @step("Setup Redirect on Host")
     def setup_redirect(self, host, target):
         host_directory = os.path.join(self.hosts_directory, host)
-        if not os.path.exists(host_directory):
-            os.mkdir(host_directory)
+        os.makedirs(host_directory, exist_ok=True)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
             with open(redirect_file) as r:
@@ -186,8 +179,7 @@ class Proxy(Server):
         default_host_directory = os.path.join(
             self.hosts_directory, default_host
         )
-        if not os.path.exists(default_host_directory):
-            os.mkdir(default_host_directory)
+        os.makedirs(default_host_directory, exist_ok=True)
         map_file = os.path.join(default_host_directory, "map.json")
         json.dump({"default": "$host"}, open(map_file, "w"), indent=4)
 
