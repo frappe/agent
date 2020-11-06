@@ -48,7 +48,9 @@ class Bench(Base):
         }
 
     def fetch_sites_info(self, since=None):
-        max_retention_time = (datetime.utcnow() - timedelta(days=30)).timestamp()
+        max_retention_time = (
+            datetime.utcnow() - timedelta(days=30)
+        ).timestamp()
 
         if not since:
             since = max_retention_time
@@ -67,7 +69,9 @@ class Bench(Base):
         ]
 
         for file in log_files:
-            if file not in valid_files and os.stat(file).st_mtime > max_retention_time:
+            if (file not in valid_files) and (
+                os.stat(file).st_mtime > max_retention_time
+            ):
                 print(f"Deleting {file}")
                 os.remove(file)
             else:
