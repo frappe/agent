@@ -262,7 +262,9 @@ class Site(Base):
 
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
-        installed_apps = self.bench_execute("list-apps")["output"].split("\n")
+        installed_apps = json.loads(
+            self.bench_execute("execute frappe.get_installed_apps")["output"]
+        )
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
