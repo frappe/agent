@@ -13,6 +13,7 @@ class ProxyTest(unittest.TestCase):
     def _create_needed_files(self):
         os.makedirs(os.path.join(self.hosts_directory, self.domain_1))
         os.makedirs(os.path.join(self.hosts_directory, self.domain_2))
+        os.makedirs(self.upstreams_directory)
 
         self.redirect_1 = os.path.join(
             self.hosts_directory, self.domain_1, "redirect.json")
@@ -42,6 +43,8 @@ class ProxyTest(unittest.TestCase):
         self.tld = "frappe.cloud"
 
         self.hosts_directory = os.path.join(self.test_files_dir, "nginx/hosts")
+        self.upstreams_directory = os.path.join(
+            self.test_files_dir, "nginx/upstreams")
         self._create_needed_files()
 
     def _get_fake_proxy(self):
@@ -98,6 +101,26 @@ class ProxyTest(unittest.TestCase):
         host_directory = os.path.join(proxy.hosts_directory, host)
         os.mkdir(host_directory)
         self._test_add_host(proxy, host)
+
+    def _test_add_upstream(self, proxy, upstream):
+        upstream_dir = os.path.join(proxy.upstreams_directory, upstream)
+        with patch.object(Proxy, 'add_upstream', new=Proxy.add_upstream.__wrapped__):
+            # get undecorated method with __wrapped__
+            proxy.add_upstream(upstream)
+        self.assertTrue(os.path.exists(upstream_dir))
+
+    def test_add_upstream_works_with_upstreams_dir(self):
+        """Ensure add_upstream works when upstreams directory exists"""
+        proxy = self._get_fake_proxy()
+        proxy.upstreams_directory = self.upstreams_directory
+        self._test_add_upstream(proxy, "0.0.0.0")
+
+    def test_add_upstream_works_without_upstreams_dir(self):
+        """Ensure add_upstream works when upstreams directory doesn't exist"""
+        proxy = self._get_fake_proxy()
+        proxy.upstreams_directory = self.upstreams_directory
+        os.rmdir(proxy.upstreams_directory)
+        self._test_add_upstream(proxy, "0.0.0.0")
 
     def tearDown(self):
         shutil.rmtree(self.test_files_dir)
