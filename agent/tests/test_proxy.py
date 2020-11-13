@@ -1,8 +1,10 @@
-import unittest
-import os
-from agent.proxy import Proxy
 import json
+import os
 import shutil
+import unittest
+from unittest.mock import patch
+
+from agent.proxy import Proxy
 
 
 class ProxyTest(unittest.TestCase):
@@ -34,10 +36,6 @@ class ProxyTest(unittest.TestCase):
                                   This directory will be used for running tests
                                   and will be deleted""")
 
-        # monkey patched methods
-        self.original_init = Proxy.__init__
-        self.original_config = Proxy.config
-
         self.default_domain = "xxx.frappe.cloud"
         self.domain_1 = "balu.codes"
         self.domain_2 = "www.balu.codes"
@@ -51,14 +49,11 @@ class ProxyTest(unittest.TestCase):
         Ensure hosts property redirects default domain when redirect.json is
         present.
         """
-
-        def __init__(self):
-            pass
-        Proxy.__init__ = __init__
-        Proxy.config = {}
-        proxy = Proxy()
+        config = {"domain": self.tld}
+        with patch.object(Proxy, '__init__', new=lambda x: None), \
+                patch('agent.proxy.Proxy.config', new_callable=lambda: config):
+            proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
-        proxy.config = {"domain": self.tld}
 
         os.makedirs(os.path.join(self.hosts_directory, self.default_domain))
         redirect_file = os.path.join(
@@ -71,6 +66,4 @@ class ProxyTest(unittest.TestCase):
             proxy.hosts.items())
 
     def tearDown(self):
-        Proxy.__init__ = self.original_init
-        Proxy.config = self.original_config
         shutil.rmtree(self.test_files_dir)
