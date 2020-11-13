@@ -44,17 +44,21 @@ class ProxyTest(unittest.TestCase):
         self.hosts_directory = os.path.join(self.test_files_dir, "nginx/hosts")
         self._create_needed_files()
 
+    def _get_fake_proxy(self):
+        """Get Proxy object with only config and hosts_directory attrs."""
+        config = {"domain": self.tld}
+        with patch.object(Proxy, '__init__', new=lambda x: None), \
+                patch.object(Proxy, 'config', new=lambda: config):
+            proxy = Proxy()
+        proxy.hosts_directory = self.hosts_directory
+        return proxy
+
     def test_hosts_redirects_default_domain(self):
         """
         Ensure hosts property redirects default domain when redirect.json is
         present.
         """
-        config = {"domain": self.tld}
-        with patch.object(Proxy, '__init__', new=lambda x: None), \
-                patch('agent.proxy.Proxy.config', new_callable=lambda: config):
-            proxy = Proxy()
-        proxy.hosts_directory = self.hosts_directory
-
+        proxy = self._get_fake_proxy()
         os.makedirs(os.path.join(self.hosts_directory, self.default_domain))
         redirect_file = os.path.join(
             self.hosts_directory, self.default_domain, "redirect.json")
@@ -64,6 +68,36 @@ class ProxyTest(unittest.TestCase):
         self.assertLessEqual(
             {self.default_domain: {'redirect': self.domain_1}}.items(),
             proxy.hosts.items())
+
+    def _test_add_host(self, proxy, host):
+        with patch.object(Proxy, 'add_host', new=Proxy.add_host.__wrapped__):
+            # get undecorated method with __wrapped__
+            proxy.add_host(host, "www.test.com", {})
+
+        self.assertTrue(os.path.exists(os.path.join(
+            proxy.hosts_directory, host, "map.json")))
+        # TODO: test contents of map.json and certificate dirs <13-11-20, Balamurali M> #
+
+    def test_add_hosts_works_without_hosts_dir(self):
+        """Ensure add_host works when hosts directory doesn't exist"""
+        proxy = self._get_fake_proxy()
+        shutil.rmtree(proxy.hosts_directory)
+        host = "test.com"
+        self._test_add_host(proxy, host)
+
+    def test_add_hosts_works_with_hosts_dir(self):
+        """Ensure add_host works when hosts directory exists"""
+        proxy = self._get_fake_proxy()
+        host = "test.com"
+        self._test_add_host(proxy, host)
+
+    def test_add_hosts_works_with_host_dir(self):
+        """Ensure add_host works when host directory of host exists"""
+        proxy = self._get_fake_proxy()
+        host = "test.com"
+        host_directory = os.path.join(proxy.hosts_directory, host)
+        os.mkdir(host_directory)
+        self._test_add_host(proxy, host)
 
     def tearDown(self):
         shutil.rmtree(self.test_files_dir)
