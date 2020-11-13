@@ -48,7 +48,8 @@ class Proxy(Server):
         os.makedirs(host_directory, exist_ok=True)
 
         map_file = os.path.join(host_directory, "map.json")
-        json.dump({host: target}, open(map_file, "w"), indent=4)
+        with open(map_file, "w") as m:
+            json.dump({host: target}, m, indent=4)
 
         for key, value in certificate.items():
             with open(os.path.join(host_directory, key), "w") as f:
