@@ -77,6 +77,32 @@ def database():
     database.create_tables([JobModel, StepModel])
 
 
+@setup.command()
+def usage():
+    import sys
+    import os
+    from crontab import CronTab
+
+    script_directory = os.path.dirname(__file__)
+    agent_directory = os.path.dirname(os.path.dirname(script_directory))
+    logs_directory = os.path.join(agent_directory, "logs")
+    script = os.path.join(script_directory, "usage.py")
+    stdout = os.path.join(logs_directory, "usage.log")
+    stderr = os.path.join(logs_directory, "usage.error.log")
+
+    cron = CronTab(user=True)
+    command = (
+        f"cd {agent_directory} && {sys.executable} {script}"
+        f" 1>> {stdout} 2>> {stderr}"
+    )
+
+    if command not in str(cron):
+        job = cron.new(command=command)
+        job.every(6).hours()
+        job.minute.on(30)
+        cron.write()
+
+
 @cli.group()
 def run():
     pass

@@ -150,7 +150,9 @@ class Server(Base):
 
         try:
             site.bench_execute(
-                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
+                "execute"
+                " frappe.website.doctype.website_theme.website_theme"
+                ".generate_theme_files_if_not_exist"
             )
         except Exception:
             pass
@@ -181,7 +183,9 @@ class Server(Base):
 
         try:
             site.bench_execute(
-                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
+                "execute"
+                " frappe.website.doctype.website_theme.website_theme"
+                ".generate_theme_files_if_not_exist"
             )
         except Exception:
             pass

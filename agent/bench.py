@@ -3,7 +3,8 @@ import os
 import shutil
 import tempfile
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+from glob import glob
 
 import requests
 
@@ -46,71 +47,58 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
-    @job("Fetch Sites Info")
-    def fetch_sites_info(self, mariadb_root_password=None):
-        return self._fetch_sites_info(mariadb_root_password)
+    def fetch_sites_info(self, since=None):
+        max_retention_time = (
+            datetime.utcnow() - timedelta(days=30)
+        ).timestamp()
 
-    @step("Fetch Sites Info")
-    def _fetch_sites_info(self, mariadb_root_password=None):
-        ddump = None
+        if not since:
+            since = max_retention_time
+
         info = {}
-
-        if mariadb_root_password:
-            databases = tuple([site.database for site in self.sites.values()])
-
-            time_zone_queries = [
-                f"select '{database}', defvalue from {database}.tabDefaultValue where defkey = 'time_zone'"
-                for database in databases
-            ]
-            time_zone_union_query = " UNION ALL ".join(time_zone_queries)
-            time_zones_data = (
-                self.execute(
-                    f'mysql -h {self.host} -uroot -p{mariadb_root_password} -sN -e "{time_zone_union_query}"'
-                )
-                .get("output")
-                .strip()
-                .split()
+        usage_data = []
+        log_files = glob(
+            os.path.join(
+                self.server.directory,
+                "logs",
+                f"{self.server.name}-usage-*.json.log",
             )
-            time_zones = {
-                time_zones_data[i]: {"time_zone": time_zones_data[i + 1]}
-                for i in range(0, len(time_zones_data), 2)
-            }
+        )
+        valid_files = [
+            file for file in log_files if os.stat(file).st_mtime > since
+        ]
 
-            databases_format = (
-                "(" + ", ".join(['"{0}"'.format(d) for d in databases]) + ")"
-            )
-            usage_query = (
-                "SELECT `table_schema`, SUM(`data_length` + `index_length`)"
-                " FROM information_schema.tables"
-                " WHERE `table_schema`"
-                f" IN {databases_format}"
-                " GROUP BY `table_schema`"
-            )
-            usage_data = (
-                self.execute(
-                    f"mysql -h {self.host} -uroot -p{mariadb_root_password} -sN -e '{usage_query}'"
-                )
-                .get("output")
-                .strip()
-                .split()
-            )
-            usage = {
-                usage_data[i]: {"usage": usage_data[i + 1]}
-                for i in range(0, len(usage_data), 2)
-            }
-
-            if len(time_zones) > len(usage):
-                ddump = time_zones.copy()
-                pending = usage
+        for file in log_files:
+            if (file not in valid_files) and (
+                os.stat(file).st_mtime > max_retention_time
+            ):
+                print(f"Deleting {file}")
+                os.remove(file)
             else:
-                ddump = usage.copy()
-                pending = time_zones
+                usage_data.extend(json.load(open(file)))
 
-            for key, val in ddump.items():
-                ddump[key].update(pending.get(key, {}))
+        for site in self.sites.values():
+            try:
+                timezone_data = {d.timestamp: d.time_zone for d in usage_data}
+                timezone = timezone_data[max(timezone_data)]
+            except Exception:
+                timezone = None
 
-        for name, site in self.sites.items():
-            info[name] = site.fetch_site_info(ddump=ddump)
+            info[site.name] = {
+                "config": site.config,
+                "usage": [
+                    {
+                        "database": d["database"],
+                        "public": d["public"],
+                        "private": d["private"],
+                        "backups": d["backups"],
+                        "timestamp": d["timestamp"],
+                    }
+                    for d in usage_data
+                    if d["site"] == site.name
+                ],
+                "time_zone": timezone,
+            }
 
         return info
 
@@ -120,7 +108,7 @@ class Bench(Base):
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
         return self.execute(
-            f"bench new-site "
+            "bench new-site "
             f"--admin-password {admin_password} "
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"

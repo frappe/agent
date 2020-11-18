@@ -9,7 +9,7 @@ import requests
 
 from agent.base import Base
 from agent.job import job, step
-from agent.utils import get_size
+from agent.utils import get_size, b2mb
 
 
 class Site(Base):
@@ -70,7 +70,7 @@ class Site(Base):
         private_file,
     ):
         return self.bench_execute(
-            f"--force restore "
+            "--force restore "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
@@ -118,7 +118,7 @@ class Site(Base):
         admin_password,
     ):
         return self.bench_execute(
-            f"reinstall --yes "
+            "reinstall --yes "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password}"
         )
@@ -248,7 +248,7 @@ class Site(Base):
         for table in self.tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
-                f"mysqldump --single-transaction --quick --lock-tables=false "
+                "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
                 f"> '{backup_file}'"
@@ -317,16 +317,14 @@ class Site(Base):
 
         return data
 
-    def get_timezone(self, ddump=None):
-        if ddump:
-            return ddump.get(self.database, {}).get("time_zone")
+    def get_timezone(self):
         return self.timezone
 
-    def fetch_site_info(self, ddump=None):
+    def fetch_site_info(self):
         data = {
             "config": self.config,
-            "timezone": self.get_timezone(ddump=ddump),
-            "usage": self.get_usage(ddump=ddump),
+            "timezone": self.get_timezone(),
+            "usage": self.get_usage(),
         }
         return data
 
@@ -349,13 +347,19 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def timezone(self):
-        timezone = self.bench_execute("execute frappe.client.get_time_zone")
-        return json.loads(timezone["output"].splitlines()[-1])["time_zone"]
+        query = (
+            f"select defvalue from {self.database}.tabDefaultValue where"
+            " defkey = 'time_zone'"
+        )
+        timezone = self.execute(
+            f'mysql -u{self.database} -p{self.password} -sN -e "{query}"'
+        )["output"].strip()
+        return timezone
 
     @property
     def tables(self):
         return self.execute(
-            f"mysql --disable-column-names -B -e 'SHOW TABLES' "
+            "mysql --disable-column-names -B -e 'SHOW TABLES' "
             f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
@@ -367,7 +371,11 @@ print(">>>" + frappe.session.sid + "<<<")
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
-        uploaded_files = self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
+        uploaded_files = (
+            self.upload_offsite_backup(backup_files, offsite)
+            if (offsite and backup_files)
+            else {}
+        )
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
@@ -397,7 +405,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return backups
 
-    def get_usage(self, ddump=None):
+    def get_usage(self):
         """Returns Usage in bytes"""
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
@@ -405,26 +413,25 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": self.get_database_size(ddump=ddump),
-            "public": get_size(public_directory),
-            "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size,
+            "database": b2mb(self.get_database_size()),
+            "public": b2mb(get_size(public_directory)),
+            "private": b2mb(
+                get_size(private_directory) - backup_directory_size
+            ),
+            "backups": b2mb(backup_directory_size),
         }
 
-    def get_database_size(self, ddump=None):
-        # only specific to mysql. use a different query for postgres.
+    def get_database_size(self):
+        # only specific to mysql/mariaDB. use a different query for postgres.
         # or try using frappe.db.get_database_size if possible
-        if ddump:
-            database_size = ddump.get(self.database, {}).get("usage")
-        else:
-            query = (
-                "SELECT SUM(`data_length` + `index_length`)"
-                " FROM information_schema.tables"
-                f' WHERE `table_schema` = "{self.database}"'
-                " GROUP BY `table_schema`"
-            )
-            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
-            database_size = self.execute(command).get("output")
+        query = (
+            "SELECT SUM(`data_length` + `index_length`)"
+            " FROM information_schema.tables"
+            f' WHERE `table_schema` = "{self.database}"'
+            " GROUP BY `table_schema`"
+        )
+        command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
+        database_size = self.execute(command).get("output")
 
         try:
             return int(database_size)
