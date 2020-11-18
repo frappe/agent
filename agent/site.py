@@ -415,7 +415,9 @@ print(">>>" + frappe.session.sid + "<<<")
         return {
             "database": b2mb(self.get_database_size()),
             "public": b2mb(get_size(public_directory)),
-            "private": b2mb(get_size(private_directory) - backup_directory_size),
+            "private": b2mb(
+                get_size(private_directory) - backup_directory_size
+            ),
             "backups": b2mb(backup_directory_size),
         }
 
