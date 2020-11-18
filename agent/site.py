@@ -9,7 +9,7 @@ import requests
 
 from agent.base import Base
 from agent.job import job, step
-from agent.utils import get_size
+from agent.utils import get_size, b2mb
 
 
 class Site(Base):
@@ -413,14 +413,14 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": self.get_database_size(),
-            "public": get_size(public_directory),
-            "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size,
+            "database": b2mb(self.get_database_size()),
+            "public": b2mb(get_size(public_directory)),
+            "private": b2mb(get_size(private_directory) - backup_directory_size),
+            "backups": b2mb(backup_directory_size),
         }
 
     def get_database_size(self):
-        # only specific to mysql. use a different query for postgres.
+        # only specific to mysql/mariaDB. use a different query for postgres.
         # or try using frappe.db.get_database_size if possible
         query = (
             "SELECT SUM(`data_length` + `index_length`)"
