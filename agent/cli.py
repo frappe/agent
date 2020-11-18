@@ -83,10 +83,14 @@ def usage():
     import os
     from crontab import CronTab
 
-    script = os.path.join(os.path.dirname(__file__), "usage.py")
+    script_directory = os.path.dirname(__file__)
+    logs_directory = os.path.join(os.path.dirname(os.path.dirname(script_directory)), "logs")
+    script = os.path.join(script_directory, "usage.py")
+    stdout = os.path.join(logs_directory, "usage.log")
+    stderr = os.path.join(logs_directory, "usage.error.log")
 
     cron = CronTab(user=True)
-    command = f"{sys.executable} {script}"
+    command = f"{sys.executable} {script} 1>> {stdout} 2>> {stderr}"
 
     if command not in str(cron):
         job = cron.new(command=command)
