@@ -354,7 +354,7 @@ print(">>>" + frappe.session.sid + "<<<")
             " defkey = 'time_zone'"
         )
         timezone = self.execute(
-            f'mysql -u{self.database} -p{self.password} -sN -e "{query}"'
+            f'mysql -h {self.host} -u{self.database} -p{self.password} -sN -e "{query}"'
         )["output"].strip()
         return timezone
 
@@ -432,7 +432,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -u{self.user} -p{self.password} -e '{query}'"
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
