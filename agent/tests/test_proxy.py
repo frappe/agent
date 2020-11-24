@@ -16,26 +16,32 @@ class ProxyTest(unittest.TestCase):
         os.makedirs(self.upstreams_directory)
 
         self.redirect_1 = os.path.join(
-            self.hosts_directory, self.domain_1, "redirect.json")
+            self.hosts_directory, self.domain_1, "redirect.json"
+        )
         self.redirect_2 = os.path.join(
-            self.hosts_directory, self.domain_2, "redirect.json")
+            self.hosts_directory, self.domain_2, "redirect.json"
+        )
 
         self.map_1 = os.path.join(
-            self.hosts_directory, self.domain_1, "map.json")
+            self.hosts_directory, self.domain_1, "map.json"
+        )
         self.map_2 = os.path.join(
-            self.hosts_directory, self.domain_2, "map.json")
+            self.hosts_directory, self.domain_2, "map.json"
+        )
 
-        with open(self.map_1, 'w') as m:
+        with open(self.map_1, "w") as m:
             json.dump({self.domain_1: self.default_domain}, m)
-        with open(self.map_2, 'w') as m:
+        with open(self.map_2, "w") as m:
             json.dump({self.domain_2: self.default_domain}, m)
 
     def setUp(self):
         self.test_files_dir = "test_files"
         if os.path.exists(self.test_files_dir):
-            raise FileExistsError(f"""Directory {self.test_files_dir} exists.
+            raise FileExistsError(
+                f"""Directory {self.test_files_dir} exists.
                                   This directory will be used for running tests
-                                  and will be deleted""")
+                                  and will be deleted"""
+            )
 
         self.default_domain = "xxx.frappe.cloud"
         self.domain_1 = "balu.codes"
@@ -44,14 +50,16 @@ class ProxyTest(unittest.TestCase):
 
         self.hosts_directory = os.path.join(self.test_files_dir, "nginx/hosts")
         self.upstreams_directory = os.path.join(
-            self.test_files_dir, "nginx/upstreams")
+            self.test_files_dir, "nginx/upstreams"
+        )
         self._create_needed_files()
 
     def _get_fake_proxy(self):
         """Get Proxy object with only config and hosts_directory attrs."""
         config = {"domain": self.tld}
-        with patch.object(Proxy, '__init__', new=lambda x: None), \
-                patch.object(Proxy, 'config', new=lambda: config):
+        with patch.object(Proxy, "__init__", new=lambda x: None), patch.object(
+            Proxy, "config", new=lambda: config
+        ):
             proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
         return proxy
@@ -64,21 +72,26 @@ class ProxyTest(unittest.TestCase):
         proxy = self._get_fake_proxy()
         os.makedirs(os.path.join(self.hosts_directory, self.default_domain))
         redirect_file = os.path.join(
-            self.hosts_directory, self.default_domain, "redirect.json")
-        with open(redirect_file, 'w') as r:
+            self.hosts_directory, self.default_domain, "redirect.json"
+        )
+        with open(redirect_file, "w") as r:
             json.dump({self.default_domain: self.domain_1}, r)
 
         self.assertLessEqual(
-            {self.default_domain: {'redirect': self.domain_1}}.items(),
-            proxy.hosts.items())
+            {self.default_domain: {"redirect": self.domain_1}}.items(),
+            proxy.hosts.items(),
+        )
 
     def _test_add_host(self, proxy, host):
-        with patch.object(Proxy, 'add_host', new=Proxy.add_host.__wrapped__):
+        with patch.object(Proxy, "add_host", new=Proxy.add_host.__wrapped__):
             # get undecorated method with __wrapped__
             proxy.add_host(host, "www.test.com", {})
 
-        self.assertTrue(os.path.exists(os.path.join(
-            proxy.hosts_directory, host, "map.json")))
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(proxy.hosts_directory, host, "map.json")
+            )
+        )
         # TODO: test contents of map.json and certificate dirs <13-11-20, Balamurali M> #
 
     def test_add_hosts_works_without_hosts_dir(self):
@@ -104,7 +117,9 @@ class ProxyTest(unittest.TestCase):
 
     def _test_add_upstream(self, proxy, upstream):
         upstream_dir = os.path.join(proxy.upstreams_directory, upstream)
-        with patch.object(Proxy, 'add_upstream', new=Proxy.add_upstream.__wrapped__):
+        with patch.object(
+            Proxy, "add_upstream", new=Proxy.add_upstream.__wrapped__
+        ):
             # get undecorated method with __wrapped__
             proxy.add_upstream(upstream)
         self.assertTrue(os.path.exists(upstream_dir))

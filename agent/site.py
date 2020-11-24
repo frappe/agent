@@ -105,12 +105,16 @@ class Site(Base):
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
-    def migrate_job(self,):
+    def migrate_job(
+        self,
+    ):
         return self.migrate()
 
     @step("Reinstall Site")
     def reinstall(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.bench_execute(
             f"reinstall --yes "
@@ -120,7 +124,9 @@ class Site(Base):
 
     @job("Reinstall Site")
     def reinstall_job(
-        self, mariadb_root_password, admin_password,
+        self,
+        mariadb_root_password,
+        admin_password,
     ):
         return self.reinstall(mariadb_root_password, admin_password)
 
@@ -301,7 +307,11 @@ class Site(Base):
         return data
 
     def fetch_site_info(self):
-        data = {"config": self.config, "timezone": self.timezone, "usage": self.get_usage()}
+        data = {
+            "config": self.config,
+            "timezone": self.timezone,
+            "usage": self.get_usage(),
+        }
         return data
 
     def sid(self):
@@ -382,12 +392,15 @@ print(">>>" + frappe.session.sid + "<<<")
             "database": self.get_database_size(),
             "public": get_size(public_directory),
             "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size
+            "backups": backup_directory_size,
         }
 
     def get_database_size(self):
         # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
-        db_sql = self.execute("""mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'""" % (self.user, self.password, self.database)).get("output")
+        db_sql = self.execute(
+            """mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'"""
+            % (self.user, self.password, self.database)
+        ).get("output")
 
         try:
             database_size = db_sql.split()[-1]

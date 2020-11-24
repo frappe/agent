@@ -322,7 +322,8 @@ def backup_site(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/migrate", methods=["POST"],
+    "/benches/<string:bench>/sites/<string:site>/migrate",
+    methods=["POST"],
 )
 def migrate_site(bench, site):
     job = Server().benches[bench].sites[site].migrate_job()

@@ -64,9 +64,13 @@ class Bench(Base):
                 self.directory, "logs", "monitor.json.log"
             )
             time = datetime.utcnow().isoformat()
-            logs_directory = os.path.join(self.server.directory, "logs",)
+            logs_directory = os.path.join(
+                self.server.directory,
+                "logs",
+            )
             target_file = os.path.join(
-                logs_directory, f"{self.name}-{time}-monitor.json.log",
+                logs_directory,
+                f"{self.name}-{time}-monitor.json.log",
             )
             if os.path.exists(monitor_log_file):
                 shutil.move(monitor_log_file, target_file)
@@ -376,5 +380,7 @@ class Bench(Base):
     def get_usage(self):
         return {
             "storage": get_size(self.directory),
-            "database": sum([site.get_database_size() for site in self.sites.values()])
+            "database": sum(
+                [site.get_database_size() for site in self.sites.values()]
+            ),
         }
