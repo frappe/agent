@@ -49,10 +49,8 @@ class ProxyTest(unittest.TestCase):
 
     def _get_fake_proxy(self):
         """Get Proxy object with only config and hosts_directory attrs."""
-        config = {"domain": self.tld}
         with patch.object(Proxy, "__init__", new=lambda x: None):
-            with patch.object(Proxy, "config", new=lambda: config):
-                proxy = Proxy()
+            proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
         return proxy
 
@@ -127,3 +125,19 @@ class ProxyTest(unittest.TestCase):
         os.rmdir(proxy.upstreams_directory)
         self._test_add_upstream(proxy, "0.0.0.0")
 
+    def test_remove_redirect_for_default_domain_deletes_host_dir(self):
+        """Ensure removing redirect of default domain deletes the host dir."""
+        proxy = self._get_fake_proxy()
+        host_dir = os.path.join(self.hosts_directory, self.default_domain)
+        os.makedirs(host_dir)
+        redir_file = os.path.join(host_dir, "redirect.json")
+        with open(redir_file, "w") as r:
+            json.dump({self.default_domain: self.domain_1}, r)
+
+        proxy.domain = self.tld
+        with patch.object(
+            Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__
+        ):
+            proxy.remove_redirect(self.default_domain)
+        self.assertFalse(os.path.exists(redir_file))
+        self.assertFalse(os.path.exists(host_dir))
