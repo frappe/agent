@@ -15,32 +15,22 @@ class ProxyTest(unittest.TestCase):
         os.makedirs(os.path.join(self.hosts_directory, self.domain_2))
         os.makedirs(self.upstreams_directory)
 
-        self.redirect_1 = os.path.join(
-            self.hosts_directory, self.domain_1, "redirect.json"
-        )
-        self.redirect_2 = os.path.join(
-            self.hosts_directory, self.domain_2, "redirect.json"
-        )
+        map_1 = os.path.join(self.hosts_directory, self.domain_1, "map.json")
+        map_2 = os.path.join(self.hosts_directory, self.domain_2, "map.json")
 
-        self.map_1 = os.path.join(
-            self.hosts_directory, self.domain_1, "map.json"
-        )
-        self.map_2 = os.path.join(
-            self.hosts_directory, self.domain_2, "map.json"
-        )
-
-        with open(self.map_1, "w") as m:
+        with open(map_1, "w") as m:
             json.dump({self.domain_1: self.default_domain}, m)
-        with open(self.map_2, "w") as m:
+        with open(map_2, "w") as m:
             json.dump({self.domain_2: self.default_domain}, m)
 
     def setUp(self):
-        self.test_files_dir = "test_files"
-        if os.path.exists(self.test_files_dir):
+        self.test_dir = "test_dir"
+        if os.path.exists(self.test_dir):
             raise FileExistsError(
-                f"""Directory {self.test_files_dir} exists.
-                                  This directory will be used for running tests
-                                  and will be deleted"""
+                f"""
+                Directory {self.test_dir} exists.  This directory will be used
+                for running tests and will be deleted
+                """
             )
 
         self.default_domain = "xxx.frappe.cloud"
@@ -48,19 +38,21 @@ class ProxyTest(unittest.TestCase):
         self.domain_2 = "www.balu.codes"
         self.tld = "frappe.cloud"
 
-        self.hosts_directory = os.path.join(self.test_files_dir, "nginx/hosts")
+        self.hosts_directory = os.path.join(self.test_dir, "nginx/hosts")
         self.upstreams_directory = os.path.join(
-            self.test_files_dir, "nginx/upstreams"
+            self.test_dir, "nginx/upstreams"
         )
         self._create_needed_files()
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
 
     def _get_fake_proxy(self):
         """Get Proxy object with only config and hosts_directory attrs."""
         config = {"domain": self.tld}
-        with patch.object(Proxy, "__init__", new=lambda x: None), patch.object(
-            Proxy, "config", new=lambda: config
-        ):
-            proxy = Proxy()
+        with patch.object(Proxy, "__init__", new=lambda x: None):
+            with patch.object(Proxy, "config", new=lambda: config):
+                proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
         return proxy
 
@@ -95,20 +87,18 @@ class ProxyTest(unittest.TestCase):
         # TODO: test contents of map.json and certificate dirs <13-11-20, Balamurali M> #
 
     def test_add_hosts_works_without_hosts_dir(self):
-        """Ensure add_host works when hosts directory doesn't exist"""
+        """Ensure add_host works when hosts directory doesn't exist."""
         proxy = self._get_fake_proxy()
         shutil.rmtree(proxy.hosts_directory)
-        host = "test.com"
-        self._test_add_host(proxy, host)
+        self._test_add_host(proxy, "test.com")
 
     def test_add_hosts_works_with_hosts_dir(self):
-        """Ensure add_host works when hosts directory exists"""
+        """Ensure add_host works when hosts directory exists."""
         proxy = self._get_fake_proxy()
-        host = "test.com"
-        self._test_add_host(proxy, host)
+        self._test_add_host(proxy, "test.com")
 
     def test_add_hosts_works_with_host_dir(self):
-        """Ensure add_host works when host directory of host exists"""
+        """Ensure add_host works when host directory of host exists."""
         proxy = self._get_fake_proxy()
         host = "test.com"
         host_directory = os.path.join(proxy.hosts_directory, host)
@@ -125,17 +115,15 @@ class ProxyTest(unittest.TestCase):
         self.assertTrue(os.path.exists(upstream_dir))
 
     def test_add_upstream_works_with_upstreams_dir(self):
-        """Ensure add_upstream works when upstreams directory exists"""
+        """Ensure add_upstream works when upstreams directory exists."""
         proxy = self._get_fake_proxy()
         proxy.upstreams_directory = self.upstreams_directory
         self._test_add_upstream(proxy, "0.0.0.0")
 
     def test_add_upstream_works_without_upstreams_dir(self):
-        """Ensure add_upstream works when upstreams directory doesn't exist"""
+        """Ensure add_upstream works when upstreams directory doesn't exist."""
         proxy = self._get_fake_proxy()
         proxy.upstreams_directory = self.upstreams_directory
         os.rmdir(proxy.upstreams_directory)
         self._test_add_upstream(proxy, "0.0.0.0")
 
-    def tearDown(self):
-        shutil.rmtree(self.test_files_dir)
