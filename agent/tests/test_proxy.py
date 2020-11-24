@@ -25,10 +25,10 @@ class ProxyTest(unittest.TestCase):
         self.map_2 = os.path.join(
             self.hosts_directory, self.domain_2, "map.json")
 
-        with open(self.map_1, 'w') as fp:
-            json.dump({self.domain_1: self.default_domain}, fp)
-        with open(self.map_2, 'w') as fp:
-            json.dump({self.domain_2: self.default_domain}, fp)
+        with open(self.map_1, 'w') as m:
+            json.dump({self.domain_1: self.default_domain}, m)
+        with open(self.map_2, 'w') as m:
+            json.dump({self.domain_2: self.default_domain}, m)
 
     def setUp(self):
         self.test_files_dir = "test_files"
@@ -65,8 +65,8 @@ class ProxyTest(unittest.TestCase):
         os.makedirs(os.path.join(self.hosts_directory, self.default_domain))
         redirect_file = os.path.join(
             self.hosts_directory, self.default_domain, "redirect.json")
-        with open(redirect_file, 'w') as fp:
-            json.dump({self.default_domain: self.domain_1}, fp)
+        with open(redirect_file, 'w') as r:
+            json.dump({self.default_domain: self.domain_1}, r)
 
         self.assertLessEqual(
             {self.default_domain: {'redirect': self.domain_1}}.items(),
