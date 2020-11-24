@@ -14,12 +14,6 @@ from agent.job import Job, Step, job, step
 from agent.site import Site
 
 
-def get_wildcard_domain(domain):
-    domain = domain.split('.')
-    domain[0] = '*'
-    return '.'.join(domain)
-
-
 class Server(Base):
     def __init__(self, directory=None):
         self.directory = directory or os.getcwd()
@@ -520,7 +514,6 @@ class Server(Base):
 
     def _render_template(self, template, context, outfile):
         environment = Environment(loader=PackageLoader("agent", "templates"))
-        environment.filters['get_wildcard_domain'] = get_wildcard_domain
         template = environment.get_template(template)
 
         with open(outfile, "w") as f:
