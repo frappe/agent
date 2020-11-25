@@ -1,10 +1,12 @@
 import os
 from urllib.parse import urlparse
+from math import ceil
 
 import requests
 
 
 def download_file(url, prefix):
+    """Download file locally under path prefix and return local path"""
     filename = urlparse(url).path.split("/")[-1]
     local_filename = os.path.join(prefix, filename)
 
@@ -33,3 +35,17 @@ def get_size(folder):
                 total_size += get_size(itempath)
 
     return total_size
+
+
+def cint(x):
+    """Convert to integer"""
+    try:
+        num = int(float(x))
+    except Exception:
+        num = 0
+    return num
+
+
+def b2mb(x):
+    """Return B value in MiB"""
+    return ceil(cint(x) / (1024 ** 2))

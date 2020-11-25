@@ -120,6 +120,13 @@ def get_bench(bench):
     return Server().benches[bench].dump()
 
 
+@application.route("/benches/<string:bench>/info", methods=["POST", "GET"])
+def fetch_sites_info(bench):
+    data = request.json
+    since = data.get("since") if data else None
+    return Server().benches[bench].fetch_sites_info(since=since)
+
+
 @application.route("/benches/<string:bench>/sites")
 def get_sites(bench):
     sites = Server().benches[bench].sites
@@ -404,7 +411,12 @@ def archive_site(bench, site):
 )
 def site_update_config(bench, site):
     data = request.json
-    job = Server().benches[bench].sites[site].update_config_job(data["config"])
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .update_config_job(data["config"], data["remove"])
+    )
     return {"job": job}
 
 

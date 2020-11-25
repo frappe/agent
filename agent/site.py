@@ -9,7 +9,7 @@ import requests
 
 from agent.base import Base
 from agent.job import job, step
-from agent.utils import get_size
+from agent.utils import get_size, b2mb
 
 
 class Site(Base):
@@ -30,6 +30,7 @@ class Site(Base):
         self.database = self.config["db_name"]
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
+        self.host = self.config.get("db_host", self.bench.host)
 
     def bench_execute(self, command, input=None):
         return self.bench.execute(
@@ -69,7 +70,7 @@ class Site(Base):
         private_file,
     ):
         return self.bench_execute(
-            f"--force restore "
+            "--force restore "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
@@ -117,7 +118,7 @@ class Site(Base):
         admin_password,
     ):
         return self.bench_execute(
-            f"reinstall --yes "
+            "reinstall --yes "
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password}"
         )
@@ -139,9 +140,21 @@ class Site(Base):
         self.uninstall_app(app)
 
     @step("Update Site Configuration")
-    def update_config(self, value):
+    def update_config(self, value, remove=None):
+        """Pass Site Config value to update or replace existing site config.
+
+        Args:
+            value (dict): Site Config
+            remove (list, optional): Keys sent in the form of a list will be
+                popped from the existing site config. Defaults to None.
+        """
         new_config = self.config
         new_config.update(value)
+
+        if remove:
+            for key in remove:
+                new_config.pop(key, None)
+
         self.setconfig(new_config)
 
     @job("Add Domain", priority="high")
@@ -161,8 +174,8 @@ class Site(Base):
         self.bench.server.reload_nginx()
 
     @job("Update Site Configuration", priority="high")
-    def update_config_job(self, value):
-        self.update_config(value)
+    def update_config_job(self, value, remove):
+        self.update_config(value, remove)
 
     @step("Backup Site")
     def backup(self, with_files=False):
@@ -172,9 +185,6 @@ class Site(Base):
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite):
-        if not (offsite and backup_files):
-            return {}
-
         import boto3
 
         offsite_files = {}
@@ -238,8 +248,9 @@ class Site(Base):
         for table in self.tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
-                f"mysqldump --single-transaction --quick --lock-tables=false "
-                f"-u {self.user} -p{self.password} {self.database} '{table}' "
+                "mysqldump --single-transaction --quick --lock-tables=false "
+                f"-h {self.host} -u {self.user} -p{self.password} "
+                f"{self.database} '{table}' "
                 f"> '{backup_file}'"
             )
             data["tables"][table] = output
@@ -251,7 +262,9 @@ class Site(Base):
 
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
-        installed_apps = self.bench_execute("list-apps")["output"].split("\n")
+        installed_apps = json.loads(
+            self.bench_execute("execute frappe.get_installed_apps")["output"]
+        )
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
@@ -270,8 +283,8 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             if os.path.exists(backup_file):
                 output = self.execute(
-                    f"mysql -u {self.user} -p{self.password} {self.database} "
-                    f"< '{backup_file}'"
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"{self.database} < '{backup_file}'"
                 )
                 data["tables"][table] = output
         return data
@@ -306,10 +319,13 @@ class Site(Base):
 
         return data
 
+    def get_timezone(self):
+        return self.timezone
+
     def fetch_site_info(self):
         data = {
             "config": self.config,
-            "timezone": self.timezone,
+            "timezone": self.get_timezone(),
             "usage": self.get_usage(),
         }
         return data
@@ -333,14 +349,20 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def timezone(self):
-        timezone = self.bench_execute("execute frappe.client.get_time_zone")
-        return json.loads(timezone["output"].splitlines()[-1])["time_zone"]
+        query = (
+            f"select defvalue from {self.database}.tabDefaultValue where"
+            " defkey = 'time_zone'"
+        )
+        timezone = self.execute(
+            f'mysql -h {self.host} -u{self.database} -p{self.password} -sN -e "{query}"'
+        )["output"].strip()
+        return timezone
 
     @property
     def tables(self):
         return self.execute(
-            f"mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-u {self.user} -p{self.password} {self.database}"
+            "mysql --disable-column-names -B -e 'SHOW TABLES' "
+            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -351,7 +373,11 @@ print(">>>" + frappe.session.sid + "<<<")
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
-        uploaded_files = self.upload_offsite_backup(backup_files, offsite)
+        uploaded_files = (
+            self.upload_offsite_backup(backup_files, offsite)
+            if (offsite and backup_files)
+            else {}
+        )
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
@@ -389,25 +415,30 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory_size = get_size(backup_directory)
 
         return {
-            "database": self.get_database_size(),
-            "public": get_size(public_directory),
-            "private": get_size(private_directory) - backup_directory_size,
-            "backups": backup_directory_size,
+            "database": b2mb(self.get_database_size()),
+            "public": b2mb(get_size(public_directory)),
+            "private": b2mb(
+                get_size(private_directory) - backup_directory_size
+            ),
+            "backups": b2mb(backup_directory_size),
         }
 
     def get_database_size(self):
-        # only specific to mysql. use a different query for postgres. or try using frappe.db.get_database_size if possible
-        db_sql = self.execute(
-            """mysql -sN -u%s -p%s -e 'SELECT `table_schema` as `database_name`, SUM(`data_length` + `index_length`) AS `database_size` FROM information_schema.tables WHERE `table_schema` = "%s" GROUP BY `table_schema`'"""
-            % (self.user, self.password, self.database)
-        ).get("output")
+        # only specific to mysql/mariaDB. use a different query for postgres.
+        # or try using frappe.db.get_database_size if possible
+        query = (
+            "SELECT SUM(`data_length` + `index_length`)"
+            " FROM information_schema.tables"
+            f' WHERE `table_schema` = "{self.database}"'
+            " GROUP BY `table_schema`"
+        )
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
+        database_size = self.execute(command).get("output")
 
         try:
-            database_size = db_sql.split()[-1]
-        except (AttributeError, IndexError):
-            database_size = "0.0"
-
-        return float(database_size)
+            return int(database_size)
+        except Exception:
+            return 0
 
     @property
     def job_record(self):

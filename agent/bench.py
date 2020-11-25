@@ -3,7 +3,8 @@ import os
 import shutil
 import tempfile
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+from glob import glob
 
 import requests
 
@@ -25,6 +26,7 @@ class Bench(Base):
         self.config_file = os.path.join(
             self.directory, "sites", "common_site_config.json"
         )
+        self.host = self.config.get("db_host", "localhost")
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.apps_directory)
@@ -45,13 +47,68 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
+    def fetch_sites_info(self, since=None):
+        max_retention_time = (
+            datetime.utcnow() - timedelta(days=30)
+        ).timestamp()
+
+        if not since:
+            since = max_retention_time
+
+        info = {}
+        usage_data = []
+        log_files = glob(
+            os.path.join(
+                self.server.directory,
+                "logs",
+                f"{self.server.name}-usage-*.json.log",
+            )
+        )
+        valid_files = [
+            file for file in log_files if os.stat(file).st_mtime > since
+        ]
+
+        for file in log_files:
+            if (file not in valid_files) and (
+                os.stat(file).st_mtime > max_retention_time
+            ):
+                print(f"Deleting {file}")
+                os.remove(file)
+            else:
+                usage_data.extend(json.load(open(file)))
+
+        for site in self.sites.values():
+            try:
+                timezone_data = {d.timestamp: d.time_zone for d in usage_data}
+                timezone = timezone_data[max(timezone_data)]
+            except Exception:
+                timezone = None
+
+            info[site.name] = {
+                "config": site.config,
+                "usage": [
+                    {
+                        "database": d["database"],
+                        "public": d["public"],
+                        "private": d["private"],
+                        "backups": d["backups"],
+                        "timestamp": d["timestamp"],
+                    }
+                    for d in usage_data
+                    if d["site"] == site.name
+                ],
+                "time_zone": timezone,
+            }
+
+        return info
+
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
         return self.execute(
-            f"bench new-site "
+            "bench new-site "
             f"--admin-password {admin_password} "
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"
