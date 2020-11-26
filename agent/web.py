@@ -454,10 +454,10 @@ def proxy_add_host():
     return {"job": job}
 
 
-@application.route("/proxy/hosts/<string:host>/redirect", methods=["POST"])
-def proxy_setup_redirect(host):
+@application.route("/proxy/hosts/redirects", methods=["POST"])
+def proxy_setup_redirects():
     data = request.json
-    job = Proxy().setup_redirect_job(host, data["target"])
+    job = Proxy().setup_redirects_job(data["domains"], data["target"])
     return {"job": job}
 
 
