@@ -461,9 +461,10 @@ def proxy_setup_redirects():
     return {"job": job}
 
 
-@application.route("/proxy/hosts/<string:host>/redirect", methods=["DELETE"])
-def proxy_remove_redirect(host):
-    job = Proxy().remove_redirect_job(host)
+@application.route("/proxy/hosts/redirects", methods=["DELETE"])
+def proxy_remove_redirects():
+    data = request.json
+    job = Proxy().remove_redirects_job(data["domains"])
     return {"job": job}
 
 
