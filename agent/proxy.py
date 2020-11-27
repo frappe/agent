@@ -109,9 +109,16 @@ class Proxy(Server):
 
     @job("Setup Redirects on Hosts")
     def setup_redirects_job(self, hosts, target):
+        if target in hosts:
+            hosts.remove(target)
+            self.remove_redirect_for_primary(target)
         self.setup_redirects(hosts, target)
         self.generate_proxy_config()
         self.reload_nginx()
+
+    @step("Remove Redirect for Primary Domain")
+    def remove_redirect_for_primary(self, host):
+        self._remove_redirect(host)
 
     @step("Setup Redirects on Hosts")
     def setup_redirects(self, hosts, target):
