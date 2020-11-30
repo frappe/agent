@@ -31,7 +31,7 @@ map $actual_host $upstream_server_hash {
 
 map $host $actual_host {
 {% for host in hosts.values() -%}
-	{% for from, to in host.items() %}
+	{% for from, to in host.items() if from != 'redirect'%}
 	{{ from }} {{ to }};
 	{%- endfor %}
 {%- endfor %}
@@ -39,10 +39,17 @@ map $host $actual_host {
 
 proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;
 
-{% for host in hosts %}
+{% for host, host_options in hosts.items() %}
+
 server {
 	listen 443 http2 ssl{% if host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ host }};
+
+
+	{%- if host.endswith("." + domain) -%}
+		{% set host = "*." + domain %}
+		{# use same certificate as root domain #}
+	{%- endif %}
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
 	ssl_certificate_key {{ nginx_directory }}/hosts/{{ host }}/privkey.pem;
@@ -73,6 +80,13 @@ server {
 	add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
 	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
 
+	{% if host_options.redirect %}
+
+	location / {
+		return 301 https://{{ host_options.redirect }}$request_uri;
+	}
+
+	{% else %}
 	location /assets/ {
 		proxy_http_version 1.1;
 
@@ -138,6 +152,7 @@ server {
 		root {{ error_pages_directory }};
 		internal;
 	}
+	{% endif %}
 }
 
 {% endfor %}

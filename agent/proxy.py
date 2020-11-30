@@ -3,6 +3,8 @@ import os
 import shutil
 from hashlib import sha512 as sha
 from pathlib import Path
+from typing import Dict
+from collections import defaultdict
 
 from agent.job import job, step
 from agent.server import Server
@@ -13,6 +15,7 @@ class Proxy(Server):
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
+        self.domain = self.config["domain"]
 
         self.nginx_directory = self.config["nginx_directory"]
         self.upstreams_directory = os.path.join(
@@ -34,15 +37,12 @@ class Proxy(Server):
 
     @step("Add Host to Proxy")
     def add_host(self, host, target, certificate):
-        if not os.path.exists(self.hosts_directory):
-            os.mkdir(self.hosts_directory)
-
         host_directory = os.path.join(self.hosts_directory, host)
-        if not os.path.exists(host_directory):
-            os.mkdir(host_directory)
+        os.makedirs(host_directory, exist_ok=True)
 
         map_file = os.path.join(host_directory, "map.json")
-        json.dump({host: target}, open(map_file, "w"), indent=4)
+        with open(map_file, "w") as m:
+            json.dump({host: target}, m, indent=4)
 
         for key, value in certificate.items():
             with open(os.path.join(host_directory, key), "w") as f:
@@ -68,10 +68,8 @@ class Proxy(Server):
 
     @step("Add Upstream Directory")
     def add_upstream(self, upstream):
-        if not os.path.exists(self.upstreams_directory):
-            os.mkdir(self.upstreams_directory)
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
-        os.mkdir(upstream_directory)
+        os.makedirs(upstream_directory, exist_ok=True)
 
     @job("Remove Host from Proxy")
     def remove_host_job(self, host):
@@ -109,6 +107,47 @@ class Proxy(Server):
         with open(site_file, "w") as f:
             f.write(status)
 
+    @job("Setup Redirects on Hosts")
+    def setup_redirects_job(self, hosts, target):
+        if target in hosts:
+            hosts.remove(target)
+            self.remove_redirect(target)
+        for host in hosts:
+            self.setup_redirect(host, target)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Setup Redirect on Host")
+    def setup_redirect(self, host, target):
+        host_directory = os.path.join(self.hosts_directory, host)
+        os.makedirs(host_directory, exist_ok=True)
+        redirect_file = os.path.join(host_directory, "redirect.json")
+        if os.path.exists(redirect_file):
+            with open(redirect_file) as r:
+                redirects = json.load(r)
+        else:
+            redirects = {}
+        redirects[host] = target
+        with open(redirect_file, "w") as r:
+            json.dump(redirects, r, indent=4)
+
+    @job("Remove Redirects on Hosts")
+    def remove_redirects_job(self, hosts):
+        for host in hosts:
+            self.remove_redirect(host)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Remove Redirect on Host")
+    def remove_redirect(self, host):
+        host_directory = os.path.join(self.hosts_directory, host)
+        redirect_file = os.path.join(host_directory, "redirect.json")
+        if os.path.exists(redirect_file):
+            os.remove(redirect_file)
+        if host.endswith("." + self.domain):
+            # default domain
+            os.rmdir(host_directory)
+
     @step("Reload NGINX")
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
@@ -141,8 +180,7 @@ class Proxy(Server):
         default_host_directory = os.path.join(
             self.hosts_directory, default_host
         )
-        if not os.path.exists(default_host_directory):
-            os.mkdir(default_host_directory)
+        os.makedirs(default_host_directory, exist_ok=True)
         map_file = os.path.join(default_host_directory, "map.json")
         json.dump({"default": "$host"}, open(map_file, "w"), indent=4)
 
@@ -177,11 +215,23 @@ class Proxy(Server):
         return upstreams
 
     @property
-    def hosts(self):
-        hosts = {}
+    def hosts(self) -> Dict[str, Dict[str, str]]:
+        hosts = defaultdict(lambda: defaultdict(str))
         for host in os.listdir(self.hosts_directory):
             host_directory = os.path.join(self.hosts_directory, host)
+
             map_file = os.path.join(host_directory, "map.json")
             if os.path.exists(map_file):
-                hosts[host] = json.load(open(map_file))
+                with open(map_file) as m:
+                    hosts[host] = json.load(m)
+
+            redirect_file = os.path.join(host_directory, "redirect.json")
+            if os.path.exists(redirect_file):
+                with open(redirect_file) as r:
+                    redirects = json.load(r)
+
+                for _from, to in redirects.items():
+                    if "*" in host:
+                        hosts[_from] = {_from: _from}
+                    hosts[_from]["redirect"] = to
         return hosts
