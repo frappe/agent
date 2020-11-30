@@ -142,7 +142,7 @@ class TestProxy(unittest.TestCase):
         self.assertFalse(os.path.exists(redir_file))
         self.assertFalse(os.path.exists(host_dir))
 
-    def test_setup_redirects_creates_redirect_json_for_all_hosts(self):
+    def test_setup_redirects_creates_redirect_json_for_given_hosts(self):
         """Ensure setup redirect creates redirect.json files"""
         proxy = self._get_fake_proxy()
         proxy.domain = self.tld
@@ -157,7 +157,7 @@ class TestProxy(unittest.TestCase):
             redir_file = os.path.join(host_dir, "redirect.json")
             self.assertTrue(os.path.exists(redir_file))
 
-    def test_remove_redirects_creates_redirect_json_for_all_hosts(self):
+    def test_remove_redirects_deletes_redirect_json_for_given_hosts(self):
         """Ensure remove redirect deletes redirect.json files"""
         proxy = self._get_fake_proxy()
         proxy.domain = self.tld
