@@ -117,7 +117,7 @@ class Proxy(Server):
         self.generate_proxy_config()
         self.reload_nginx()
 
-    @step("Setup Redirects on Hosts")
+    @step("Setup Redirect on Host")
     def setup_redirect(self, host, target):
         host_directory = os.path.join(self.hosts_directory, host)
         os.makedirs(host_directory, exist_ok=True)
