@@ -73,6 +73,7 @@ class TestProxy(unittest.TestCase):
         )
 
     def _test_add_host(self, proxy, host):
+        # TODO: test contents of map.json and certificate dirs
         with patch.object(Proxy, "add_host", new=Proxy.add_host.__wrapped__):
             # get undecorated method with __wrapped__
             proxy.add_host(host, "www.test.com", {})
@@ -82,7 +83,6 @@ class TestProxy(unittest.TestCase):
                 os.path.join(proxy.hosts_directory, host, "map.json")
             )
         )
-        # TODO: test contents of map.json and certificate dirs <13-11-20, Balamurali M> #
 
     def test_add_hosts_works_without_hosts_dir(self):
         """Ensure add_host works when hosts directory doesn't exist."""
