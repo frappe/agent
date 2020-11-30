@@ -128,51 +128,49 @@ class TestProxy(unittest.TestCase):
     def test_remove_redirect_for_default_domain_deletes_host_dir(self):
         """Ensure removing redirect of default domain deletes the host dir."""
         proxy = self._get_fake_proxy()
+        proxy.domain = self.tld
         host_dir = os.path.join(self.hosts_directory, self.default_domain)
         os.makedirs(host_dir)
         redir_file = os.path.join(host_dir, "redirect.json")
         with open(redir_file, "w") as r:
             json.dump({self.default_domain: self.domain_1}, r)
 
-        proxy.domain = self.tld
         with patch.object(
-            Proxy, "remove_redirects", new=Proxy.remove_redirects.__wrapped__
+            Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__
         ):
-            proxy.remove_redirects([self.default_domain])
+            proxy.remove_redirect(self.default_domain)
         self.assertFalse(os.path.exists(redir_file))
         self.assertFalse(os.path.exists(host_dir))
 
-    def test_setup_redirects_creates_redirect_json_for_given_hosts(self):
+    def test_setup_redirect_creates_redirect_json_for_given_hosts(self):
         """Ensure setup redirect creates redirect.json files"""
         proxy = self._get_fake_proxy()
         proxy.domain = self.tld
-        hosts = [self.default_domain, self.domain_2]
+        host = self.domain_2
         target = self.domain_1
         with patch.object(
-            Proxy, "setup_redirects", new=Proxy.setup_redirects.__wrapped__
+            Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__
         ):
-            proxy.setup_redirects(hosts, target)
-        for host in hosts:
-            host_dir = os.path.join(proxy.hosts_directory, host)
-            redir_file = os.path.join(host_dir, "redirect.json")
-            self.assertTrue(os.path.exists(redir_file))
+            proxy.setup_redirect(host, target)
+        host_dir = os.path.join(proxy.hosts_directory, host)
+        redir_file = os.path.join(host_dir, "redirect.json")
+        self.assertTrue(os.path.exists(redir_file))
 
-    def test_remove_redirects_deletes_redirect_json_for_given_hosts(self):
+    def test_remove_redirect_deletes_redirect_json_for_given_hosts(self):
         """Ensure remove redirect deletes redirect.json files"""
         proxy = self._get_fake_proxy()
         proxy.domain = self.tld
-        hosts = [self.default_domain, self.domain_2]
+        host = self.domain_2
         target = self.domain_1
         with patch.object(
-            Proxy, "setup_redirects", new=Proxy.setup_redirects.__wrapped__
+            Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__
         ):
-            proxy.setup_redirects(hosts, target)
+            proxy.setup_redirect(host, target)
             # assume that setup redirects works properly based on previous test
         with patch.object(
-            Proxy, "remove_redirects", new=Proxy.remove_redirects.__wrapped__
+            Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__
         ):
-            proxy.remove_redirects(hosts)
-        for host in hosts:
-            host_dir = os.path.join(proxy.hosts_directory, host)
-            redir_file = os.path.join(host_dir, "redirect.json")
-            self.assertFalse(os.path.exists(redir_file))
+            proxy.remove_redirect(host)
+        host_dir = os.path.join(proxy.hosts_directory, host)
+        redir_file = os.path.join(host_dir, "redirect.json")
+        self.assertFalse(os.path.exists(redir_file))
