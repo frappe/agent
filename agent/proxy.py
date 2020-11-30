@@ -111,21 +111,14 @@ class Proxy(Server):
     def setup_redirects_job(self, hosts, target):
         if target in hosts:
             hosts.remove(target)
-            self.remove_redirect_for_primary(target)
-        self.setup_redirects(hosts, target)
+            self.remove_redirect(target)
+        for host in hosts:
+            self.setup_redirect(host, target)
         self.generate_proxy_config()
         self.reload_nginx()
 
-    @step("Remove Redirect for Primary Domain")
-    def remove_redirect_for_primary(self, host):
-        self._remove_redirect(host)
-
     @step("Setup Redirects on Hosts")
-    def setup_redirects(self, hosts, target):
-        for host in hosts:
-            self._setup_redirect(host, target)
-
-    def _setup_redirect(self, host, target):
+    def setup_redirect(self, host, target):
         host_directory = os.path.join(self.hosts_directory, host)
         os.makedirs(host_directory, exist_ok=True)
         redirect_file = os.path.join(host_directory, "redirect.json")
@@ -140,16 +133,13 @@ class Proxy(Server):
 
     @job("Remove Redirects on Hosts")
     def remove_redirects_job(self, hosts):
-        self.remove_redirects(hosts)
+        for host in hosts:
+            self.remove_redirect(host)
         self.generate_proxy_config()
         self.reload_nginx()
 
-    @step("Remove Redirects on Hosts")
-    def remove_redirects(self, hosts):
-        for host in hosts:
-            self._remove_redirect(host)
-
-    def _remove_redirect(self, host):
+    @step("Remove Redirect on Host")
+    def remove_redirect(self, host):
         host_directory = os.path.join(self.hosts_directory, host)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
