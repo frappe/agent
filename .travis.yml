@@ -28,6 +28,9 @@ jobs:
       - agent setup authentication --password password
       - agent setup supervisor
       - agent setup nginx
+  - name: Run Tests
+    script:
+      - python -m unittest discover repo
 
 before_install:
   - mkdir /home/travis/agent
