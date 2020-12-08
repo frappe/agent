@@ -5,6 +5,8 @@ worker_shutdown_timeout 30s;
 
 pid /run/nginx.pid;
 
+load_module modules/ngx_http_headers_more_filter_module.so;
+
 
 events {
 	worker_connections 65535;
@@ -24,6 +26,8 @@ http {
 	tcp_nopush on;
 	tcp_nodelay on;
 	server_tokens off;
+
+	more_set_headers 'Server: Frappe Cloud';
 
 	keepalive_timeout 10;
 	keepalive_requests 10;
