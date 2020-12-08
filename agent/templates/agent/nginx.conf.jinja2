@@ -36,4 +36,9 @@ server {
 
 		proxy_pass http://127.0.0.1:{{ web_port }}/;
 	}
+
+	location / {
+		root {{ pages_directory }};
+		try_files /home.html /dev/null;
+	}
 }

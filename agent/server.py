@@ -488,6 +488,9 @@ class Server(Base):
                 "web_port": self.config["web_port"],
                 "name": self.name,
                 "tls_directory": self.config["tls_directory"],
+                "pages_directory": os.path.join(
+                    self.directory, "repo", "agent", "pages"
+                ),
             },
             agent_nginx_config,
         )
