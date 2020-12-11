@@ -28,24 +28,40 @@ class Server(Base):
         self.job = None
         self.step = None
 
-    @step("Bench Initialize")
-    def bench_init(self, name, python, url, branch, clone):
-        if clone:
-            # NOTE: Cloning seems incoherent for now.
-            # Unable to articulate the reasons as of now
-            command = (
-                f"bench init --clone-from {clone} --clone-without-update "
-                "--no-backups --skip-assets --verbose "
-                f"--python {python} {name}"
-            )
-        else:
-            command = (
-                f"bench init --frappe-branch {branch} --frappe-path {url} "
-                "--no-backups --skip-assets --verbose "
-                f"--python {python} {name}"
-            )
+    @step("Initialize Bench")
+    def bench_init(
+        self,
+        name,
+        docker_image_name,
+        docker_image_tag,
+        port_offset,
+        gunicorn_workers,
+        background_workers,
+    ):
+        bench_directory = os.path.join(self.benches_directory, name)
+        os.mkdir(bench_directory)
+        directories = ["logs", "sites"]
+        for directory in directories:
+            os.mkdir(os.path.join(bench_directory, directory))
 
-        return self.execute(command, directory=self.benches_directory)
+        docker_compose = os.path.join(bench_directory, "docker-compose.yml")
+        self._render_template(
+            "bench/docker-compose.yml.jinja2",
+            {
+                "directory": bench_directory,
+                "docker_image_name": docker_image_name,
+                "docker_image_tag": docker_image_tag,
+                "web_port": 18000 + port_offset,
+                "socketio_port": 19000 + port_offset,
+                "gunicorn_workers": gunicorn_workers,
+                "background_workers": background_workers,
+            },
+            docker_compose,
+        )
+
+        sites_directory = os.path.join(bench_directory, "sites")
+        command = f"docker run --rm -v {sites_directory}:/home/frappe/frappe-bench/sitesmount -it {docker_image_name}:{docker_image_tag} cp -LR sites/. sitesmount"
+        return self.execute(command, directory=bench_directory)
 
     def dump(self):
         return {
@@ -57,17 +73,28 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, python, config, apps, clone):
-        frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
-        self.bench_init(name, python, frappe["url"], frappe["branch"], clone)
+    def new_bench(
+        self,
+        name,
+        docker_image_name,
+        docker_image_tag,
+        port_offset,
+        gunicorn_workers,
+        background_workers,
+        config,
+    ):
+        self.bench_init(
+            name,
+            docker_image_name,
+            docker_image_tag,
+            port_offset,
+            gunicorn_workers,
+            background_workers,
+        )
         bench = Bench(name, self)
         bench.update_config(config)
-        bench.setup_redis()
-        bench.reset_frappe(apps)
-        bench.get_apps(apps)
-        bench.setup_requirements()
-        bench.build()
-        bench.setup_production()
+        bench.deploy()
+        bench.setup_nginx()
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):

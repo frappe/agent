@@ -176,10 +176,12 @@ def new_bench():
     data = request.json
     job = Server().new_bench(
         data["name"],
-        data["python"],
+        data["docker_image_name"],
+        data["docker_image_tag"],
+        data["port_offset"],
+        data["gunicorn_workers"],
+        data["background_workers"],
         data["config"],
-        data["apps"],
-        data["clone"],
     )
     return {"job": job}
 

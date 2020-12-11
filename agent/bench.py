@@ -20,7 +20,6 @@ class Bench(Base):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
-        self.apps_directory = os.path.join(self.directory, "apps")
         self.sites_directory = os.path.join(self.directory, "sites")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
         self.config_file = os.path.join(
@@ -29,7 +28,6 @@ class Bench(Base):
         self.host = self.config.get("db_host", "localhost")
         if not (
             os.path.isdir(self.directory)
-            and os.path.exists(self.apps_directory)
             and os.path.exists(self.sites_directory)
             and os.path.exists(self.config_file)
         ):
@@ -38,6 +36,11 @@ class Bench(Base):
     @step("Bench Build")
     def build(self):
         return self.execute("bench build")
+
+    @step("Bench Deploy")
+    def deploy(self):
+        command = f"docker stack deploy {self.name} --resolve-image=never --compose-file docker-compose.yml"
+        return self.execute(command)
 
     def dump(self):
         return {
@@ -280,69 +283,6 @@ class Bench(Base):
         self.setup_nginx()
         self.server.reload_nginx()
 
-    @step("Bench Reset Frappe App")
-    def reset_frappe(self, apps):
-        data = {}
-        output = []
-
-        hash = list(filter(lambda x: x["name"] == "frappe", apps))[0]["hash"]
-        data["fetch"] = self.apps["frappe"].fetch_ref(hash)
-        data["checkout"] = self.apps["frappe"].checkout(hash)
-
-        output.append(data["fetch"]["output"])
-        output.append(data["checkout"]["output"])
-
-        data["output"] = "\n".join(output)
-        return data
-
-    @step("Bench Get Apps")
-    def get_apps(self, apps):
-        data = {"apps": {}}
-        output = []
-
-        for app in apps:
-            name, repo, url, hash = (
-                app["name"],
-                app["repo"],
-                app["url"],
-                app["hash"],
-            )
-            if name in self.apps:  # Skip frappe
-                continue
-
-            app_directory = os.path.join(self.apps_directory, repo)
-            os.mkdir(app_directory)
-
-            data["apps"][name] = {}
-            log = data["apps"][name]
-            log["clone"] = self.clone_app(url, hash, app_directory)
-            log["get"] = self.get_app(url)
-
-            output.append(log["clone"])
-            output.append(log["get"])
-
-        data["output"] = "\n".join(output)
-        return data
-
-    def clone_app(self, url, hash, dir):
-        commands = []
-        commands.append(self.server.execute("git init", dir))
-        commands.append(
-            self.server.execute(f"git remote add upstream {url}", dir)
-        )
-        commands.append(
-            self.server.execute(
-                f"git fetch --progress --depth 1 upstream {hash}", dir
-            )
-        )
-        commands.append(self.server.execute(f"git checkout {hash}", dir))
-        return "".join(c["output"] for c in commands)
-
-    def get_app(self, url):
-        return self.execute(
-            f"bench get-app {url} --skip-assets", input="N\ny\n"
-        )["output"]
-
     @step("Bench Setup NGINX")
     def setup_nginx(self):
         return self.execute("bench setup nginx --yes")
@@ -351,43 +291,9 @@ class Bench(Base):
     def setup_nginx_target(self):
         return self.execute("bench setup nginx --yes")
 
-    @step("Bench Setup Supervisor")
-    def setup_supervisor(self):
-        user = self.config["frappe_user"]
-        return self.execute(f"sudo bench setup supervisor --user {user} --yes")
-
-    @step("Bench Setup Production")
-    def setup_production(self):
-        processes = [
-            "web",
-            "schedule",
-            "worker",
-            "redis-queue",
-            "redis-socketio",
-            "redis-cache",
-            "node-socketio",
-        ]
-        logs_directory = os.path.join(self.directory, "logs")
-        for process in processes:
-            stdout_log = os.path.join(logs_directory, f"{process}.log")
-            stderr_log = os.path.join(logs_directory, f"{process}.error.log")
-            open(stdout_log, "a").close()
-            open(stderr_log, "a").close()
-
-        user = self.config["frappe_user"]
-        return self.execute(f"sudo bench setup production {user} --yes")
-
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute("sudo bench disable-production")
-
-    @step("Bench Setup Redis")
-    def setup_redis(self):
-        return self.execute("bench setup redis")
-
-    @step("Bench Setup Requirements")
-    def setup_requirements(self):
-        return self.execute("bench setup requirements")
+        return self.execute(f"docker stack rm {self.name}")
 
     @property
     def apps(self):
