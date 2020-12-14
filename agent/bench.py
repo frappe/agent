@@ -37,10 +37,6 @@ class Bench(Base):
         ):
             raise Exception
 
-    @step("Bench Build")
-    def build(self):
-        return self.execute("bench build")
-
     @step("Bench Deploy")
     def deploy(self):
         command = (
@@ -275,7 +271,7 @@ class Bench(Base):
 
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
-        return self.execute(
+        return self.docker_execute(
             f"bench drop-site {name} "
             f"--root-password {mariadb_root_password} --no-backup"
         )
