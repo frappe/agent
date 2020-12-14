@@ -33,7 +33,7 @@ class Site(Base):
         self.host = self.config.get("db_host", self.bench.host)
 
     def bench_execute(self, command, input=None):
-        return self.bench.execute(
+        return self.bench.docker_execute(
             f"bench --site {self.name} {command}", input=input
         )
 

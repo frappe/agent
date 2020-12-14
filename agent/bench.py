@@ -115,11 +115,21 @@ class Bench(Base):
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
+    def docker_execute(self, command, input=None):
+        command = (
+            f"docker run --rm "
+            f"-v {self.sites_directory}:/home/frappe/frappe-bench/sites "
+            f"--net {self.name}_default "
+            f"-it {self.docker_image_name}:{self.docker_image_tag} {command}"
+        )
+        return self.execute(command, input=input)
+
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
-        return self.execute(
+        return self.docker_execute(
             "bench new-site "
             f"--admin-password {admin_password} "
+            f"--no-mariadb-socket "
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"
         )
@@ -171,7 +181,9 @@ class Bench(Base):
             inactive = []
             _touch_currentsite_file(bench)
             try:
-                doctor = bench.execute("bench doctor")["output"].split("\n")
+                doctor = bench.docker_execute("bench doctor")["output"].split(
+                    "\n"
+                )
             except AgentException as e:
                 doctor = e.data["output"]
 
