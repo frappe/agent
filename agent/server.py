@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -29,38 +30,31 @@ class Server(Base):
         self.step = None
 
     @step("Initialize Bench")
-    def bench_init(
-        self,
-        name,
-        docker_image_name,
-        docker_image_tag,
-        port_offset,
-        gunicorn_workers,
-        background_workers,
-    ):
+    def bench_init(self, name, config):
         bench_directory = os.path.join(self.benches_directory, name)
         os.mkdir(bench_directory)
         directories = ["logs", "sites"]
         for directory in directories:
             os.mkdir(os.path.join(bench_directory, directory))
 
+        bench_config_file = os.path.join(bench_directory, "config.json")
+        with open(bench_config_file, "w") as f:
+            json.dump(config, f, indent=1, sort_keys=True)
+
+        config.update({"directory": bench_directory})
         docker_compose = os.path.join(bench_directory, "docker-compose.yml")
         self._render_template(
-            "bench/docker-compose.yml.jinja2",
-            {
-                "directory": bench_directory,
-                "docker_image_name": docker_image_name,
-                "docker_image_tag": docker_image_tag,
-                "web_port": 18000 + port_offset,
-                "socketio_port": 19000 + port_offset,
-                "gunicorn_workers": gunicorn_workers,
-                "background_workers": background_workers,
-            },
-            docker_compose,
+            "bench/docker-compose.yml.jinja2", config, docker_compose
         )
 
         sites_directory = os.path.join(bench_directory, "sites")
-        command = f"docker run --rm -v {sites_directory}:/home/frappe/frappe-bench/sitesmount -it {docker_image_name}:{docker_image_tag} cp -LR sites/. sitesmount"
+        # Copy sites directory from image to host system
+        command = (
+            "docker run --rm "
+            f"-v {sites_directory}:/home/frappe/frappe-bench/sitesmount "
+            f"-it {config['docker_image_name']}:{config['docker_image_tag']} "
+            "cp -LR sites/. sitesmount"
+        )
         return self.execute(command, directory=bench_directory)
 
     def dump(self):
@@ -73,26 +67,10 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(
-        self,
-        name,
-        docker_image_name,
-        docker_image_tag,
-        port_offset,
-        gunicorn_workers,
-        background_workers,
-        config,
-    ):
-        self.bench_init(
-            name,
-            docker_image_name,
-            docker_image_tag,
-            port_offset,
-            gunicorn_workers,
-            background_workers,
-        )
+    def new_bench(self, name, bench_config, common_site_config):
+        self.bench_init(name, bench_config)
         bench = Bench(name, self)
-        bench.update_config(config)
+        bench.update_config(common_site_config)
         bench.deploy()
         bench.setup_nginx()
 

@@ -174,15 +174,7 @@ def get_site_sid(bench, site):
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json
-    job = Server().new_bench(
-        data["name"],
-        data["docker_image_name"],
-        data["docker_image_tag"],
-        data["port_offset"],
-        data["gunicorn_workers"],
-        data["background_workers"],
-        data["config"],
-    )
+    job = Server().new_bench(**data)
     return {"job": job}
 
 

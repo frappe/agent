@@ -22,14 +22,18 @@ class Bench(Base):
         self.directory = os.path.join(self.server.benches_directory, name)
         self.sites_directory = os.path.join(self.directory, "sites")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
+        self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(
             self.directory, "sites", "common_site_config.json"
         )
         self.host = self.config.get("db_host", "localhost")
+        self.docker_image_name = self.bench_config.get("docker_image_name")
+        self.docker_image_tag = self.bench_config.get("docker_image_tag")
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.sites_directory)
             and os.path.exists(self.config_file)
+            and os.path.exists(self.bench_config_file)
         ):
             raise Exception
 
@@ -39,7 +43,10 @@ class Bench(Base):
 
     @step("Bench Deploy")
     def deploy(self):
-        command = f"docker stack deploy {self.name} --resolve-image=never --compose-file docker-compose.yml"
+        command = (
+            "docker stack deploy --resolve-image=never "
+            f"--compose-file docker-compose.yml {self.name} "
+        )
         return self.execute(command)
 
     def dump(self):
@@ -347,3 +354,12 @@ class Bench(Base):
                 [site.get_database_size() for site in self.sites.values()]
             ),
         }
+
+    @property
+    def bench_config(self):
+        with open(self.bench_config_file, "r") as f:
+            return json.load(f)
+
+    def set_bench_config(self, value, indent=1):
+        with open(self.config_file, "w") as f:
+            json.dump(value, f, indent=indent, sort_keys=True)
