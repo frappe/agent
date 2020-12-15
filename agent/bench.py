@@ -273,7 +273,8 @@ class Bench(Base):
     def bench_archive_site(self, name, mariadb_root_password):
         return self.docker_execute(
             f"bench drop-site {name} "
-            f"--root-password {mariadb_root_password} --no-backup"
+            f"--root-password {mariadb_root_password} --no-backup "
+            "--archived-sites-path archived"
         )
 
     @step("Download Backup Files")
