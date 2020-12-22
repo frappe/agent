@@ -37,7 +37,7 @@ class Bench(Base):
         ):
             raise Exception
 
-    @step("Bench Deploy")
+    @step("Deploy Bench")
     def deploy(self):
         command = (
             "docker stack deploy --resolve-image=never "
