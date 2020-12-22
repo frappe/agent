@@ -301,11 +301,36 @@ class Bench(Base):
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
+        self.generate_nginx_config()
         return self.execute("bench setup nginx --yes")
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
+        self.generate_nginx_config()
         return self.execute("bench setup nginx --yes")
+
+    def generate_nginx_config(self):
+        domains = {}
+        sites = []
+        for site in self.sites.values():
+            sites.append(site)
+            for domain in site.config.get("domains", []):
+                domains[domain] = site.name
+
+        config = {
+            "bench_name": self.name,
+            "bench_name_slug": self.name.replace("-", "_"),
+            "sites": sites,
+            "domains": domains,
+            "http_timeout": self.bench_config["http_timeout"],
+            "web_port": self.bench_config["web_port"],
+            "socketio_port": self.bench_config["socketio_port"],
+            "sites_directory": self.sites_directory,
+        }
+        nginx_config = os.path.join(self.directory, "nginx.conf")
+        self.server._render_template(
+            "bench/nginx.conf.jinja2", config, nginx_config
+        )
 
     @step("Bench Disable Production")
     def disable_production(self):
