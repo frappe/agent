@@ -114,8 +114,7 @@ class Bench(Base):
         command = (
             f"docker run --rm "
             f"-v {self.sites_directory}:/home/frappe/frappe-bench/sites "
-            f"--net {self.name}_default "
-            f"-it {self.docker_image} {command}"
+            f"--net {self.name}_default {self.docker_image} {command}"
         )
         return self.execute(command, input=input)
 
