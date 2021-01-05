@@ -27,8 +27,7 @@ class Bench(Base):
             self.directory, "sites", "common_site_config.json"
         )
         self.host = self.config.get("db_host", "localhost")
-        self.docker_image_name = self.bench_config.get("docker_image_name")
-        self.docker_image_tag = self.bench_config.get("docker_image_tag")
+        self.docker_image = self.bench_config.get("docker_image")
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.sites_directory)
@@ -116,7 +115,7 @@ class Bench(Base):
             f"docker run --rm "
             f"-v {self.sites_directory}:/home/frappe/frappe-bench/sites "
             f"--net {self.name}_default "
-            f"-it {self.docker_image_name}:{self.docker_image_tag} {command}"
+            f"-it {self.docker_image} {command}"
         )
         return self.execute(command, input=input)
 

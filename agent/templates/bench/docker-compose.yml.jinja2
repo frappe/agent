@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   web:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command:
       [
         "/home/frappe/frappe-bench/env/bin/gunicorn",
@@ -27,7 +27,7 @@ services:
       - redis-queue
       - redis-socketio
   socketio:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
     working_dir: /home/frappe/frappe-bench
     ports:
@@ -39,7 +39,7 @@ services:
       - redis-socketio
       - web
   scheduler:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command: ["bench", "schedule"]
     working_dir: /home/frappe/frappe-bench
     volumes:
@@ -50,7 +50,7 @@ services:
       - redis-queue
       - redis-socketio
   worker_default:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command: ["bench", "worker", "--queue", "default"]
     working_dir: /home/frappe/frappe-bench
     volumes:
@@ -63,7 +63,7 @@ services:
     deploy:
       replicas: {{ background_workers }}
   worker_short:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command: ["bench", "worker", "--queue", "short"]
     working_dir: /home/frappe/frappe-bench
     volumes:
@@ -76,7 +76,7 @@ services:
     deploy:
       replicas: {{ background_workers }}
   worker_long:
-    image: {{ docker_image_name }}:{{ docker_image_tag }}
+    image: {{ docker_image }}
     command: ["bench", "worker", "--queue", "long"]
     working_dir: /home/frappe/frappe-bench
     volumes:
