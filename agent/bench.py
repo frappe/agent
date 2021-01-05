@@ -300,12 +300,12 @@ class Bench(Base):
     @step("Bench Setup NGINX")
     def setup_nginx(self):
         self.generate_nginx_config()
-        return self.execute("bench setup nginx --yes")
+        self.server.reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
         self.generate_nginx_config()
-        return self.execute("bench setup nginx --yes")
+        self.server.reload_nginx()
 
     def generate_nginx_config(self):
         domains = {}
