@@ -59,4 +59,5 @@ http {
 	proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=web-cache:8m max_size=1000m inactive=600m;
 
 	include /etc/nginx/conf.d/*.conf;
+	include /home/frappe/benches/*/nginx.conf;
 }
