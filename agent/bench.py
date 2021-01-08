@@ -79,10 +79,17 @@ class Bench(Base):
 
         for site in self.sites.values():
             try:
-                timezone_data = {d.timestamp: d.timezone for d in usage_data}
+                timezone_data = {
+                    d["timestamp"]: d["timezone"]
+                    for d in usage_data
+                    if d["site"] == site.name
+                }
                 timezone = timezone_data[max(timezone_data)]
             except Exception:
                 timezone = None
+
+            if not (usage_data and timezone):
+                timezone = site.timezone
 
             info[site.name] = {
                 "config": site.config,
