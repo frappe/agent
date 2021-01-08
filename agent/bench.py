@@ -79,7 +79,7 @@ class Bench(Base):
 
         for site in self.sites.values():
             try:
-                timezone_data = {d.timestamp: d.time_zone for d in usage_data}
+                timezone_data = {d.timestamp: d.timezone for d in usage_data}
                 timezone = timezone_data[max(timezone_data)]
             except Exception:
                 timezone = None
@@ -97,7 +97,7 @@ class Bench(Base):
                     for d in usage_data
                     if d["site"] == site.name
                 ],
-                "time_zone": timezone,
+                "timezone": timezone,
             }
 
         return info

@@ -20,7 +20,7 @@ if __name__ == "__main__":
                 {
                     "site": site.name,
                     "timestamp": str(datetime.utcnow()),
-                    "time_zone": site.timezone,
+                    "timezone": site.timezone,
                     **site.get_usage(),
                 }
             )
