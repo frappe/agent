@@ -281,6 +281,15 @@ def reinstall_site(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/rename", methods=["POST"]
+)
+def rename_site(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].rename_job(data["new_name"])
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
 )
 def install_app_site(bench, site):
