@@ -32,9 +32,9 @@ class Site(Base):
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
 
-    def bench_execute(self, command, input=None):
+    def bench_execute(self, command, input=None, volumes=None):
         return self.bench.docker_execute(
-            f"bench --site {self.name} {command}", input=input
+            f"bench --site {self.name} {command}", input=input, volumes=volumes
         )
 
     def dump(self):
