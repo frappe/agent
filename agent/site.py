@@ -97,7 +97,7 @@ class Site(Base):
                 files["private"],
             )
         finally:
-            self.bench.delete_downloaded_files(files["database"])
+            self.bench.delete_downloaded_files(files["directory"])
         self.uninstall_unavailable_apps(apps)
         self.migrate()
         self.set_admin_password(admin_password)

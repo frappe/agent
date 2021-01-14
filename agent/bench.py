@@ -263,7 +263,7 @@ class Bench(Base):
                 site_config = json.loads(site_config)
                 site.update_config(site_config)
         finally:
-            self.delete_downloaded_files(files["database"])
+            self.delete_downloaded_files(files["directory"])
         site.uninstall_unavailable_apps(apps)
         site.migrate()
         site.set_admin_password(admin_password)
@@ -283,19 +283,20 @@ class Bench(Base):
 
     @step("Download Backup Files")
     def download_files(self, name, database_url, public_url, private_url):
-        folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
-        database_file = download_file(database_url, prefix=folder)
-        private_file = download_file(private_url, prefix=folder)
-        public_file = download_file(public_url, prefix=folder)
+        directory = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
+        database_file = download_file(database_url, prefix=directory)
+        private_file = download_file(private_url, prefix=directory)
+        public_file = download_file(public_url, prefix=directory)
         return {
+            "directory": directory,
             "database": database_file,
             "private": private_file,
             "public": public_file,
         }
 
     @step("Delete Downloaded Backup Files")
-    def delete_downloaded_files(self, database_file):
-        shutil.rmtree(os.path.dirname(database_file))
+    def delete_downloaded_files(self, backup_files_directory):
+        shutil.rmtree(backup_files_directory)
 
     @job("Archive Site")
     def archive_site(self, name, mariadb_root_password):
