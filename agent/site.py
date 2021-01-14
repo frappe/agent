@@ -65,6 +65,7 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
+        backup_files_directory,
         database_file,
         public_file,
         private_file,
@@ -74,7 +75,8 @@ class Site(Base):
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
-            f"--with-private-files {private_file} {database_file}"
+            f"--with-private-files {private_file} {database_file}",
+            volumes=[(backup_files_directory, backup_files_directory)],
         )
 
     @job("Restore Site")
@@ -92,6 +94,7 @@ class Site(Base):
             self.restore(
                 mariadb_root_password,
                 admin_password,
+                files["directory"],
                 files["database"],
                 files["public"],
                 files["private"],

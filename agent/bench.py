@@ -255,6 +255,7 @@ class Bench(Base):
             site.restore(
                 mariadb_root_password,
                 admin_password,
+                files["directory"],
                 files["database"],
                 files["public"],
                 files["private"],
