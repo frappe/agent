@@ -45,6 +45,7 @@ class Site(Base):
         os.rename(
             self.directory, os.path.join(self.bench.sites_directory, new_name)
         )
+        self.name = new_name
 
     @job("Rename Site")
     def rename_job(self, new_name):
