@@ -509,6 +509,16 @@ def proxy_remove_upstream_site(upstream, site):
 
 
 @application.route(
+    "/proxy/upstreams/<string:upstream>/sites/<string:site>/rename",
+    methods=["POST"],
+)
+def proxy_rename_upstream_site(upstream, site):
+    data = request.json
+    job = Proxy().rename_site_on_upstream_job(upstream, site, data["new_name"])
+    return {"job": job}
+
+
+@application.route(
     "/proxy/upstreams/<string:upstream>/sites/<string:site>/status",
     methods=["POST"],
 )

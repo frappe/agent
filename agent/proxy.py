@@ -94,6 +94,21 @@ class Proxy(Server):
         site_file = os.path.join(upstream_directory, site)
         os.remove(site_file)
 
+    @job("Rename Site on Upstream")
+    def rename_site_on_upstream_job(
+        self, upstream: str, site: str, new_name: str
+    ):
+        self.rename_site_on_upstream(upstream, site, new_name)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Rename Site File in Upstream Directory")
+    def rename_site_on_upstream(self, upstream: str, site: str, new_name: str):
+        upstream_directory = os.path.join(self.upstreams_directory, upstream)
+        old_site_file = os.path.join(upstream_directory, site)
+        new_site_file = os.path.join(upstream_directory, new_name)
+        os.rename(old_site_file, new_site_file)
+
     @job("Update Site Status")
     def update_site_status_job(self, upstream, site, status):
         self.update_site_status(upstream, site, status)
