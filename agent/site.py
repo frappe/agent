@@ -47,7 +47,7 @@ class Site(Base):
         )
         self.name = new_name
 
-    @job("Rename Site")
+    @job("Rename Site", priority="high")
     def rename_job(self, new_name):
         self.enable_maintenance_mode()
         self.wait_till_ready()
