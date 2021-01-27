@@ -51,6 +51,8 @@ class Site(Base):
     def rename_job(self, new_name):
         self.enable_maintenance_mode()
         self.wait_till_ready()
+        if self.config.get("host_name") == self.name:
+            self.update_config({"host_name": new_name})
         self.rename(new_name)
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
