@@ -514,7 +514,12 @@ def proxy_remove_upstream_site(upstream, site):
 )
 def proxy_rename_upstream_site(upstream, site):
     data = request.json
-    job = Proxy().rename_site_on_upstream_job(upstream, site, data["new_name"])
+    job = Proxy().rename_site_on_upstream_job(
+        upstream,
+        data["domains"],
+        site,
+        data["new_name"],
+    )
     return {"job": job}
 
 

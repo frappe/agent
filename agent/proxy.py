@@ -3,7 +3,7 @@ import os
 import shutil
 from hashlib import sha512 as sha
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 from collections import defaultdict
 
 from agent.job import job, step
@@ -96,11 +96,51 @@ class Proxy(Server):
 
     @job("Rename Site on Upstream")
     def rename_site_on_upstream_job(
-        self, upstream: str, site: str, new_name: str
+        self, upstream: str, hosts: List[str], site: str, new_name: str
     ):
         self.rename_site_on_upstream(upstream, site, new_name)
+        site_host_dir = os.path.join(self.hosts_directory, site)
+        if os.path.exists(site_host_dir):
+            self.rename_site_in_its_own_host_dir(site, new_name)
+        for host in hosts:
+            self.rename_site_in_host_dir(host, new_name)
         self.generate_proxy_config()
         self.reload_nginx()
+
+    @step("Rename Site in its own Host Directory")
+    def rename_site_in_its_own_host_dir(self, old_name: str, new_name: str):
+        """
+        Rename site in its host directory.
+
+        Host directory for upstream site is created for redirects.
+        """
+        old_host_dir = os.path.join(self.hosts_directory, old_name)
+        new_host_dir = os.path.join(self.hosts_directory, new_name)
+        os.rename(old_host_dir, new_host_dir)
+        redirect_file = os.path.join(new_host_dir, "redirect.json")
+        with open(redirect_file) as r:
+            redirects = json.load(r)
+        redirects[new_name] = redirects.pop(old_name)
+        with open(redirect_file, "w") as r:
+            json.dump(redirects, r, indent=4)
+
+    @step("Rename Site in Host Directory")
+    def rename_site_in_host_dir(self, host: str, old_name: str, new_name: str):
+        host_directory = os.path.join(self.hosts_directory, host)
+
+        map_file = os.path.join(host_directory, "map.json")
+        if os.path.exists(map_file):
+            with open(map_file, "w") as m:
+                json.dump({host: new_name}, m, indent=4)
+
+        redirect_file = os.path.join(host_directory, "redirect.json")
+        if os.path.exists(redirect_file):
+            with open(redirect_file) as r:
+                redirects = json.load(r)
+            if redirects[host] == old_name:
+                redirects[host] = new_name
+                with open(redirect_file, "w") as r:
+                    json.dump(redirects, r, indent=4)
 
     @step("Rename Site File in Upstream Directory")
     def rename_site_on_upstream(self, upstream: str, site: str, new_name: str):
