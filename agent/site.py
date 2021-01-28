@@ -348,7 +348,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def timezone(self):
         query = (
             f"select defvalue from {self.database}.tabDefaultValue where"
-            " defkey = 'time_zone'"
+            " defkey = 'time_zone' and parent = '__default'"
         )
         timezone = self.execute(
             f"mysql -h {self.host} -u{self.database} -p{self.password} "
