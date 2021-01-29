@@ -103,7 +103,7 @@ class Proxy(Server):
         if os.path.exists(site_host_dir):
             self.rename_site_in_its_own_host_dir(site, new_name)
         for host in hosts:
-            self.rename_site_in_host_dir(host, new_name)
+            self.rename_site_in_host_dir(host, site, new_name)
         self.generate_proxy_config()
         self.reload_nginx()
 
