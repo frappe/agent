@@ -181,18 +181,12 @@ class TestProxy(unittest.TestCase):
         proxy = self._get_fake_proxy()
         old_host_dir = os.path.join(proxy.hosts_directory, self.default_domain)
         os.makedirs(old_host_dir)
-        # make dummy redirect_file
-        redirect_file = os.path.join(old_host_dir, "redirect.json")
-        with open(redirect_file, "w") as r:
-            json.dump({self.default_domain: self.domain_1}, r)
         with patch.object(
             Proxy,
-            "rename_site_in_its_own_host_dir",
-            new=Proxy.rename_site_in_its_own_host_dir.__wrapped__,
+            "rename_host_dir",
+            new=Proxy.rename_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_its_own_host_dir(
-                self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_host_dir(self.default_domain, "yyy.frappe.cloud")
         new_host_dir = os.path.join(proxy.hosts_directory, "yyy.frappe.cloud")
         self.assertFalse(os.path.exists(old_host_dir))
         self.assertTrue(os.path.exists(new_host_dir))
@@ -207,11 +201,17 @@ class TestProxy(unittest.TestCase):
             json.dump({self.default_domain: self.domain_1}, r)
         with patch.object(
             Proxy,
-            "rename_site_in_its_own_host_dir",
-            new=Proxy.rename_site_in_its_own_host_dir.__wrapped__,
+            "rename_host_dir",
+            new=Proxy.rename_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_its_own_host_dir(
-                self.default_domain, "yyy.frappe.cloud"
+            proxy.rename_host_dir(self.default_domain, "yyy.frappe.cloud")
+        with patch.object(
+            Proxy,
+            "rename_site_in_host_dir",
+            new=Proxy.rename_site_in_host_dir.__wrapped__,
+        ):
+            proxy.rename_site_in_host_dir(
+                "yyy.frappe.cloud", self.default_domain, "yyy.frappe.cloud"
             )
         new_host_dir = os.path.join(proxy.hosts_directory, "yyy.frappe.cloud")
         redirect_file = os.path.join(new_host_dir, "redirect.json")
