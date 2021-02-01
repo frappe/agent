@@ -26,6 +26,9 @@ server {
 		{% for site in sites -%}
 			{{ site.name }}
 		{% endfor -%}
+		{% for domain in domains -%}
+			{{ domain }}
+		{% endfor -%}
 		;
 
 	root {{ sites_directory }};
