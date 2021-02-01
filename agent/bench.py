@@ -420,5 +420,5 @@ class Bench(Base):
             return json.load(f)
 
     def set_bench_config(self, value, indent=1):
-        with open(self.config_file, "w") as f:
+        with open(self.bench_config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
