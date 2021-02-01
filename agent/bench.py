@@ -310,17 +310,17 @@ class Bench(Base):
     def archive_site(self, name, mariadb_root_password):
         self.bench_archive_site(name, mariadb_root_password)
         self.setup_nginx()
-        self.server.reload_nginx()
+        self.server._reload_nginx()
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
         self.generate_nginx_config()
-        self.server.reload_nginx()
+        self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
         self.generate_nginx_config()
-        self.server.reload_nginx()
+        self.server._reload_nginx()
 
     def generate_nginx_config(self):
         domains = {}
