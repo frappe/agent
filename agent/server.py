@@ -76,7 +76,7 @@ class Server(Base):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
         bench = Bench(name, self)
-        bench.update_config(common_site_config)
+        bench.update_config(common_site_config, bench_config)
         bench.deploy()
         bench.setup_nginx()
 
