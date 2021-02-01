@@ -384,7 +384,7 @@ class Bench(Base):
         config = self.bench_config
         config.update({"directory": self.directory})
         docker_compose = os.path.join(self.directory, "docker-compose.yml")
-        self._render_template(
+        self.server._render_template(
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
 
