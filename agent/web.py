@@ -435,7 +435,7 @@ def site_remove_domain(bench, site, domain):
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json
-    job = Server().benches[bench].update_config_job(data["config"])
+    job = Server().benches[bench].update_config_job(**data)
     return {"job": job}
 
 

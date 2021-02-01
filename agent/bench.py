@@ -363,18 +363,30 @@ class Bench(Base):
         return apps
 
     @step("Update Bench Configuration")
-    def update_config(self, value):
-        new_config = self.config
-        new_config.update(value)
-        self.setconfig(new_config)
+    def update_config(self, common_site_config, bench_config):
+        new_common_site_config = self.config
+        new_common_site_config.update(common_site_config)
+        self.setconfig(new_common_site_config)
+
+        new_bench_config = self.bench_config
+        new_bench_config.update(bench_config)
+        self.set_bench_config(new_bench_config)
 
     @job("Update Bench Configuration", priority="high")
-    def update_config_job(self, value):
-        self.update_config(value)
-        self.setup_supervisor()
-        self.server.update_supervisor()
+    def update_config_job(self, common_site_config, bench_config):
+        self.update_config(common_site_config, bench_config)
         self.setup_nginx()
-        self.server.reload_nginx()
+        self.generate_docker_compose_file()
+        self.deploy()
+
+    @step("Generate Docker Compose File")
+    def generate_docker_compose_file(self):
+        config = self.bench_config
+        config.update({"directory": self.directory})
+        docker_compose = os.path.join(self.directory, "docker-compose.yml")
+        self._render_template(
+            "bench/docker-compose.yml.jinja2", config, docker_compose
+        )
 
     @property
     def job_record(self):
