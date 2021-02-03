@@ -32,9 +32,9 @@ class Site(Base):
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
 
-    def bench_execute(self, command, input=None):
-        return self.bench.execute(
-            f"bench --site {self.name} {command}", input=input
+    def bench_execute(self, command, input=None, volumes=None):
+        return self.bench.docker_execute(
+            f"bench --site {self.name} {command}", input=input, volumes=volumes
         )
 
     def dump(self):
@@ -65,6 +65,7 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
+        backup_files_directory,
         database_file,
         public_file,
         private_file,
@@ -74,7 +75,8 @@ class Site(Base):
             f"--mariadb-root-password {mariadb_root_password} "
             f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
-            f"--with-private-files {private_file} {database_file}"
+            f"--with-private-files {private_file} {database_file}",
+            volumes=[(backup_files_directory, backup_files_directory)],
         )
 
     @job("Restore Site")
@@ -92,12 +94,13 @@ class Site(Base):
             self.restore(
                 mariadb_root_password,
                 admin_password,
+                files["directory"],
                 files["database"],
                 files["public"],
                 files["private"],
             )
         finally:
-            self.bench.delete_downloaded_files(files["database"])
+            self.bench.delete_downloaded_files(files["directory"])
         self.uninstall_unavailable_apps(apps)
         self.migrate()
         self.set_admin_password(admin_password)
@@ -180,7 +183,7 @@ class Site(Base):
     @step("Backup Site")
     def backup(self, with_files=False):
         with_files = "--with-files" if with_files else ""
-        self.bench.execute(f"bench --site {self.name} backup {with_files}")
+        self.bench_execute(f"backup {with_files}")
         return self.fetch_latest_backup(with_files=with_files)
 
     @step("Upload Site Backup to S3")
@@ -211,9 +214,7 @@ class Site(Base):
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
-        return self.bench.execute(
-            f"bench --site {self.name} set-maintenance-mode on"
-        )
+        return self.bench_execute("set-maintenance-mode on")
 
     @step("Set Administrator Password")
     def set_admin_password(self, password):
@@ -226,9 +227,7 @@ class Site(Base):
         start = time.time()
         while (time.time() - start) < WAIT_TIMEOUT:
             try:
-                output = self.bench.execute(
-                    f"bench --site {self.name} ready-for-migration"
-                )
+                output = self.bench_execute("ready-for-migration")
                 data["tries"].append(output)
                 break
             except Exception as e:
@@ -258,7 +257,7 @@ class Site(Base):
 
     @step("Migrate Site")
     def migrate(self):
-        return self.bench.execute(f"bench --site {self.name} migrate")
+        return self.bench_execute("migrate")
 
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
@@ -272,9 +271,7 @@ class Site(Base):
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
-        return self.bench.execute(
-            f"bench --site {self.name} set-maintenance-mode off"
-        )
+        return self.bench_execute("set-maintenance-mode off")
 
     @step("Restore Touched Tables")
     def restore_touched_tables(self):
@@ -291,15 +288,15 @@ class Site(Base):
 
     @step("Pause Scheduler")
     def pause_scheduler(self):
-        return self.bench.execute(f"bench --site {self.name} scheduler pause")
+        return self.bench_execute("scheduler pause")
 
     @step("Enable Scheduler")
     def enable_scheduler(self):
-        return self.bench.execute(f"bench --site {self.name} scheduler enable")
+        return self.bench_execute("scheduler enable")
 
     @step("Resume Scheduler")
     def resume_scheduler(self):
-        return self.bench.execute(f"bench --site {self.name} scheduler resume")
+        return self.bench_execute("scheduler resume")
 
     def fetch_site_status(self):
         data = {
@@ -313,7 +310,7 @@ class Site(Base):
         except Exception:
             data["web"] = False
 
-        doctor = self.bench.execute(f"bench --site {self.name} doctor")
+        doctor = self.bench_execute("doctor")
         if "inactive" in doctor["output"]:
             data["scheduler"] = False
 

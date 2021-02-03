@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -28,24 +29,38 @@ class Server(Base):
         self.job = None
         self.step = None
 
-    @step("Bench Initialize")
-    def bench_init(self, name, python, url, branch, clone):
-        if clone:
-            # NOTE: Cloning seems incoherent for now.
-            # Unable to articulate the reasons as of now
-            command = (
-                f"bench init --clone-from {clone} --clone-without-update "
-                "--no-backups --skip-assets --verbose "
-                f"--python {python} {name}"
-            )
-        else:
-            command = (
-                f"bench init --frappe-branch {branch} --frappe-path {url} "
-                "--no-backups --skip-assets --verbose "
-                f"--python {python} {name}"
-            )
+    def docker_login(self, registry):
+        url = registry["url"]
+        username = registry["username"]
+        password = registry["password"]
+        return self.execute(f"docker login -u {username} -p {password} {url}")
 
-        return self.execute(command, directory=self.benches_directory)
+    @step("Initialize Bench")
+    def bench_init(self, name, config):
+        bench_directory = os.path.join(self.benches_directory, name)
+        os.mkdir(bench_directory)
+        directories = ["logs", "sites"]
+        for directory in directories:
+            os.mkdir(os.path.join(bench_directory, directory))
+
+        bench_config_file = os.path.join(bench_directory, "config.json")
+        with open(bench_config_file, "w") as f:
+            json.dump(config, f, indent=1, sort_keys=True)
+
+        config.update({"directory": bench_directory})
+        docker_compose = os.path.join(bench_directory, "docker-compose.yml")
+        self._render_template(
+            "bench/docker-compose.yml.jinja2", config, docker_compose
+        )
+
+        sites_directory = os.path.join(bench_directory, "sites")
+        # Copy sites directory from image to host system
+        command = (
+            "docker run --rm "
+            f"-v {sites_directory}:/home/frappe/frappe-bench/sitesmount "
+            f"{config['docker_image']} cp -LR sites/. sitesmount"
+        )
+        return self.execute(command, directory=bench_directory)
 
     def dump(self):
         return {
@@ -57,17 +72,13 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, python, config, apps, clone):
-        frappe = list(filter(lambda x: x["name"] == "frappe", apps))[0]
-        self.bench_init(name, python, frappe["url"], frappe["branch"], clone)
+    def new_bench(self, name, bench_config, common_site_config, registry):
+        self.docker_login(registry)
+        self.bench_init(name, bench_config)
         bench = Bench(name, self)
-        bench.update_config(config)
-        bench.setup_redis()
-        bench.reset_frappe(apps)
-        bench.get_apps(apps)
-        bench.setup_requirements()
-        bench.build()
-        bench.setup_production()
+        bench.update_config(common_site_config, bench_config)
+        bench.deploy()
+        bench.setup_nginx()
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
@@ -488,6 +499,9 @@ class Server(Base):
                 "web_port": self.config["web_port"],
                 "name": self.name,
                 "tls_directory": self.config["tls_directory"],
+                "pages_directory": os.path.join(
+                    self.directory, "repo", "agent", "pages"
+                ),
             },
             agent_nginx_config,
         )

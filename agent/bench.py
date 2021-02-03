@@ -20,24 +20,29 @@ class Bench(Base):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
-        self.apps_directory = os.path.join(self.directory, "apps")
         self.sites_directory = os.path.join(self.directory, "sites")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
+        self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(
             self.directory, "sites", "common_site_config.json"
         )
         self.host = self.config.get("db_host", "localhost")
+        self.docker_image = self.bench_config.get("docker_image")
         if not (
             os.path.isdir(self.directory)
-            and os.path.exists(self.apps_directory)
             and os.path.exists(self.sites_directory)
             and os.path.exists(self.config_file)
+            and os.path.exists(self.bench_config_file)
         ):
             raise Exception
 
-    @step("Bench Build")
-    def build(self):
-        return self.execute("bench build")
+    @step("Deploy Bench")
+    def deploy(self):
+        command = (
+            "docker stack deploy --resolve-image=never "
+            f"--compose-file docker-compose.yml {self.name} "
+        )
+        return self.execute(command)
 
     def dump(self):
         return {
@@ -112,11 +117,26 @@ class Bench(Base):
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
+    def docker_execute(self, command, input=None, volumes=None):
+        if volumes is None:
+            volumes = []
+        volumes.append(
+            (self.sites_directory, "/home/frappe/frappe-bench/sites")
+        )
+        volume_args = " ".join([f"-v {v[0]}:{v[1]}" for v in volumes])
+        command = (
+            f"docker run --rm "
+            f"{volume_args} "
+            f"--net {self.name}_default {self.docker_image} {command}"
+        )
+        return self.execute(command, input=input)
+
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
-        return self.execute(
+        return self.docker_execute(
             "bench new-site "
             f"--admin-password {admin_password} "
+            f"--no-mariadb-socket "
             f"--mariadb-root-password {mariadb_root_password} "
             f"{name}"
         )
@@ -168,7 +188,9 @@ class Bench(Base):
             inactive = []
             _touch_currentsite_file(bench)
             try:
-                doctor = bench.execute("bench doctor")["output"].split("\n")
+                doctor = bench.docker_execute("bench doctor")["output"].split(
+                    "\n"
+                )
             except AgentException as e:
                 doctor = e.data["output"]
 
@@ -240,6 +262,7 @@ class Bench(Base):
             site.restore(
                 mariadb_root_password,
                 admin_password,
+                files["directory"],
                 files["database"],
                 files["public"],
                 files["private"],
@@ -248,7 +271,7 @@ class Bench(Base):
                 site_config = json.loads(site_config)
                 site.update_config(site_config)
         finally:
-            self.delete_downloaded_files(files["database"])
+            self.delete_downloaded_files(files["directory"])
         site.uninstall_unavailable_apps(apps)
         site.migrate()
         site.set_admin_password(admin_password)
@@ -260,141 +283,71 @@ class Bench(Base):
 
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
-        return self.execute(
+        return self.docker_execute(
             f"bench drop-site {name} "
-            f"--root-password {mariadb_root_password} --no-backup"
+            f"--root-password {mariadb_root_password} --no-backup "
+            "--archived-sites-path archived"
         )
 
     @step("Download Backup Files")
     def download_files(self, name, database_url, public_url, private_url):
-        folder = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
-        database_file = download_file(database_url, prefix=folder)
-        private_file = download_file(private_url, prefix=folder)
-        public_file = download_file(public_url, prefix=folder)
+        directory = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}")
+        database_file = download_file(database_url, prefix=directory)
+        private_file = download_file(private_url, prefix=directory)
+        public_file = download_file(public_url, prefix=directory)
         return {
+            "directory": directory,
             "database": database_file,
             "private": private_file,
             "public": public_file,
         }
 
     @step("Delete Downloaded Backup Files")
-    def delete_downloaded_files(self, database_file):
-        shutil.rmtree(os.path.dirname(database_file))
+    def delete_downloaded_files(self, backup_files_directory):
+        shutil.rmtree(backup_files_directory)
 
     @job("Archive Site")
     def archive_site(self, name, mariadb_root_password):
         self.bench_archive_site(name, mariadb_root_password)
         self.setup_nginx()
-        self.server.reload_nginx()
-
-    @step("Bench Reset Frappe App")
-    def reset_frappe(self, apps):
-        data = {}
-        output = []
-
-        hash = list(filter(lambda x: x["name"] == "frappe", apps))[0]["hash"]
-        data["fetch"] = self.apps["frappe"].fetch_ref(hash)
-        data["checkout"] = self.apps["frappe"].checkout(hash)
-
-        output.append(data["fetch"]["output"])
-        output.append(data["checkout"]["output"])
-
-        data["output"] = "\n".join(output)
-        return data
-
-    @step("Bench Get Apps")
-    def get_apps(self, apps):
-        data = {"apps": {}}
-        output = []
-
-        for app in apps:
-            name, repo, url, hash = (
-                app["name"],
-                app["repo"],
-                app["url"],
-                app["hash"],
-            )
-            if name in self.apps:  # Skip frappe
-                continue
-
-            app_directory = os.path.join(self.apps_directory, repo)
-            os.mkdir(app_directory)
-
-            data["apps"][name] = {}
-            log = data["apps"][name]
-            log["clone"] = self.clone_app(url, hash, app_directory)
-            log["get"] = self.get_app(url)
-
-            output.append(log["clone"])
-            output.append(log["get"])
-
-        data["output"] = "\n".join(output)
-        return data
-
-    def clone_app(self, url, hash, dir):
-        commands = []
-        commands.append(self.server.execute("git init", dir))
-        commands.append(
-            self.server.execute(f"git remote add upstream {url}", dir)
-        )
-        commands.append(
-            self.server.execute(
-                f"git fetch --progress --depth 1 upstream {hash}", dir
-            )
-        )
-        commands.append(self.server.execute(f"git checkout {hash}", dir))
-        return "".join(c["output"] for c in commands)
-
-    def get_app(self, url):
-        return self.execute(
-            f"bench get-app {url} --skip-assets", input="N\ny\n"
-        )["output"]
+        self.server._reload_nginx()
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
-        return self.execute("bench setup nginx --yes")
+        self.generate_nginx_config()
+        self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
-        return self.execute("bench setup nginx --yes")
+        self.generate_nginx_config()
+        self.server._reload_nginx()
 
-    @step("Bench Setup Supervisor")
-    def setup_supervisor(self):
-        user = self.config["frappe_user"]
-        return self.execute(f"sudo bench setup supervisor --user {user} --yes")
+    def generate_nginx_config(self):
+        domains = {}
+        sites = []
+        for site in self.sites.values():
+            sites.append(site)
+            for domain in site.config.get("domains", []):
+                domains[domain] = site.name
 
-    @step("Bench Setup Production")
-    def setup_production(self):
-        processes = [
-            "web",
-            "schedule",
-            "worker",
-            "redis-queue",
-            "redis-socketio",
-            "redis-cache",
-            "node-socketio",
-        ]
-        logs_directory = os.path.join(self.directory, "logs")
-        for process in processes:
-            stdout_log = os.path.join(logs_directory, f"{process}.log")
-            stderr_log = os.path.join(logs_directory, f"{process}.error.log")
-            open(stdout_log, "a").close()
-            open(stderr_log, "a").close()
-
-        user = self.config["frappe_user"]
-        return self.execute(f"sudo bench setup production {user} --yes")
+        config = {
+            "bench_name": self.name,
+            "bench_name_slug": self.name.replace("-", "_"),
+            "sites": sites,
+            "domains": domains,
+            "http_timeout": self.bench_config["http_timeout"],
+            "web_port": self.bench_config["web_port"],
+            "socketio_port": self.bench_config["socketio_port"],
+            "sites_directory": self.sites_directory,
+        }
+        nginx_config = os.path.join(self.directory, "nginx.conf")
+        self.server._render_template(
+            "bench/nginx.conf.jinja2", config, nginx_config
+        )
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute("sudo bench disable-production")
-
-    @step("Bench Setup Redis")
-    def setup_redis(self):
-        return self.execute("bench setup redis")
-
-    @step("Bench Setup Requirements")
-    def setup_requirements(self):
-        return self.execute("bench setup requirements")
+        return self.execute(f"docker stack rm {self.name}")
 
     @property
     def apps(self):
@@ -410,18 +363,30 @@ class Bench(Base):
         return apps
 
     @step("Update Bench Configuration")
-    def update_config(self, value):
-        new_config = self.config
-        new_config.update(value)
-        self.setconfig(new_config)
+    def update_config(self, common_site_config, bench_config):
+        new_common_site_config = self.config
+        new_common_site_config.update(common_site_config)
+        self.setconfig(new_common_site_config)
+
+        new_bench_config = self.bench_config
+        new_bench_config.update(bench_config)
+        self.set_bench_config(new_bench_config)
 
     @job("Update Bench Configuration", priority="high")
-    def update_config_job(self, value):
-        self.update_config(value)
-        self.setup_supervisor()
-        self.server.update_supervisor()
+    def update_config_job(self, common_site_config, bench_config):
+        self.update_config(common_site_config, bench_config)
         self.setup_nginx()
-        self.server.reload_nginx()
+        self.generate_docker_compose_file()
+        self.deploy()
+
+    @step("Generate Docker Compose File")
+    def generate_docker_compose_file(self):
+        config = self.bench_config
+        config.update({"directory": self.directory})
+        docker_compose = os.path.join(self.directory, "docker-compose.yml")
+        self.server._render_template(
+            "bench/docker-compose.yml.jinja2", config, docker_compose
+        )
 
     @property
     def job_record(self):
@@ -448,3 +413,12 @@ class Bench(Base):
                 [site.get_database_size() for site in self.sites.values()]
             ),
         }
+
+    @property
+    def bench_config(self):
+        with open(self.bench_config_file, "r") as f:
+            return json.load(f)
+
+    def set_bench_config(self, value, indent=1):
+        with open(self.bench_config_file, "w") as f:
+            json.dump(value, f, indent=indent, sort_keys=True)
