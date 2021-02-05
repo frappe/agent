@@ -108,10 +108,11 @@ class Proxy(Server):
         self.generate_proxy_config()
         self.reload_nginx()
 
-    def replace_str_in_file(self, file: str, old: str, new: str):
+    def replace_str_in_json(self, file: str, old: str, new: str):
+        """Replace quoted strings in json file."""
         with open(file) as f:
             text = f.read()
-        text = text.replace(old, new)
+        text = text.replace('"' + old + '"', '"' + new + '"')
         with open(file, "w") as f:
             f.write(text)
 
@@ -128,11 +129,11 @@ class Proxy(Server):
 
         map_file = os.path.join(host_directory, "map.json")
         if os.path.exists(map_file):
-            self.replace_str_in_file(map_file, old_name, new_name)
+            self.replace_str_in_json(map_file, old_name, new_name)
 
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
-            self.replace_str_in_file(redirect_file, old_name, new_name)
+            self.replace_str_in_json(redirect_file, old_name, new_name)
 
     @step("Rename Site File in Upstream Directory")
     def rename_site_on_upstream(self, upstream: str, site: str, new_name: str):
