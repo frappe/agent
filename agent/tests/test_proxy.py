@@ -12,9 +12,9 @@ class TestProxy(unittest.TestCase):
 
     def _create_needed_files(self):
         """Create host dirs for 2 domains test json files."""
-        os.makedirs(os.path.join(self.hosts_directory, self.domain_1))
-        os.makedirs(os.path.join(self.hosts_directory, self.domain_2))
-        os.makedirs(self.upstreams_directory)
+        os.makedirs(os.path.join(self.hosts_directory, self.domain_1), exist_ok=True)
+        os.makedirs(os.path.join(self.hosts_directory, self.domain_2), exist_ok=True)
+        os.makedirs(self.upstreams_directory, exist_ok=True)
 
         map_1 = os.path.join(self.hosts_directory, self.domain_1, "map.json")
         map_2 = os.path.join(self.hosts_directory, self.domain_2, "map.json")
@@ -277,3 +277,24 @@ class TestProxy(unittest.TestCase):
             )
         with open(redirect_file) as r:
             self.assertDictEqual(json.load(r), original_dict)
+
+    def test_rename_does_not_update_partial_strings(self):
+        """Test rename doesn't update part of other custom domains."""
+        proxy = self._get_fake_proxy()
+        custom_domain = self.default_domain + ".balu.codes"
+        self.domain_1 = custom_domain
+        self._create_needed_files()
+        with patch.object(
+            Proxy,
+            "rename_site_in_host_dir",
+            new=Proxy.rename_site_in_host_dir.__wrapped__,
+        ):
+            proxy.rename_site_in_host_dir(
+                self.domain_1, self.default_domain, "yyy.frappe.cloud"
+            )
+        host_dir = os.path.join(self.hosts_directory, self.domain_1)
+        map_file = os.path.join(host_dir, "map.json")
+        with open(map_file) as m:
+            self.assertDictEqual(
+                json.load(m), {self.domain_1: "yyy.frappe.cloud"}
+            )
