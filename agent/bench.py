@@ -124,9 +124,10 @@ class Bench(Base):
             (self.sites_directory, "/home/frappe/frappe-bench/sites")
         )
         volume_args = " ".join([f"-v {v[0]}:{v[1]}" for v in volumes])
+        interactive = "-it" if input else ""
         command = (
             f"docker run --rm "
-            f"{volume_args} "
+            f"{volume_args} {interactive} "
             f"--net {self.name}_default {self.docker_image} {command}"
         )
         return self.execute(command, input=input)
