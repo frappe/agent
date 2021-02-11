@@ -1,0 +1,116 @@
+version: "3.8"
+services:
+  web:
+    image: {{ docker_image }}
+    command:
+      [
+        "/home/frappe/frappe-bench/env/bin/gunicorn",
+        "--bind",
+        "0.0.0.0:8000",
+        "--timeout",
+        "120",
+        "--workers",
+        "{{ gunicorn_workers }}",
+        "--worker-tmp-dir",
+        "/dev/shm",
+        "--preload",
+        "frappe.app:application",
+      ]
+    working_dir: /home/frappe/frappe-bench/sites
+    ports:
+      - "{{ web_port }}:8000"
+    volumes:
+      - logs:/home/frappe/frappe-bench/logs:rw
+      - sites:/home/frappe/frappe-bench/sites:rw
+    depends_on:
+      - redis-cache
+      - redis-queue
+      - redis-socketio
+  socketio:
+    image: {{ docker_image }}
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    working_dir: /home/frappe/frappe-bench
+    ports:
+      - "{{ socketio_port }}:9000"
+    volumes:
+      - logs:/home/frappe/frappe-bench/logs:rw
+      - sites:/home/frappe/frappe-bench/sites:ro
+    depends_on:
+      - redis-socketio
+      - web
+  scheduler:
+    image: {{ docker_image }}
+    command: ["bench", "schedule"]
+    working_dir: /home/frappe/frappe-bench
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites:rw
+      - logs:/home/frappe/frappe-bench/logs:rw
+    depends_on:
+      - redis-cache
+      - redis-queue
+      - redis-socketio
+  worker_default:
+    image: {{ docker_image }}
+    command: ["bench", "worker", "--queue", "default"]
+    working_dir: /home/frappe/frappe-bench
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites:rw
+      - logs:/home/frappe/frappe-bench/logs:rw
+    depends_on:
+      - redis-cache
+      - redis-queue
+      - redis-socketio
+    deploy:
+      replicas: {{ background_workers }}
+  worker_short:
+    image: {{ docker_image }}
+    command: ["bench", "worker", "--queue", "short"]
+    working_dir: /home/frappe/frappe-bench
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites:rw
+      - logs:/home/frappe/frappe-bench/logs:rw
+    depends_on:
+      - redis-cache
+      - redis-queue
+      - redis-socketio
+    deploy:
+      replicas: {{ background_workers }}
+  worker_long:
+    image: {{ docker_image }}
+    command: ["bench", "worker", "--queue", "long"]
+    working_dir: /home/frappe/frappe-bench
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites:rw
+      - logs:/home/frappe/frappe-bench/logs:rw
+    depends_on:
+      - redis-cache
+      - redis-queue
+      - redis-socketio
+    deploy:
+      replicas: {{ background_workers }}
+  redis-cache:
+    image: redis:6.0
+  redis-queue:
+    image: redis:6.0
+  redis-socketio:
+    image: redis:6.0
+
+# Any container should be allowed to manually attach to default overlay network
+networks:
+  default:
+    driver: overlay
+    attachable: true
+
+volumes:
+  logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: {{ directory }}/logs
+  sites:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: {{ directory }}/sites

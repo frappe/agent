@@ -174,13 +174,7 @@ def get_site_sid(bench, site):
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json
-    job = Server().new_bench(
-        data["name"],
-        data["python"],
-        data["config"],
-        data["apps"],
-        data["clone"],
-    )
+    job = Server().new_bench(**data)
     return {"job": job}
 
 
@@ -450,7 +444,7 @@ def site_remove_domain(bench, site, domain):
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json
-    job = Server().benches[bench].update_config_job(data["config"])
+    job = Server().benches[bench].update_config_job(**data)
     return {"job": job}
 
 
