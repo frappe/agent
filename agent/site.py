@@ -40,6 +40,25 @@ class Site(Base):
     def dump(self):
         return {"name": self.name}
 
+    @step("Rename Site")
+    def rename(self, new_name):
+        os.rename(
+            self.directory, os.path.join(self.bench.sites_directory, new_name)
+        )
+        self.name = new_name
+
+    @job("Rename Site", priority="high")
+    def rename_job(self, new_name):
+        self.enable_maintenance_mode()
+        self.wait_till_ready()
+        if self.config.get("host_name") == self.name:
+            self.update_config({"host_name": new_name})
+        self.rename(new_name)
+        self.bench.setup_nginx()
+        self.bench.server.reload_nginx()
+        self.disable_maintenance_mode()
+        self.enable_scheduler()
+
     @step("Install Apps")
     def install_apps(self, apps):
         data = {"apps": {}}

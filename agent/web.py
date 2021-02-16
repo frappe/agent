@@ -275,6 +275,15 @@ def reinstall_site(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/rename", methods=["POST"]
+)
+def rename_site(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].rename_job(data["new_name"])
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
 )
 def install_app_site(bench, site):
@@ -490,6 +499,21 @@ def proxy_add_upstream_site(upstream):
 )
 def proxy_remove_upstream_site(upstream, site):
     job = Proxy().remove_site_from_upstream_job(upstream, site)
+    return {"job": job}
+
+
+@application.route(
+    "/proxy/upstreams/<string:upstream>/sites/<string:site>/rename",
+    methods=["POST"],
+)
+def proxy_rename_upstream_site(upstream, site):
+    data = request.json
+    job = Proxy().rename_site_on_upstream_job(
+        upstream,
+        data["domains"],
+        site,
+        data["new_name"],
+    )
     return {"job": job}
 
 
