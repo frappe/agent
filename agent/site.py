@@ -23,10 +23,13 @@ class Site(Base):
         self.touched_tables_file = os.path.join(
             self.directory, "touched_tables.json"
         )
-        if not (
-            os.path.isdir(self.directory) and os.path.exists(self.config_file)
-        ):
-            raise Exception
+
+        if not os.path.isdir(self.directory):
+            raise OSError(f'Path {self.directory} is not a directory')
+
+        if not os.path.exists(self.config_file):
+            raise OSError(f'Path {self.config_file} does not exist')
+
         self.database = self.config["db_name"]
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
