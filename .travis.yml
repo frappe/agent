@@ -42,6 +42,7 @@ jobs:
     install:
       - pip install -e /home/travis/agent/repo
       - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
+      - mkdir /home/travis/agent/nginx
       - sudo ln -s /home/travis/agent/nginx.conf /etc/nginx/conf.d/agent.conf
       - mkdir /home/travis/agent/logs
       - sudo apt-get install -y nginx
