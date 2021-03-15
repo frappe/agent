@@ -36,7 +36,7 @@ jobs:
       - cp -R $TRAVIS_BUILD_DIR repo
       - source /home/travis/agent/env/bin/activate
       - pip install black flake8
-      - black -l 79 repo
+      - black -l 79 repo --check --diff
       - flake8 repo
 
     install:
