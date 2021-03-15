@@ -25,10 +25,10 @@ class Site(Base):
         )
 
         if not os.path.isdir(self.directory):
-            raise OSError(f'Path {self.directory} is not a directory')
+            raise OSError(f"Path {self.directory} is not a directory")
 
         if not os.path.exists(self.config_file):
-            raise OSError(f'Path {self.config_file} does not exist')
+            raise OSError(f"Path {self.config_file} does not exist")
 
         self.database = self.config["db_name"]
         self.user = self.config["db_name"]
