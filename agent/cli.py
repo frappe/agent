@@ -3,6 +3,7 @@ import os
 import shutil
 
 import click
+import requests
 
 from agent.proxy import Proxy
 from agent.server import Server
@@ -21,6 +22,20 @@ def setup():
 @cli.command()
 def update():
     Server().update_agent_cli()
+
+
+@cli.command()
+@click.option("--password", required=True)
+def ping_server(password: str):
+    """Ping web api on localhost and check for pong."""
+    res = requests.get(
+        "http://localhost:25052/ping",
+        headers={"Authorization": f"bearer {password}"},
+    )
+    res = res.json()
+    if res["message"] != "pong":
+        raise Exception("pong not in response")
+    print(res)
 
 
 @setup.command()
@@ -71,16 +86,17 @@ def proxy(domain=None):
 
 @setup.command()
 def database():
-    from agent.job import agent_database as database
     from agent.job import JobModel, StepModel
+    from agent.job import agent_database as database
 
     database.create_tables([JobModel, StepModel])
 
 
 @setup.command()
 def usage():
-    import sys
     import os
+    import sys
+
     from crontab import CronTab
 
     script_directory = os.path.dirname(__file__)
