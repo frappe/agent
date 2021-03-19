@@ -17,7 +17,6 @@ jobs:
     addons:
       apt:
         packages:
-        - nginx
         - supervisor
       hosts:
         - test.frappe.agent
@@ -27,7 +26,6 @@ jobs:
       - agent setup config --name test.frappe.agent --user travis --workers 1
       - agent setup authentication --password password
       - agent setup supervisor
-      - agent setup nginx
 
     before_install:
       - mkdir /home/travis/agent
@@ -42,10 +40,7 @@ jobs:
     install:
       - pip install -e /home/travis/agent/repo
       - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
-      - mkdir /home/travis/agent/nginx
-      - sudo ln -s /home/travis/agent/nginx.conf /etc/nginx/conf.d/agent.conf
       - mkdir /home/travis/agent/logs
-      - sudo apt-get install -y nginx
 
   - name: Run Tests
     script:
