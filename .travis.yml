@@ -26,6 +26,7 @@ jobs:
       - agent setup config --name test.frappe.agent --user travis --workers 1
       - agent setup authentication --password password
       - agent setup supervisor
+      - agent ping-server --password password
 
     before_install:
       - mkdir /home/travis/agent
