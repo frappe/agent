@@ -17,6 +17,8 @@ class TestSite(unittest.TestCase):
         os.makedirs(self.apps_directory)
         with open(self.common_site_config, "w") as c:
             json.dump({}, c)
+        with open(self.bench_config, "w") as c:
+            json.dump({"docker_image": "fake_img_url"}, c)
 
     def setUp(self):
         self.test_dir = "test_dir"
@@ -37,6 +39,7 @@ class TestSite(unittest.TestCase):
         self.common_site_config = os.path.join(
             self.sites_directory, "common_site_config.json"
         )
+        self.bench_config = os.path.join(self.bench_dir, "config.json")
 
         self._create_needed_paths()
 
@@ -50,7 +53,7 @@ class TestSite(unittest.TestCase):
         with open(site_config, "w") as s:
             json.dump({}, s)
 
-    def _get_test_bench(self):
+    def _get_test_bench(self) -> Bench:
         with patch.object(Server, "__init__", new=lambda x: None):
             server = Server()
         server.benches_directory = self.benches_directory
