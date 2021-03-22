@@ -11,6 +11,17 @@ python:
 cache:
   - pip
 
+before_install:
+  - mkdir /home/travis/agent
+  - cd /home/travis/agent
+  - virtualenv -p python3 env
+  - cp -R $TRAVIS_BUILD_DIR repo
+  - source /home/travis/agent/env/bin/activate
+
+install:
+  - pip install -e /home/travis/agent/repo
+  - cd /home/travis/agent
+
 jobs:
   include:
   - name: Agent Setup
@@ -22,28 +33,16 @@ jobs:
         - test.frappe.agent
 
     script:
-      - cd /home/travis/agent
+      - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
+      - mkdir /home/travis/agent/logs
       - agent setup config --name test.frappe.agent --user travis --workers 1
       - agent setup authentication --password password
       - agent setup supervisor
       - agent ping-server --password password
-
-    before_install:
-      - mkdir /home/travis/agent
-      - cd /home/travis/agent
-      - virtualenv -p python3 env
-      - cp -R $TRAVIS_BUILD_DIR repo
-      - source /home/travis/agent/env/bin/activate
       - pip install black flake8
       - black -l 79 repo --check --diff
       - flake8 repo
 
-    install:
-      - pip install -e /home/travis/agent/repo
-      - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
-      - mkdir /home/travis/agent/logs
-
   - name: Run Tests
     script:
       - python -m unittest discover repo
-
