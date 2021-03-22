@@ -12,8 +12,12 @@ class TestProxy(unittest.TestCase):
 
     def _create_needed_files(self):
         """Create host dirs for 2 domains test json files."""
-        os.makedirs(os.path.join(self.hosts_directory, self.domain_1), exist_ok=True)
-        os.makedirs(os.path.join(self.hosts_directory, self.domain_2), exist_ok=True)
+        os.makedirs(
+            os.path.join(self.hosts_directory, self.domain_1), exist_ok=True
+        )
+        os.makedirs(
+            os.path.join(self.hosts_directory, self.domain_2), exist_ok=True
+        )
         os.makedirs(self.upstreams_directory, exist_ok=True)
 
         map_1 = os.path.join(self.hosts_directory, self.domain_1, "map.json")
