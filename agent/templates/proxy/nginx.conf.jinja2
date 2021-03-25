@@ -46,11 +46,12 @@ server {
 	server_name {{ host }};
 
 
-	{%- if host.endswith("." + domain) -%}
-		{% set host = "*." + domain %}
-		{# use same certificate as root domain #}
-	{%- endif %}
-
+	{%- for domain in wildcards -%}
+		{%- if host.endswith("." + domain) -%}
+			{% set host = "*." + domain %}
+			{# use same certificate as root domain #}
+		{%- endif %}
+	{%- endfor %}
 	ssl_certificate {{ nginx_directory }}/hosts/{{ host }}/fullchain.pem;
 	ssl_certificate_key {{ nginx_directory }}/hosts/{{ host }}/privkey.pem;
 	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ host }}/chain.pem;

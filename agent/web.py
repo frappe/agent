@@ -457,6 +457,13 @@ def proxy_add_host():
     return {"job": job}
 
 
+@application.route("/proxy/wildcards", methods=["POST"])
+def proxy_add_wildcard_hosts():
+    data = request.json
+    job = Proxy().add_wildcard_hosts_job(data)
+    return {"job": job}
+
+
 @application.route("/proxy/hosts/redirects", methods=["POST"])
 def proxy_setup_redirects():
     data = request.json
