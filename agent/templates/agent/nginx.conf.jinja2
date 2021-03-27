@@ -37,6 +37,11 @@ server {
 		proxy_pass http://127.0.0.1:{{ web_port }}/;
 	}
 
+	location /status {
+		vhost_traffic_status_display;
+		vhost_traffic_status_display_format html;
+	}
+
 	location / {
 		root {{ pages_directory }};
 		try_files /home.html /dev/null;
