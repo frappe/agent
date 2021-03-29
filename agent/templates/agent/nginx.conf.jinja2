@@ -38,6 +38,9 @@ server {
 	}
 
 	location /status {
+		auth_basic "NGINX VTS";
+		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+
 		vhost_traffic_status_display;
 		vhost_traffic_status_display_format html;
 	}
