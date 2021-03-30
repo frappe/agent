@@ -503,6 +503,7 @@ class Server(Base):
             {
                 "web_port": self.config["web_port"],
                 "name": self.name,
+                "registry": self.config.get("registry", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
                 "pages_directory": os.path.join(

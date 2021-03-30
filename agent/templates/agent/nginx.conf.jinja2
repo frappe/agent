@@ -89,6 +89,7 @@ server {
 		}
 	}
 
+	{% if registry %}
 	location /v2/ {
 		# Do not allow connections from docker 1.5 and earlier
 		# docker pre-1.6.0 did not properly set the user agent on ping, catch "Go *" user agents
@@ -118,12 +119,12 @@ server {
 		proxy_read_timeout                  900;
 	}
 
-	location /registry {
+	location / {
 		# To add basic authentication to v2 use auth_basic setting.
 		auth_basic "Registry realm";
 		auth_basic_user_file /home/frappe/registry/registry.htpasswd;
 
-		proxy_pass                          http://127.0.0.1:6000/;
+		proxy_pass                          http://127.0.0.1:6000;
 		proxy_set_header  Host              $http_host;   # required for docker client's sake
 		proxy_set_header  X-Real-IP         $remote_addr; # pass on real client's IP
 		proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
@@ -131,8 +132,10 @@ server {
 		proxy_read_timeout                  900;
 	}
 
+	{% else %}
 	location / {
 		root {{ pages_directory }};
 		try_files /home.html /dev/null;
 	}
+	{% endif %}
 }
