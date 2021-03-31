@@ -47,7 +47,7 @@ class Server(Base):
         with open(bench_config_file, "w") as f:
             json.dump(config, f, indent=1, sort_keys=True)
 
-        config.update({"directory": bench_directory})
+        config.update({"directory": bench_directory, "name": name})
         docker_compose = os.path.join(bench_directory, "docker-compose.yml")
         self._render_template(
             "bench/docker-compose.yml.jinja2", config, docker_compose
@@ -262,6 +262,7 @@ class Server(Base):
     def setup_authentication(self, password):
         config = self.config
         config["access_token"] = pbkdf2.hash(password)
+        self.generate_auth_file(password)
         self.setconfig(config, indent=4)
 
     def setup_nginx(self):
@@ -483,6 +484,10 @@ class Server(Base):
             systemd = e.data
         return systemd["output"]
 
+    def generate_auth_file(self, password):
+        auth_file = os.path.join(self.nginx_directory, "nginx.htpasswd")
+        self.execute(f"htpasswd -Bbc {auth_file} frappe '{password}'")
+
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
         self._render_template(
@@ -498,7 +503,9 @@ class Server(Base):
             {
                 "web_port": self.config["web_port"],
                 "name": self.name,
+                "registry": self.config.get("registry", False),
                 "tls_directory": self.config["tls_directory"],
+                "nginx_directory": self.nginx_directory,
                 "pages_directory": os.path.join(
                     self.directory, "repo", "agent", "pages"
                 ),

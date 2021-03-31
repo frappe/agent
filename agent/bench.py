@@ -39,7 +39,7 @@ class Bench(Base):
     @step("Deploy Bench")
     def deploy(self):
         command = (
-            "docker stack deploy --resolve-image=never "
+            "docker stack deploy --resolve-image=never --with-registry-auth "
             f"--compose-file docker-compose.yml {self.name} "
         )
         return self.execute(command)

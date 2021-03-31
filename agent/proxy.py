@@ -48,6 +48,27 @@ class Proxy(Server):
             with open(os.path.join(host_directory, key), "w") as f:
                 f.write(value)
 
+    @job("Add Wildcard Hosts to Proxy")
+    def add_wildcard_hosts_job(self, wildcards):
+        self.add_wildcard_hosts(wildcards)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Add Wildcard Hosts to Proxy")
+    def add_wildcard_hosts(self, wildcards):
+        for wildcard in wildcards:
+            host = f"*.{wildcard['domain']}"
+            host_directory = os.path.join(self.hosts_directory, host)
+            os.makedirs(host_directory, exist_ok=True)
+
+            map_file = os.path.join(host_directory, "map.json")
+            with open(map_file, "w") as m:
+                json.dump({host: "$host"}, m, indent=4)
+
+            for key, value in wildcard["certificate"].items():
+                with open(os.path.join(host_directory, key), "w") as f:
+                    f.write(value)
+
     @job("Add Site to Upstream")
     def add_site_to_upstream_job(self, upstream, site):
         self.add_site_to_upstream(upstream, site)
@@ -212,6 +233,7 @@ class Proxy(Server):
                 "hosts": self.hosts,
                 "upstreams": self.upstreams,
                 "domain": self.config["domain"],
+                "wildcards": self.wildcards,
                 "nginx_directory": self.config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
             },
@@ -283,3 +305,11 @@ class Proxy(Server):
                         hosts[_from] = {_from: _from}
                     hosts[_from]["redirect"] = to
         return hosts
+
+    @property
+    def wildcards(self) -> List[str]:
+        wildcards = []
+        for host in os.listdir(self.hosts_directory):
+            if "*" in host:
+                wildcards.append(host.strip("*."))
+        return wildcards
