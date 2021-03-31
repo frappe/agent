@@ -15,10 +15,6 @@ services:
         "/dev/shm",
         "--preload",
         "frappe.app:application",
-        "--statsd-prefix",
-        "{{ name }}",
-        "--statsd-host",
-        "{{ statsd_host }}",
       ]
     working_dir: /home/frappe/frappe-bench/sites
     ports:

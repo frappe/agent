@@ -47,7 +47,7 @@ class Server(Base):
         with open(bench_config_file, "w") as f:
             json.dump(config, f, indent=1, sort_keys=True)
 
-        config.update({"directory": bench_directory, "name": name})
+        config.update({"directory": bench_directory})
         docker_compose = os.path.join(bench_directory, "docker-compose.yml")
         self._render_template(
             "bench/docker-compose.yml.jinja2", config, docker_compose
