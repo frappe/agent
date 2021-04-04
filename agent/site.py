@@ -281,6 +281,19 @@ class Site(Base):
     def migrate(self):
         return self.bench_execute("migrate")
 
+    @step("Clear Cache")
+    def clear_cache_job(self):
+        self.clear_cache()
+        self.clear_website_cache()
+
+    @step("Clear Cache")
+    def clear_cache(self):
+        return self.bench_execute("clear-cache")
+
+    @step("Clear Website Cache")
+    def clear_website_cache(self):
+        return self.bench_execute("clear-website-cache")
+
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
         installed_apps = json.loads(

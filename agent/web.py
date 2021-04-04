@@ -341,6 +341,15 @@ def migrate_site(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/cache",
+    methods=["DELETE"],
+)
+def clear_site_cache(bench, site, app):
+    job = Server().benches[bench].sites[site].clear_cache_job()
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/update/migrate",
     methods=["POST"],
 )
