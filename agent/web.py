@@ -344,7 +344,7 @@ def migrate_site(bench, site):
     "/benches/<string:bench>/sites/<string:site>/cache",
     methods=["DELETE"],
 )
-def clear_site_cache(bench, site, app):
+def clear_site_cache(bench, site):
     job = Server().benches[bench].sites[site].clear_cache_job()
     return {"job": job}
 
