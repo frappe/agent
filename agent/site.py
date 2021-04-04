@@ -281,7 +281,7 @@ class Site(Base):
     def migrate(self):
         return self.bench_execute("migrate")
 
-    @step("Clear Cache")
+    @job("Clear Cache")
     def clear_cache_job(self):
         self.clear_cache()
         self.clear_website_cache()
