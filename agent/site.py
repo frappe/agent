@@ -206,7 +206,8 @@ class Site(Base):
             user["last_name"],
             user["password"],
         )
-        self.update_config(config)
+        self.update_erpnext_config(config)
+        return self.sid(user["email"])
 
     @step("Create User")
     def create_user(self, email, first_name, last_name, password):
@@ -379,8 +380,8 @@ class Site(Base):
         }
         return data
 
-    def sid(self):
-        code = """import frappe
+    def sid(self, user="Administrator"):
+        code = f"""import frappe
 from frappe.app import init_request
 try:
     from frappe.utils import set_request
@@ -388,7 +389,7 @@ except ImportError:
     from frappe.tests import set_request
 set_request()
 frappe.app.init_request(frappe.local.request)
-frappe.local.login_manager.login_as("Administrator")
+frappe.local.login_manager.login_as("{user}")
 print(">>>" + frappe.session.sid + "<<<")
 
 """
