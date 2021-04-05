@@ -206,7 +206,7 @@ class Site(Base):
             user["last_name"],
         )
         self.update_erpnext_config(config)
-        return self.sid(user["email"])
+        return {"sid": self.sid(user["email"])}
 
     @step("Update ERPNext Configuration")
     def update_erpnext_config(self, value):
