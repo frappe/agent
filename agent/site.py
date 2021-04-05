@@ -209,6 +209,17 @@ class Site(Base):
         self.update_erpnext_config(config)
         return self.sid(user["email"])
 
+    @step("Update ERPNext Configuration")
+    def update_erpnext_config(self, value):
+        config_file = os.path.join(self.directory, "journeys_config.json")
+        with open(config_file, "r") as f:
+            config = json.load(f)
+
+        config.update(value)
+
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=1, sort_keys=True)
+
     @step("Create User")
     def create_user(self, email, first_name, last_name, password):
         return self.bench_execute(
