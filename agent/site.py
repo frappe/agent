@@ -198,6 +198,23 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
+    @job("Setup ERPNext", priority="high")
+    def setup_erpnext(self, user, config):
+        self.create_user(
+            user["email"],
+            user["first_name"],
+            user["last_name"],
+            user["password"],
+        )
+        self.update_config(config)
+
+    @step("Create User")
+    def create_user(self, email, first_name, last_name, password):
+        return self.bench_execute(
+            f"add-system-manager {email} --first-name {first_name} "
+            f"--last-name {last_name} --password {password}"
+        )
+
     @job("Update Site Configuration", priority="high")
     def update_config_job(self, value, remove):
         self.update_config(value, remove)
