@@ -211,8 +211,8 @@ class Site(Base):
     @step("Create User")
     def create_user(self, email, first_name, last_name, password):
         return self.bench_execute(
-            f"add-system-manager {email} --first-name {first_name} "
-            f"--last-name {last_name} --password {password}"
+            f"add-system-manager {email} "
+            f"--first-name {first_name} --last-name {last_name}"
         )
 
     @job("Update Site Configuration", priority="high")
