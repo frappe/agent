@@ -302,7 +302,7 @@ def uninstall_app_site(bench, site, app):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/users", methods=["POST"]
+    "/benches/<string:bench>/sites/<string:site>/erpnext", methods=["POST"]
 )
 def setup_erpnext(bench, site):
     data = request.json
