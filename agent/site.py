@@ -204,7 +204,6 @@ class Site(Base):
             user["email"],
             user["first_name"],
             user["last_name"],
-            user["password"],
         )
         self.update_erpnext_config(config)
         return self.sid(user["email"])
@@ -221,7 +220,7 @@ class Site(Base):
             json.dump(config, f, indent=1, sort_keys=True)
 
     @step("Create User")
-    def create_user(self, email, first_name, last_name, password):
+    def create_user(self, email, first_name, last_name):
         return self.bench_execute(
             f"add-system-manager {email} "
             f"--first-name {first_name} --last-name {last_name}"
