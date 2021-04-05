@@ -198,6 +198,34 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
+    @job("Setup ERPNext", priority="high")
+    def setup_erpnext(self, user, config):
+        self.create_user(
+            user["email"],
+            user["first_name"],
+            user["last_name"],
+        )
+        self.update_erpnext_config(config)
+        return {"sid": self.sid(user["email"])}
+
+    @step("Update ERPNext Configuration")
+    def update_erpnext_config(self, value):
+        config_file = os.path.join(self.directory, "journeys_config.json")
+        with open(config_file, "r") as f:
+            config = json.load(f)
+
+        config.update(value)
+
+        with open(config_file, "w") as f:
+            json.dump(config, f, indent=1, sort_keys=True)
+
+    @step("Create User")
+    def create_user(self, email, first_name, last_name):
+        return self.bench_execute(
+            f"add-system-manager {email} "
+            f"--first-name {first_name} --last-name {last_name}"
+        )
+
     @job("Update Site Configuration", priority="high")
     def update_config_job(self, value, remove):
         self.update_config(value, remove)
@@ -362,8 +390,8 @@ class Site(Base):
         }
         return data
 
-    def sid(self):
-        code = """import frappe
+    def sid(self, user="Administrator"):
+        code = f"""import frappe
 from frappe.app import init_request
 try:
     from frappe.utils import set_request
@@ -371,7 +399,7 @@ except ImportError:
     from frappe.tests import set_request
 set_request()
 frappe.app.init_request(frappe.local.request)
-frappe.local.login_manager.login_as("Administrator")
+frappe.local.login_manager.login_as("{user}")
 print(">>>" + frappe.session.sid + "<<<")
 
 """

@@ -301,6 +301,20 @@ def uninstall_app_site(bench, site, app):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/erpnext", methods=["POST"]
+)
+def setup_erpnext(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .setup_erpnext(data["user"], data["config"])
+    )
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 def fetch_monitor_data(bench):
     return {"data": Server().benches[bench].fetch_monitor_data()}
