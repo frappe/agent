@@ -399,6 +399,21 @@ def update_site_recover_migrate(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/migrate/restore",
+    methods=["POST"],
+)
+def restore_site_tables(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .restore_site_tables_job(data.get("activate", True))
+    )
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/update/pull/recover",
     methods=["POST"],
 )

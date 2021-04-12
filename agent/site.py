@@ -208,6 +208,24 @@ class Site(Base):
         self.update_erpnext_config(config)
         return {"sid": self.sid(user["email"])}
 
+    @job("Restore Site Tables", priority="high")
+    def restore_site_tables_job(self, activate):
+        self.restore_site_tables()
+        if activate:
+            self.disable_maintenance_mode()
+
+    @step("Restore Site Tables")
+    def restore_site_tables(self):
+        data = {"tables": {}}
+        for backup_file in os.listdir(self.backup_directory):
+            backup_file_path = os.path.join(self.backup_directory, backup_file)
+            output = self.execute(
+                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"{self.database} < '{backup_file_path}'"
+            )
+            data["tables"][backup_file] = output
+        return data
+
     @step("Update ERPNext Configuration")
     def update_erpnext_config(self, value):
         config_file = os.path.join(self.directory, "journeys_config.json")
