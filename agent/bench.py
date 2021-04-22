@@ -117,18 +117,16 @@ class Bench(Base):
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
-    def docker_execute(self, command, input=None, volumes=None):
-        if volumes is None:
-            volumes = []
-        volumes.append(
-            (self.sites_directory, "/home/frappe/frappe-bench/sites")
-        )
-        volume_args = " ".join([f"-v {v[0]}:{v[1]}" for v in volumes])
+    def docker_execute(self, command, input=None):
         interactive = "-i" if input else ""
+        service = f"{self.name}_worker_default"
+        task = self.execute(
+            "docker service ps -f desired-state=Running -q --no-trunc "
+            f"{service}"
+        )["output"].split()[0]
         command = (
-            f"docker run --rm "
-            f"{volume_args} {interactive} "
-            f"--net {self.name}_default {self.docker_image} {command}"
+            "docker exec -w /home/frappe/frappe-bench "
+            f"{interactive} {service}.1.{task} {command}"
         )
         return self.execute(command, input=input)
 
