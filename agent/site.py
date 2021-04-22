@@ -91,14 +91,15 @@ class Site(Base):
         public_file,
         private_file,
     ):
+        sites_directory = self.bench.sites_directory
         database_file = database_file.replace(
-            self.sites_directory, "/home/frappe/frappe-bench/sites"
+            sites_directory, "/home/frappe/frappe-bench/sites"
         )
         public_file = public_file.replace(
-            self.sites_directory, "/home/frappe/frappe-bench/sites"
+            sites_directory, "/home/frappe/frappe-bench/sites"
         )
         private_file = private_file.replace(
-            self.sites_directory, "/home/frappe/frappe-bench/sites"
+            sites_directory, "/home/frappe/frappe-bench/sites"
         )
         return self.bench_execute(
             "--force restore "
