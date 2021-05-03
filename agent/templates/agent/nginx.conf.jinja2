@@ -131,6 +131,27 @@ server {
 		proxy_set_header  X-Forwarded-Proto $scheme;
 		proxy_read_timeout                  900;
 	}
+	{% elif monitor %}
+
+	location /prometheus {
+		auth_basic "Monitoring";
+		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		proxy_pass http://127.0.0.1:9090/prometheus;
+	}
+
+	location /alertmanager {
+		auth_basic "Monitoring";
+		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		proxy_pass http://127.0.0.1:9093/alertmanager;
+	}
+
+	location /grafana {
+		proxy_pass http://127.0.0.1:3000/grafana;
+	}
+
+	location / {
+ 		return 307 https://$host/grafana;
+ 	}
 
 	{% else %}
 	location / {

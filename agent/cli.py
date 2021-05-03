@@ -42,13 +42,17 @@ def ping_server(password: str):
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-def config(name, user, workers):
+@click.option("--registry", is_flag=True, default=False)
+@click.option("--monitor", is_flag=True, default=False)
+def config(name, user, workers, registry, monitor):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
         "redis_port": 25025,
+        "registry": registry,
+        "monitor": monitor,
         "user": user,
         "workers": workers,
         "gunicorn_workers": 2,
