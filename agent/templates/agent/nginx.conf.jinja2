@@ -87,6 +87,23 @@ server {
 		location /metrics/gunicorn {
 			proxy_pass http://127.0.0.1:9102/metrics;
 		}
+
+		location /metrics/prometheus {
+			proxy_pass http://127.0.0.1:9090/prometheus/metrics;
+		}
+
+		location /metrics/alertmanager {
+			proxy_pass http://127.0.0.1:9093/alertmanager/metrics;
+		}
+
+		location /metrics/blackbox {
+			proxy_pass http://127.0.0.1:9115/blackbox/metrics;
+		}
+	
+		location /metrics/grafana {
+			proxy_pass http://127.0.0.1:3000/grafana/mertics;
+		}
+
 	}
 
 	{% if registry %}
@@ -135,23 +152,33 @@ server {
 
 	location /prometheus {
 		auth_basic "Monitoring";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
 		proxy_pass http://127.0.0.1:9090/prometheus;
 	}
 
 	location /alertmanager {
 		auth_basic "Monitoring";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
 		proxy_pass http://127.0.0.1:9093/alertmanager;
 	}
 
+	location /blackbox {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9115/blackbox;
+	}
+	
 	location /grafana {
 		proxy_pass http://127.0.0.1:3000/grafana;
+
+		location /grafana/metrics {
+			return 307 https://$host/metrics/grafana;
+		}
 	}
 
 	location / {
- 		return 307 https://$host/grafana;
- 	}
+		return 307 https://$host/grafana;
+	}
 
 	{% else %}
 	location / {
