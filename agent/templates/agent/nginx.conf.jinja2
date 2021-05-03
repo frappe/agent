@@ -53,7 +53,7 @@ server {
 
 	location /status {
 		auth_basic "NGINX VTS";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
 
 		vhost_traffic_status_display;
 		vhost_traffic_status_display_format html;
@@ -61,7 +61,7 @@ server {
 
 	location /metrics {
 		auth_basic "Prometheus";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
 
 		location /metrics/node {
 			proxy_pass http://127.0.0.1:9100/metrics;
