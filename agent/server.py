@@ -535,8 +535,11 @@ class Server(Base):
     def _reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
 
-    def _render_template(self, template, context, outfile):
-        environment = Environment(loader=PackageLoader("agent", "templates"))
+    def _render_template(self, template, context, outfile, options=None):
+        if options is None:
+            options = {}
+        options.update({"loader": PackageLoader("agent", "templates")})
+        environment = Environment(**options)
         template = environment.get_template(template)
 
         with open(outfile, "w") as f:
