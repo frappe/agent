@@ -9,7 +9,7 @@ from agent.server import Server
 class Monitor(Server):
     def __init__(self, directory=None):
         super().__init__(directory=directory)
-        self.prometheus_directory = "/home/aditya/Frappe/agent/prometheus"
+        self.prometheus_directory = "/home/frappe/prometheus"
 
     def discover_targets(self):
         targets = self.fetch_targets()
