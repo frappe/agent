@@ -267,6 +267,10 @@ class Server(Base):
         config.update(value)
         self.setconfig(config, indent=4)
 
+    def setup_registry(self):
+        self.update_config({"registry": True})
+        self.setup_nginx()
+
     def setup_nginx(self):
         self._generate_nginx_config()
         self._generate_agent_nginx_config()

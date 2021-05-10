@@ -123,6 +123,11 @@ def usage():
         cron.write()
 
 
+@setup.command()
+def registry():
+    Server().setup_registry()
+
+
 @cli.group()
 def run():
     pass
