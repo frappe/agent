@@ -128,6 +128,19 @@ def registry():
     Server().setup_registry()
 
 
+@setup.command()
+@click.option("--url", required=True)
+@click.option("--token", required=True)
+def monitor(url, token):
+    from agent.monitor import Monitor
+
+    server = Monitor()
+    server.update_config(
+        {"monitor": True, "press_url": url, "press_token": token}
+    )
+    server.discover_targets()
+
+
 @cli.group()
 def run():
     pass
@@ -159,3 +172,10 @@ def worker():
         f"redis://127.0.0.1:{port}",
     ]
     os.execv(executable, arguments)
+
+
+@cli.command()
+def discover():
+    from agent.monitor import Monitor
+
+    Monitor().discover_targets()
