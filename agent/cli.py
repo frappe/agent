@@ -42,7 +42,7 @@ def ping_server(password: str):
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-def config(name, user, workers, registry, monitor):
+def config(name, user, workers):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
