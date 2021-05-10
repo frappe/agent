@@ -88,6 +88,10 @@ server {
 			proxy_pass http://127.0.0.1:9102/metrics;
 		}
 
+		location /metrics/registry {
+			proxy_pass http://127.0.0.1:5001/mertics;
+		}
+
 		location /metrics/prometheus {
 			proxy_pass http://127.0.0.1:9090/prometheus/metrics;
 		}
