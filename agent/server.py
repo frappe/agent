@@ -260,8 +260,11 @@ class Server(Base):
         return self._update_supervisor()
 
     def setup_authentication(self, password):
+        self.update_config({"access_token": pbkdf2.hash(password)})
+
+    def update_config(self, value):
         config = self.config
-        config["access_token"] = pbkdf2.hash(password)
+        config.update(value)
         self.setconfig(config, indent=4)
 
     def setup_nginx(self):
