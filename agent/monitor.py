@@ -16,7 +16,7 @@ class Monitor(Server):
         for cluster in targets["clusters"]:
             self.generate_prometheus_cluster_config(cluster)
 
-        self.generate_prometheus_sites_config(targets["sites"])
+        self.generate_prometheus_sites_config(targets["benches"])
 
     def fetch_targets(self):
         press_url = self.config.get("press_url")
@@ -27,7 +27,7 @@ class Monitor(Server):
         ).json()["message"]
         return targets
 
-    def generate_prometheus_sites_config(self, sites):
+    def generate_prometheus_sites_config(self, benches):
         prometheus_sites_config = os.path.join(
             self.prometheus_directory, "file_sd", "sites.yml"
         )
@@ -36,7 +36,7 @@ class Monitor(Server):
         )[1]
         self._render_template(
             "prometheus/sites.yml",
-            {"sites": sites},
+            {"benches": benches},
             temp_sites_config,
             {"block_start_string": "##", "block_end_string": "##"},
         )

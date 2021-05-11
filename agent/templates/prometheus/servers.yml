@@ -1,12 +1,12 @@
 - targets:
 
-## for type, servers in cluster.types.items() ##
+## for job, servers in cluster.jobs.items() ##
 - targets:
     ##- for server in servers ##
     - "{{ server }}"
     ##- endfor ##
   labels:
     cluster: "{{ cluster.name }}"
-    job: "{{ type }}"
-    __metrics_path__: /metrics/{{ type }}
+    job: "{{ job }}"
+    __metrics_path__: /metrics/{{ job }}
 ## endfor ##

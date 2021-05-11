@@ -8,6 +8,6 @@
   labels:
     cluster: "{{ bench.cluster }}"
     server: "{{ bench.server }}"
-    release_group: "{{ bench.group }}"
+    group: "{{ bench.group }}"
     bench: "{{ bench.name }}"
 ## endfor ##
