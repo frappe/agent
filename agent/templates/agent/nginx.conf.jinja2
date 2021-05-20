@@ -184,6 +184,45 @@ server {
 		return 307 https://$host/grafana;
 	}
 
+	{% elif log %}
+
+	location /kibana/ {
+		auth_basic "Kibana";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+		
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+
+		proxy_pass http://127.0.0.1:5601/;
+	}
+
+	location /elasticsearch/ {
+		auth_basic "Elasticsearch";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+		proxy_pass http://127.0.0.1:9200/;
+	}
+
+	location / {
+		return 307 https://$host/kibana;
+	}
+
 	{% else %}
 	location / {
 		root {{ pages_directory }};

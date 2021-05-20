@@ -137,6 +137,11 @@ def monitor(url, token):
     server.discover_targets()
 
 
+@setup.command()
+def log():
+    Server().setup_log()
+
+
 @cli.group()
 def run():
     pass
