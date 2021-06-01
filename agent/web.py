@@ -9,6 +9,7 @@ from playhouse.shortcuts import model_to_dict
 from agent.job import JobModel
 from agent.proxy import Proxy
 from agent.server import Server
+from agent.monitor import Monitor
 
 application = Flask(__name__)
 
@@ -570,6 +571,13 @@ def update_site_status(upstream, site):
     data = request.json
     job = Proxy().update_site_status_job(upstream, site, data["status"])
     return {"job": job}
+
+
+@application.route("/monitor/rules", methods=["POST"])
+def update_monitor_rules():
+    data = request.json
+    Monitor().update_rules(data["rules"])
+    return {}
 
 
 def to_dict(model):

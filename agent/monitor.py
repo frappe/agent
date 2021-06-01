@@ -11,6 +11,21 @@ class Monitor(Server):
         super().__init__(directory=directory)
         self.prometheus_directory = "/home/frappe/prometheus"
 
+    def update_rules(self, rules):
+        rules_files = os.path.join(
+            self.prometheus_directory, "rules", "agent.yml"
+        )
+        self._render_template(
+            "prometheus/rules.yml",
+            {"rules": rules},
+            rules_files,
+            {
+                "variable_start_string": "###",
+                "variable_end_string": "###",
+            },
+        )
+        self.execute("sudo systemctl reload prometheus")
+
     def discover_targets(self):
         targets = self.fetch_targets()
         for cluster in targets["clusters"]:
