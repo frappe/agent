@@ -50,6 +50,7 @@ class Bench(Base):
             bench_directory = "/home/frappe/frappe-bench"
             command = (
                 "docker run -d --init -u frappe "
+                "--restart on-failure:3 "
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
                 f"-v {self.sites_directory}:{bench_directory}/sites "
