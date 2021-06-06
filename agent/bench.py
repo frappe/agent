@@ -409,12 +409,13 @@ class Bench(Base):
 
     @job("Update Bench Configuration", priority="high")
     def update_config_job(self, common_site_config, bench_config):
+        old_config = self.bench_config
         self.update_config(common_site_config, bench_config)
         self.setup_nginx()
         if self.bench_config.get("model") == "new":
             self.update_supervisor()
-            if (self.bench_config["web_port"] != bench_config["web_port"]) or (
-                self.bench_config["socketio_port"]
+            if (old_config["web_port"] != bench_config["web_port"]) or (
+                old_config["socketio_port"]
                 != bench_config["socketio_port"]
             ):
                 self.deploy()
