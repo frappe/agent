@@ -402,9 +402,22 @@ class Bench(Base):
     def update_config_job(self, common_site_config, bench_config):
         self.update_config(common_site_config, bench_config)
         self.setup_nginx()
-        self.generate_docker_compose_file()
-        self.deploy()
+        if self.bench_config.get("model") == "new":
+            self.update_supervisor()
+            if (self.bench_config["web_port"] != bench_config["web_port"]) or (
+                self.bench_config["socketio_port"]
+                != bench_config["socketio_port"]
+            ):
+                self.deploy()
+        else:
+            self.generate_docker_compose_file()
+            self.deploy()
 
+    @step("Update Supervisor Configuration")
+    def update_supervisor(self):
+        self.generate_supervisor_config()
+        self.docker_execute("supervisorctl reread")
+        self.docker_execute("supervisorctl update")
 
     def generate_supervisor_config(self):
         supervisor_config = os.path.join(
