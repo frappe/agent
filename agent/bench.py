@@ -369,7 +369,11 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute(f"docker stack rm {self.name}")
+        if self.bench_config.get("model") == "new":
+            self.execute(f"docker stop {self.name}")
+            return self.execute(f"docker rm {self.name}")
+        else:
+            return self.execute(f"docker stack rm {self.name}")
 
     @property
     def apps(self):
