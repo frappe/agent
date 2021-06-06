@@ -430,7 +430,7 @@ class Bench(Base):
         supervisor_config = os.path.join(
             self.directory, "config", "supervisor.conf"
         )
-        self._render_template(
+        self.server._render_template(
             "bench/supervisor.conf",
             {
                 "background_workers": self.bench_config["background_workers"],
