@@ -22,6 +22,7 @@ class Bench(Base):
         self.directory = os.path.join(self.server.benches_directory, name)
         self.sites_directory = os.path.join(self.directory, "sites")
         self.config_directory = os.path.join(self.directory, "config")
+        self.logs_directory = os.path.join(self.directory, "logs")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
         self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(
