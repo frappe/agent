@@ -132,15 +132,21 @@ class Bench(Base):
 
     def docker_execute(self, command, input=None):
         interactive = "-i" if input else ""
-        service = f"{self.name}_worker_default"
-        task = self.execute(
-            "docker service ps -f desired-state=Running -q --no-trunc "
-            f"{service}"
-        )["output"].split()[0]
-        command = (
-            "docker exec -w /home/frappe/frappe-bench "
-            f"{interactive} {service}.1.{task} {command}"
-        )
+        if self.bench_config.get("model") == "new":
+            command = (
+                "docker exec -w /home/frappe/frappe-bench "
+                f"{interactive} {self.name} {command}"
+            )
+        else:
+            service = f"{self.name}_worker_default"
+            task = self.execute(
+                "docker service ps -f desired-state=Running -q --no-trunc "
+                f"{service}"
+            )["output"].split()[0]
+            command = (
+                "docker exec -w /home/frappe/frappe-bench "
+                f"{interactive} {service}.1.{task} {command}"
+            )
         return self.execute(command, input=input)
 
     @step("New Site")
