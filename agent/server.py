@@ -57,7 +57,7 @@ class Server(Base):
         command = (
             "docker run --rm "
             f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
-            f"{config['docker_image']} cp -LR sites/. configmount"
+            f"{config['docker_image']} cp -LR config/. configmount"
         )
         self.execute(command, directory=bench_directory)
 
