@@ -39,7 +39,7 @@ class Server(Base):
     def bench_init(self, name, config):
         bench_directory = os.path.join(self.benches_directory, name)
         os.mkdir(bench_directory)
-        directories = ["logs", "sites"]
+        directories = ["logs", "sites", "config"]
         for directory in directories:
             os.mkdir(os.path.join(bench_directory, directory))
 
@@ -52,6 +52,14 @@ class Server(Base):
         self._render_template(
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
+
+        config_directory = os.path.join(bench_directory, "config")
+        command = (
+            "docker run --rm "
+            f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
+            f"{config['docker_image']} cp -LR sites/. configmount"
+        )
+        self.execute(command, directory=bench_directory)
 
         sites_directory = os.path.join(bench_directory, "sites")
         # Copy sites directory from image to host system
@@ -77,6 +85,8 @@ class Server(Base):
         self.bench_init(name, bench_config)
         bench = Bench(name, self)
         bench.update_config(common_site_config, bench_config)
+        if bench.bench_config.get("model") == "new":
+            bench.generate_supervisor_config()
         bench.deploy()
         bench.setup_nginx()
 

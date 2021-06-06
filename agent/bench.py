@@ -405,6 +405,21 @@ class Bench(Base):
         self.generate_docker_compose_file()
         self.deploy()
 
+
+    def generate_supervisor_config(self):
+        supervisor_config = os.path.join(
+            self.directory, "config", "supervisor.conf"
+        )
+        self._render_template(
+            "bench/supervisor.conf",
+            {
+                "background_workers": self.bench_config["background_workers"],
+                "gunicorn_workers": self.bench_config["gunicorn_workers"],
+                "http_timeout": self.bench_config["http_timeout"],
+            },
+            supervisor_config,
+        )
+
     @step("Generate Docker Compose File")
     def generate_docker_compose_file(self):
         config = self.bench_config
