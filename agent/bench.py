@@ -38,10 +38,23 @@ class Bench(Base):
 
     @step("Deploy Bench")
     def deploy(self):
-        command = (
-            "docker stack deploy --resolve-image=never --with-registry-auth "
-            f"--compose-file docker-compose.yml {self.name} "
-        )
+        if self.bench_config.get("model") == "new":
+            bench_directory = "/home/frappe/frappe-bench"
+            command = (
+                "docker run -d --init -u frappe"
+                f"--p 127.0.0.1:{self.bench_config['web_port']}:8000 "
+                f"--p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
+                f"--v {self.sites_directory}:{bench_directory}/sites "
+                f"--v {self.logs_directory}:{bench_directory}/logs "
+                f"--v {self.config_directory}:{bench_directory}/config "
+                f"--name {self.name} {self.bench_config['docker_image']}"
+            )
+        else:
+            command = (
+                "docker stack deploy "
+                "--resolve-image=never --with-registry-auth "
+                f"--compose-file docker-compose.yml {self.name} "
+            )
         return self.execute(command)
 
     def dump(self):
