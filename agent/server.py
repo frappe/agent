@@ -55,7 +55,7 @@ class Server(Base):
 
         config_directory = os.path.join(bench_directory, "config")
         command = (
-            "docker run --rm "
+            "docker run --rm --net none "
             f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
             f"{config['docker_image']} cp -LR config/. configmount"
         )
@@ -64,7 +64,7 @@ class Server(Base):
         sites_directory = os.path.join(bench_directory, "sites")
         # Copy sites directory from image to host system
         command = (
-            "docker run --rm "
+            "docker run --rm --net none "
             f"-v {sites_directory}:/home/frappe/frappe-bench/sitesmount "
             f"{config['docker_image']} cp -LR sites/. sitesmount"
         )
