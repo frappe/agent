@@ -21,6 +21,7 @@ class Bench(Base):
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
         self.sites_directory = os.path.join(self.directory, "sites")
+        self.config_directory = os.path.join(self.directory, "config")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
         self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(
@@ -39,6 +40,12 @@ class Bench(Base):
     @step("Deploy Bench")
     def deploy(self):
         if self.bench_config.get("model") == "new":
+            try:
+                self.execute(f"docker stop {self.name}")
+                self.execute(f"docker rm {self.name}")
+            except Exception:
+                pass
+
             bench_directory = "/home/frappe/frappe-bench"
             command = (
                 "docker run -d --init -u frappe"
