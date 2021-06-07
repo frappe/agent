@@ -40,7 +40,7 @@ class Bench(Base):
 
     @step("Deploy Bench")
     def deploy(self):
-        if self.bench_config.get("model") == "new":
+        if self.bench_config.get("is_single_container"):
             try:
                 self.execute(f"docker stop {self.name}")
                 self.execute(f"docker rm {self.name}")
@@ -141,7 +141,7 @@ class Bench(Base):
 
     def docker_execute(self, command, input=None):
         interactive = "-i" if input else ""
-        if self.bench_config.get("model") == "new":
+        if self.bench_config.get("is_single_container"):
             command = (
                 "docker exec -w /home/frappe/frappe-bench "
                 f"{interactive} {self.name} {command}"
@@ -378,7 +378,7 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        if self.bench_config.get("model") == "new":
+        if self.bench_config.get("is_single_container"):
             self.execute(f"docker stop {self.name}")
             return self.execute(f"docker rm {self.name}")
         else:
@@ -412,11 +412,10 @@ class Bench(Base):
         old_config = self.bench_config
         self.update_config(common_site_config, bench_config)
         self.setup_nginx()
-        if self.bench_config.get("model") == "new":
+        if self.bench_config.get("is_single_container"):
             self.update_supervisor()
             if (old_config["web_port"] != bench_config["web_port"]) or (
-                old_config["socketio_port"]
-                != bench_config["socketio_port"]
+                old_config["socketio_port"] != bench_config["socketio_port"]
             ):
                 self.deploy()
         else:

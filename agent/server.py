@@ -85,7 +85,7 @@ class Server(Base):
         self.bench_init(name, bench_config)
         bench = Bench(name, self)
         bench.update_config(common_site_config, bench_config)
-        if bench.bench_config.get("model") == "new":
+        if bench.bench_config.get("is_single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
         bench.setup_nginx()
