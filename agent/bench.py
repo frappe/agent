@@ -21,6 +21,8 @@ class Bench(Base):
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
         self.sites_directory = os.path.join(self.directory, "sites")
+        self.config_directory = os.path.join(self.directory, "config")
+        self.logs_directory = os.path.join(self.directory, "logs")
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
         self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(
@@ -38,10 +40,30 @@ class Bench(Base):
 
     @step("Deploy Bench")
     def deploy(self):
-        command = (
-            "docker stack deploy --resolve-image=never --with-registry-auth "
-            f"--compose-file docker-compose.yml {self.name} "
-        )
+        if self.bench_config.get("single_container"):
+            try:
+                self.execute(f"docker stop {self.name}")
+                self.execute(f"docker rm {self.name}")
+            except Exception:
+                pass
+
+            bench_directory = "/home/frappe/frappe-bench"
+            command = (
+                "docker run -d --init -u frappe "
+                "--restart always "
+                f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
+                f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
+                f"-v {self.sites_directory}:{bench_directory}/sites "
+                f"-v {self.logs_directory}:{bench_directory}/logs "
+                f"-v {self.config_directory}:{bench_directory}/config "
+                f"--name {self.name} {self.bench_config['docker_image']}"
+            )
+        else:
+            command = (
+                "docker stack deploy "
+                "--resolve-image=never --with-registry-auth "
+                f"--compose-file docker-compose.yml {self.name} "
+            )
         return self.execute(command)
 
     def dump(self):
@@ -119,15 +141,21 @@ class Bench(Base):
 
     def docker_execute(self, command, input=None):
         interactive = "-i" if input else ""
-        service = f"{self.name}_worker_default"
-        task = self.execute(
-            "docker service ps -f desired-state=Running -q --no-trunc "
-            f"{service}"
-        )["output"].split()[0]
-        command = (
-            "docker exec -w /home/frappe/frappe-bench "
-            f"{interactive} {service}.1.{task} {command}"
-        )
+        if self.bench_config.get("single_container"):
+            command = (
+                "docker exec -w /home/frappe/frappe-bench "
+                f"{interactive} {self.name} {command}"
+            )
+        else:
+            service = f"{self.name}_worker_default"
+            task = self.execute(
+                "docker service ps -f desired-state=Running -q --no-trunc "
+                f"{service}"
+            )["output"].split()[0]
+            command = (
+                "docker exec -w /home/frappe/frappe-bench "
+                f"{interactive} {service}.1.{task} {command}"
+            )
         return self.execute(command, input=input)
 
     @step("New Site")
@@ -350,7 +378,11 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.execute(f"docker stack rm {self.name}")
+        if self.bench_config.get("single_container"):
+            self.execute(f"docker stop {self.name}")
+            return self.execute(f"docker rm {self.name}")
+        else:
+            return self.execute(f"docker stack rm {self.name}")
 
     @property
     def apps(self):
@@ -377,10 +409,38 @@ class Bench(Base):
 
     @job("Update Bench Configuration", priority="high")
     def update_config_job(self, common_site_config, bench_config):
+        old_config = self.bench_config
         self.update_config(common_site_config, bench_config)
         self.setup_nginx()
-        self.generate_docker_compose_file()
-        self.deploy()
+        if self.bench_config.get("single_container"):
+            self.update_supervisor()
+            if (old_config["web_port"] != bench_config["web_port"]) or (
+                old_config["socketio_port"] != bench_config["socketio_port"]
+            ):
+                self.deploy()
+        else:
+            self.generate_docker_compose_file()
+            self.deploy()
+
+    @step("Update Supervisor Configuration")
+    def update_supervisor(self):
+        self.generate_supervisor_config()
+        self.docker_execute("supervisorctl reread")
+        self.docker_execute("supervisorctl update")
+
+    def generate_supervisor_config(self):
+        supervisor_config = os.path.join(
+            self.directory, "config", "supervisor.conf"
+        )
+        self.server._render_template(
+            "bench/supervisor.conf",
+            {
+                "background_workers": self.bench_config["background_workers"],
+                "gunicorn_workers": self.bench_config["gunicorn_workers"],
+                "http_timeout": self.bench_config["http_timeout"],
+            },
+            supervisor_config,
+        )
 
     @step("Generate Docker Compose File")
     def generate_docker_compose_file(self):

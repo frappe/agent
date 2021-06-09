@@ -39,7 +39,7 @@ class Server(Base):
     def bench_init(self, name, config):
         bench_directory = os.path.join(self.benches_directory, name)
         os.mkdir(bench_directory)
-        directories = ["logs", "sites"]
+        directories = ["logs", "sites", "config"]
         for directory in directories:
             os.mkdir(os.path.join(bench_directory, directory))
 
@@ -53,10 +53,18 @@ class Server(Base):
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
 
+        config_directory = os.path.join(bench_directory, "config")
+        command = (
+            "docker run --rm --net none "
+            f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
+            f"{config['docker_image']} cp -LR config/. configmount"
+        )
+        self.execute(command, directory=bench_directory)
+
         sites_directory = os.path.join(bench_directory, "sites")
         # Copy sites directory from image to host system
         command = (
-            "docker run --rm "
+            "docker run --rm --net none "
             f"-v {sites_directory}:/home/frappe/frappe-bench/sitesmount "
             f"{config['docker_image']} cp -LR sites/. sitesmount"
         )
@@ -77,6 +85,8 @@ class Server(Base):
         self.bench_init(name, bench_config)
         bench = Bench(name, self)
         bench.update_config(common_site_config, bench_config)
+        if bench.bench_config.get("single_container"):
+            bench.generate_supervisor_config()
         bench.deploy()
         bench.setup_nginx()
 
@@ -260,10 +270,20 @@ class Server(Base):
         return self._update_supervisor()
 
     def setup_authentication(self, password):
+        self.update_config({"access_token": pbkdf2.hash(password)})
+
+    def update_config(self, value):
         config = self.config
-        config["access_token"] = pbkdf2.hash(password)
-        self.generate_auth_file(password)
+        config.update(value)
         self.setconfig(config, indent=4)
+
+    def setup_registry(self):
+        self.update_config({"registry": True})
+        self.setup_nginx()
+
+    def setup_log(self):
+        self.update_config({"log": True})
+        self.setup_nginx()
 
     def setup_nginx(self):
         self._generate_nginx_config()
@@ -484,10 +504,6 @@ class Server(Base):
             systemd = e.data
         return systemd["output"]
 
-    def generate_auth_file(self, password):
-        auth_file = os.path.join(self.nginx_directory, "nginx.htpasswd")
-        self.execute(f"htpasswd -Bbc {auth_file} frappe '{password}'")
-
     def _generate_nginx_config(self):
         nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
         self._render_template(
@@ -504,6 +520,8 @@ class Server(Base):
                 "web_port": self.config["web_port"],
                 "name": self.name,
                 "registry": self.config.get("registry", False),
+                "monitor": self.config.get("monitor", False),
+                "log": self.config.get("log", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
                 "pages_directory": os.path.join(
@@ -539,8 +557,11 @@ class Server(Base):
     def _reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
 
-    def _render_template(self, template, context, outfile):
-        environment = Environment(loader=PackageLoader("agent", "templates"))
+    def _render_template(self, template, context, outfile, options=None):
+        if options is None:
+            options = {}
+        options.update({"loader": PackageLoader("agent", "templates")})
+        environment = Environment(**options)
         template = environment.get_template(template)
 
         with open(outfile, "w") as f:

@@ -7,12 +7,12 @@ from datetime import datetime
 from agent.server import Server
 
 
-def cstr(text, encoding='utf-8'):
+def cstr(text, encoding="utf-8"):
     """Similar to frappe.utils.cstr"""
     if isinstance(text, str):
         return text
     elif text is None:
-        return ''
+        return ""
     elif isinstance(text, bytes):
         return str(text, encoding)
     else:
@@ -20,8 +20,7 @@ def cstr(text, encoding='utf-8'):
 
 
 def get_traceback():
-    """Returns the traceback of the Exception
-    """
+    """Returns the traceback of the Exception"""
     exc_type, exc_value, exc_tb = sys.exc_info()
     trace_list = traceback.format_exception(exc_type, exc_value, exc_tb)
     body = "".join(cstr(t) for t in trace_list)

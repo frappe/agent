@@ -53,7 +53,7 @@ server {
 
 	location /status {
 		auth_basic "NGINX VTS";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
 
 		vhost_traffic_status_display;
 		vhost_traffic_status_display_format html;
@@ -61,7 +61,7 @@ server {
 
 	location /metrics {
 		auth_basic "Prometheus";
-		auth_basic_user_file {{ nginx_directory }}/nginx.htpasswd;
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
 
 		location /metrics/node {
 			proxy_pass http://127.0.0.1:9100/metrics;
@@ -87,6 +87,27 @@ server {
 		location /metrics/gunicorn {
 			proxy_pass http://127.0.0.1:9102/metrics;
 		}
+
+		location /metrics/registry {
+			proxy_pass http://127.0.0.1:5001/metrics;
+		}
+
+		location /metrics/prometheus {
+			proxy_pass http://127.0.0.1:9090/prometheus/metrics;
+		}
+
+		location /metrics/alertmanager {
+			proxy_pass http://127.0.0.1:9093/alertmanager/metrics;
+		}
+
+		location /metrics/blackbox {
+			proxy_pass http://127.0.0.1:9115/blackbox/metrics;
+		}
+	
+		location /metrics/grafana {
+			proxy_pass http://127.0.0.1:3000/grafana/metrics;
+		}
+
 	}
 
 	{% if registry %}
@@ -130,6 +151,76 @@ server {
 		proxy_set_header  X-Forwarded-For   $proxy_add_x_forwarded_for;
 		proxy_set_header  X-Forwarded-Proto $scheme;
 		proxy_read_timeout                  900;
+	}
+	{% elif monitor %}
+
+	location /prometheus {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9090/prometheus;
+	}
+
+	location /alertmanager {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9093/alertmanager;
+	}
+
+	location /blackbox {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9115/blackbox;
+	}
+	
+	location /grafana {
+		proxy_pass http://127.0.0.1:3000/grafana;
+
+		location /grafana/metrics {
+			return 307 https://$host/metrics/grafana;
+		}
+	}
+
+	location / {
+		return 307 https://$host/grafana;
+	}
+
+	{% elif log %}
+
+	location /kibana/ {
+		auth_basic "Kibana";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+		
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+
+		proxy_pass http://127.0.0.1:5601/;
+	}
+
+	location /elasticsearch/ {
+		auth_basic "Elasticsearch";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+		proxy_pass http://127.0.0.1:9200/;
+	}
+
+	location / {
+		return 307 https://$host/kibana;
 	}
 
 	{% else %}
