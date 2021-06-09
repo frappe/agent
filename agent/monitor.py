@@ -12,18 +12,22 @@ class Monitor(Server):
         self.prometheus_directory = "/home/frappe/prometheus"
 
     def update_rules(self, rules):
-        rules_files = os.path.join(
+        rules_file = os.path.join(
             self.prometheus_directory, "rules", "agent.yml"
         )
         self._render_template(
             "prometheus/rules.yml",
             {"rules": rules},
-            rules_files,
+            rules_file,
             {
                 "variable_start_string": "###",
                 "variable_end_string": "###",
             },
         )
+
+        promtool = os.path.join(self.prometheus_directory, "promtool")
+        self.execute(f"{promtool} check rules {rules_file}")
+
         self.execute("sudo systemctl reload prometheus")
 
     def discover_targets(self):
