@@ -10,6 +10,7 @@ class Monitor(Server):
     def __init__(self, directory=None):
         super().__init__(directory=directory)
         self.prometheus_directory = "/home/frappe/prometheus"
+        self.alertmanager_directory = "/home/frappe/alertmanager"
 
     def update_rules(self, rules):
         rules_file = os.path.join(
@@ -29,6 +30,24 @@ class Monitor(Server):
         self.execute(f"{promtool} check rules {rules_file}")
 
         self.execute("sudo systemctl reload prometheus")
+
+    def update_routes(self, routes):
+        config_file = os.path.join(
+            self.alertmanager_directory, "alertmanager.yml"
+        )
+        self._render_template(
+            "alertmanager/routes.yml",
+            {"routes": routes},
+            config_file,
+            {
+                "variable_start_string": "###",
+                "variable_end_string": "###",
+            },
+        )
+        amtool = os.path.join(self.alertmanager_directory, "amtool")
+        self.execute(f"{amtool} check-config {config_file}")
+
+        self.execute("sudo systemctl reload alertmanager")
 
     def discover_targets(self):
         targets = self.fetch_targets()

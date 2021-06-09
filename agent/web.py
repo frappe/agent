@@ -577,6 +577,7 @@ def update_site_status(upstream, site):
 def update_monitor_rules():
     data = request.json
     Monitor().update_rules(data["rules"])
+    Monitor().update_routes(data["routes"])
     return {}
 
 
