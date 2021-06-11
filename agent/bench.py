@@ -438,6 +438,8 @@ class Bench(Base):
                 "background_workers": self.bench_config["background_workers"],
                 "gunicorn_workers": self.bench_config["gunicorn_workers"],
                 "http_timeout": self.bench_config["http_timeout"],
+                "name": self.name,
+                "statsd_host": self.bench_config["statsd_host"],
             },
             supervisor_config,
         )
