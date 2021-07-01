@@ -180,3 +180,26 @@ def discover():
     from agent.monitor import Monitor
 
     Monitor().discover_targets()
+
+
+@cli.group()
+def bench():
+    pass
+
+
+@bench.command()
+@click.argument("bench", required=False)
+def start(bench):
+    if bench:
+        return Server().benches[bench].start()
+    else:
+        return Server().start_all_benches()
+
+
+@bench.command()
+@click.argument("bench", required=False)
+def stop(bench):
+    if bench:
+        return Server().benches[bench].stop()
+    else:
+        return Server().stop_all_benches()

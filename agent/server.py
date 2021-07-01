@@ -295,6 +295,20 @@ class Server(Base):
         self._generate_supervisor_config()
         self._update_supervisor()
 
+    def start_all_benches(self):
+        for bench in self.benches.values():
+            try:
+                bench.start()
+            except Exception:
+                pass
+
+    def stop_all_benches(self):
+        for bench in self.benches.values():
+            try:
+                bench.stop()
+            except Exception:
+                pass
+
     @property
     def benches(self):
         benches = {}

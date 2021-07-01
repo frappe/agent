@@ -40,31 +40,7 @@ class Bench(Base):
 
     @step("Deploy Bench")
     def deploy(self):
-        if self.bench_config.get("single_container"):
-            try:
-                self.execute(f"docker stop {self.name}")
-                self.execute(f"docker rm {self.name}")
-            except Exception:
-                pass
-
-            bench_directory = "/home/frappe/frappe-bench"
-            command = (
-                "docker run -d --init -u frappe "
-                "--restart always "
-                f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
-                f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
-                f"-v {self.sites_directory}:{bench_directory}/sites "
-                f"-v {self.logs_directory}:{bench_directory}/logs "
-                f"-v {self.config_directory}:{bench_directory}/config "
-                f"--name {self.name} {self.bench_config['docker_image']}"
-            )
-        else:
-            command = (
-                "docker stack deploy "
-                "--resolve-image=never --with-registry-auth "
-                f"--compose-file docker-compose.yml {self.name} "
-            )
-        return self.execute(command)
+        return self.start()
 
     def dump(self):
         return {
@@ -378,11 +354,7 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        if self.bench_config.get("single_container"):
-            self.execute(f"docker stop {self.name}")
-            return self.execute(f"docker rm {self.name}")
-        else:
-            return self.execute(f"docker stack rm {self.name}")
+        return self.stop()
 
     @property
     def apps(self):
@@ -452,6 +424,40 @@ class Bench(Base):
         self.server._render_template(
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
+
+    def start(self):
+        if self.bench_config.get("single_container"):
+            try:
+                self.execute(f"docker stop {self.name}")
+                self.execute(f"docker rm {self.name}")
+            except Exception:
+                pass
+
+            bench_directory = "/home/frappe/frappe-bench"
+            command = (
+                "docker run -d --init -u frappe "
+                "--restart always "
+                f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
+                f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
+                f"-v {self.sites_directory}:{bench_directory}/sites "
+                f"-v {self.logs_directory}:{bench_directory}/logs "
+                f"-v {self.config_directory}:{bench_directory}/config "
+                f"--name {self.name} {self.bench_config['docker_image']}"
+            )
+        else:
+            command = (
+                "docker stack deploy "
+                "--resolve-image=never --with-registry-auth "
+                f"--compose-file docker-compose.yml {self.name} "
+            )
+        return self.execute(command)
+
+    def stop(self):
+        if self.bench_config.get("single_container"):
+            self.execute(f"docker stop {self.name}")
+            return self.execute(f"docker rm {self.name}")
+        else:
+            return self.execute(f"docker stack rm {self.name}")
 
     @property
     def job_record(self):
