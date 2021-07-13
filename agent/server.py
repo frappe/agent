@@ -336,7 +336,9 @@ class Server(Base):
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         if url:
-            self.execute(f"git remote set-url upstream {url}")
+            self.execute(
+                f"git remote set-url upstream {url}", directory=directory
+            )
         self.execute("git fetch upstream", directory=directory)
         self.execute(
             "git merge --ff-only upstream/master", directory=directory
