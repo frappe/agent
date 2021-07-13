@@ -331,10 +331,12 @@ class Server(Base):
             self.step = Step()
         return self.step
 
-    def update_agent_web(self):
+    def update_agent_web(self, url=None):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
+        if url:
+            self.execute(f"git remote set-url upstream {url}")
         self.execute("git fetch upstream", directory=directory)
         self.execute(
             "git merge --ff-only upstream/master", directory=directory
