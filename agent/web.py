@@ -531,6 +531,15 @@ def proxy_add_upstream():
 
 
 @application.route(
+    "/proxy/upstreams/<string:upstream>/rename", methods=["POST"]
+)
+def proxy_rename_upstream(upstream):
+    data = request.json
+    job = Proxy().rename_upstream_job(upstream, data["name"])
+    return {"job": job}
+
+
+@application.route(
     "/proxy/upstreams/<string:upstream>/sites", methods=["POST"]
 )
 def proxy_add_upstream_site(upstream):
@@ -614,5 +623,6 @@ def jobs(id=None, ids=None, status=None):
 
 @application.route("/update", methods=["POST"])
 def update_agent():
-    Server().update_agent_web()
+    data = request.json
+    Server().update_agent_web(data.get("url"))
     return {"message": "Success"}

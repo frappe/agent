@@ -92,6 +92,18 @@ class Proxy(Server):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         os.makedirs(upstream_directory, exist_ok=True)
 
+    @job("Rename Upstream")
+    def rename_upstream_job(self, old, new):
+        self.rename_upstream(old, new)
+        self.generate_proxy_config()
+        self.reload_nginx()
+
+    @step("Rename Upstream Directory")
+    def rename_upstream(self, old, new):
+        old_upstream_directory = os.path.join(self.upstreams_directory, old)
+        new_upstream_directory = os.path.join(self.upstreams_directory, new)
+        shutil.move(old_upstream_directory, new_upstream_directory)
+
     @job("Remove Host from Proxy")
     def remove_host_job(self, host):
         self.remove_host(host)

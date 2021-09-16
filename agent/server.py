@@ -295,6 +295,20 @@ class Server(Base):
         self._generate_supervisor_config()
         self._update_supervisor()
 
+    def start_all_benches(self):
+        for bench in self.benches.values():
+            try:
+                bench.start()
+            except Exception:
+                pass
+
+    def stop_all_benches(self):
+        for bench in self.benches.values():
+            try:
+                bench.stop()
+            except Exception:
+                pass
+
     @property
     def benches(self):
         benches = {}
@@ -317,10 +331,14 @@ class Server(Base):
             self.step = Step()
         return self.step
 
-    def update_agent_web(self):
+    def update_agent_web(self, url=None):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
+        if url:
+            self.execute(
+                f"git remote set-url upstream {url}", directory=directory
+            )
         self.execute("git fetch upstream", directory=directory)
         self.execute(
             "git merge --ff-only upstream/master", directory=directory
