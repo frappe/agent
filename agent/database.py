@@ -59,7 +59,6 @@ class DatabaseServer(Server):
         BINARY_LOG_FILE_PATTERN = r"mysql-bin.\d+"
         files = []
         for file in Path(self.mariadb_directory).iterdir():
-            print(file)
             if re.match(BINARY_LOG_FILE_PATTERN, file.name):
                 unix_timestamp = int(file.stat().st_mtime)
                 files.append(
