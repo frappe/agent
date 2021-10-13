@@ -10,6 +10,8 @@ from agent.job import JobModel
 from agent.proxy import Proxy
 from agent.server import Server
 from agent.monitor import Monitor
+from agent.database import DatabaseServer
+
 
 application = Flask(__name__)
 
@@ -588,6 +590,26 @@ def update_monitor_rules():
     Monitor().update_rules(data["rules"])
     Monitor().update_routes(data["routes"])
     return {}
+
+
+@application.route("/database/binary/logs")
+def get_binary_logs():
+    return jsonify(DatabaseServer().binary_logs)
+
+
+@application.route("/database/binary/logs/<string:log>", methods=["POST"])
+def get_binary_log(log):
+    data = request.json
+    return jsonify(
+        DatabaseServer().search_binary_log(
+            log,
+            data["database"],
+            data["start_datetime"],
+            data["stop_datetime"],
+            data["search_pattern"],
+            data["max_lines"],
+        )
+    )
 
 
 def to_dict(model):
