@@ -23,9 +23,7 @@ class DatabaseServer(Server):
         max_lines,
     ):
         log = os.path.join(self.mariadb_directory, log)
-        LINES_TO_SKIP = (
-            r"^(USE|COMMIT|START TRANSACTION|DELIMITER|ROLLBACK|#|/\*!)"
-        )
+        LINES_TO_SKIP = r"^(USE|COMMIT|START TRANSACTION|DELIMITER|ROLLBACK|#)"
         command = (
             f"mysqlbinlog --short-form --database {database} "
             f"--start-datetime '{start_datetime}' "
@@ -43,7 +41,7 @@ class DatabaseServer(Server):
             if line.startswith("SET TIMESTAMP"):
                 timestamp = int(line.split("=")[-1].split(".")[0])
             else:
-                if line.startswith("SET"):
+                if any(line.startswith(skip) for skip in ["SET", "/*!"]):
                     continue
                 elif line and timestamp:
                     events.append(
