@@ -102,6 +102,7 @@ class Server(Base):
     def cleanup_unused_files(self):
         self.remove_archived_benches()
         self.remove_temporary_files()
+        self.remove_unused_docker_artefacts()
 
     @step("Remove Archived Benches")
     def remove_archived_benches(self):
@@ -143,6 +144,17 @@ class Server(Base):
                     elif os.path.isdir(file_path):
                         shutil.rmtree(file_path)
         return {"files": removed[:100]}
+
+    @step("Remove Unused Docker Artefacts")
+    def remove_unused_docker_artefacts(self):
+        before = self.execute("docker system df -v")["output"].split("\n")
+        prune = self.execute("docker system prune -af")["output"].split("\n")
+        after = self.execute("docker system df -v")["output"].split("\n")
+        return {
+            "before": before,
+            "prune": prune,
+            "after": after,
+        }
 
     @step("Move Bench to Archived Directory")
     def move_bench_to_archived_directory(self, bench):
