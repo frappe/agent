@@ -270,8 +270,10 @@ class Server(Base):
     def move_site(self, site, target):
         shutil.move(site.directory, target.sites_directory)
 
-    def execute(self, command, directory=None):
-        return super().execute(command, directory=directory)
+    def execute(self, command, directory=None, skip_output_log=False):
+        return super().execute(
+            command, directory=directory, skip_output_log=skip_output_log
+        )
 
     @step("Reload NGINX")
     def reload_nginx(self):

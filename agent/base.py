@@ -13,7 +13,9 @@ class Base:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
 
-    def execute(self, command, directory=None, input=None):
+    def execute(
+        self, command, directory=None, input=None, skip_output_log=False
+    ):
         directory = directory or self.directory
         self.log("Command", command)
         self.log("Directory", directory)
@@ -33,7 +35,8 @@ class Base:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
             output = self.remove_crs(e.output)
-            self.log("Output", output)
+            if not skip_output_log:
+                self.log("Output", output)
             data.update(
                 {
                     "output": output,
@@ -45,7 +48,8 @@ class Base:
 
         end = datetime.now()
         output = self.remove_crs(process.stdout)
-        self.log("Output", output)
+        if not skip_output_log:
+            self.log("Output", output)
         data.update({"duration": end - start, "end": end, "output": output})
         return data
 
