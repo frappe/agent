@@ -59,7 +59,6 @@ class DatabaseServer(Server):
     @property
     def binary_logs(self):
         BINARY_LOG_FILE_PATTERN = r"mysql-bin.\d+"
-        BINARY_LOG_FILE_PATTERN = r"mariadb-bin.\d+"
         files = []
         for file in Path(self.mariadb_directory).iterdir():
             if re.match(BINARY_LOG_FILE_PATTERN, file.name):
