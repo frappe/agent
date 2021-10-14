@@ -49,7 +49,9 @@ class DatabaseServer(Server):
                     events.append(
                         {
                             "query": line,
-                            "timestamp": datetime.utcfromtimestamp(timestamp),
+                            "timestamp": str(
+                                datetime.utcfromtimestamp(timestamp)
+                            ),
                         }
                     )
         return events
@@ -57,6 +59,7 @@ class DatabaseServer(Server):
     @property
     def binary_logs(self):
         BINARY_LOG_FILE_PATTERN = r"mysql-bin.\d+"
+        BINARY_LOG_FILE_PATTERN = r"mariadb-bin.\d+"
         files = []
         for file in Path(self.mariadb_directory).iterdir():
             if re.match(BINARY_LOG_FILE_PATTERN, file.name):
@@ -65,7 +68,9 @@ class DatabaseServer(Server):
                     {
                         "name": file.name,
                         "size": file.stat().st_size,
-                        "modified": datetime.utcfromtimestamp(unix_timestamp),
+                        "modified": str(
+                            datetime.utcfromtimestamp(unix_timestamp)
+                        ),
                     }
                 )
         return sorted(files, key=lambda x: x["name"])
