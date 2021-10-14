@@ -28,8 +28,7 @@ class DatabaseServer(Server):
             f"mysqlbinlog --short-form --database {database} "
             f"--start-datetime '{start_datetime}' "
             f"--stop-datetime '{stop_datetime}' "
-            f" {log} | grep -Piv '{LINES_TO_SKIP}' | grep '{search_pattern}' "
-            f"| head -n {max_lines}"
+            f" {log} | grep -Piv '{LINES_TO_SKIP}' | head -n {max_lines}"
         )
 
         DELIMITER = "/*!*/;"
@@ -45,7 +44,7 @@ class DatabaseServer(Server):
             else:
                 if any(line.startswith(skip) for skip in ["SET", "/*!"]):
                     continue
-                elif line and timestamp:
+                elif line and timestamp and re.search(search_pattern, line):
                     events.append(
                         {
                             "query": line,
