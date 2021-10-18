@@ -236,6 +236,7 @@ def new_site_from_backup(bench):
             data["database"],
             data["public"],
             data["private"],
+            data.get("skip_failing_patches", False)
         )
     )
     return {"job": job}
@@ -258,6 +259,7 @@ def restore_site(bench, site):
             data["database"],
             data["public"],
             data["private"],
+            data.get("skip_failing_patches", False)
         )
     )
     return {"job": job}
@@ -352,8 +354,8 @@ def backup_site(bench, site):
     "/benches/<string:bench>/sites/<string:site>/migrate",
     methods=["POST"],
 )
-def migrate_site(bench, site):
-    job = Server().benches[bench].sites[site].migrate_job()
+def migrate_site(bench, site, skip_failing_patches=False):
+    job = Server().benches[bench].sites[site].migrate_job(skip_failing_patches=skip_failing_patches)
     return {"job": job}
 
 
@@ -373,7 +375,11 @@ def clear_site_cache(bench, site):
 def update_site_migrate(bench, site):
     data = request.json
     job = Server().update_site_migrate_job(
-        site, bench, data["target"], data.get("activate", True)
+        site, 
+        bench, 
+        data["target"], 
+        data.get("activate", True), 
+        data.get("skip_failing_patches", False)
     )
     return {"job": job}
 

@@ -118,6 +118,7 @@ class Site(Base):
         database,
         public,
         private,
+        skip_failing_patches
     ):
         files = self.bench.download_files(self.name, database, public, private)
         try:
@@ -131,7 +132,7 @@ class Site(Base):
         finally:
             self.bench.delete_downloaded_files(files["directory"])
         self.uninstall_unavailable_apps(apps)
-        self.migrate()
+        self.migrate(skip_failing_patches=skip_failing_patches)
         self.set_admin_password(admin_password)
         self.enable_scheduler()
 
@@ -140,8 +141,9 @@ class Site(Base):
     @job("Migrate Site")
     def migrate_job(
         self,
+        skip_failing_patches=False
     ):
-        return self.migrate()
+        return self.migrate(skip_failing_patches=skip_failing_patches)
 
     @step("Reinstall Site")
     def reinstall(
@@ -331,8 +333,11 @@ class Site(Base):
         return data
 
     @step("Migrate Site")
-    def migrate(self):
-        return self.bench_execute("migrate")
+    def migrate(self, skip_failing_patches=False):
+        if skip_failing_patches:
+            return self.bench_execute("migrate --skip-failing")
+        else:
+            return self.bench_execute("migrate")
 
     @job("Clear Cache")
     def clear_cache_job(self):

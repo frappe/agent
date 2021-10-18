@@ -256,6 +256,7 @@ class Bench(Base):
         database,
         public,
         private,
+        skip_failing_patches
     ):
         files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)
@@ -275,7 +276,7 @@ class Bench(Base):
         finally:
             self.delete_downloaded_files(files["directory"])
         site.uninstall_unavailable_apps(apps)
-        site.migrate()
+        site.migrate(skip_failing_patches=skip_failing_patches)
         site.set_admin_password(admin_password)
         site.enable_scheduler()
         self.setup_nginx()
