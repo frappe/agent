@@ -354,8 +354,11 @@ def backup_site(bench, site):
     "/benches/<string:bench>/sites/<string:site>/migrate",
     methods=["POST"],
 )
-def migrate_site(bench, site, skip_failing_patches=False):
-    job = Server().benches[bench].sites[site].migrate_job(skip_failing_patches=skip_failing_patches)
+def migrate_site(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].migrate_job(
+        skip_failing_patches=data.get("skip_failing_patches", False)
+    )
     return {"job": job}
 
 
