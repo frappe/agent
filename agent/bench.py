@@ -1,12 +1,12 @@
-import json
 import os
+import json
 import shutil
+import requests
 import tempfile
 import traceback
-from datetime import datetime, timedelta
-from glob import glob
 
-import requests
+from glob import glob
+from datetime import datetime, timedelta
 
 from agent.app import App
 from agent.base import AgentException, Base

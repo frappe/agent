@@ -1,18 +1,18 @@
-import json
 import os
+import time
+import json
 import shutil
 import tempfile
-import time
-from datetime import datetime
 
+from datetime import datetime
+from peewee import MySQLDatabase
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
-from peewee import MySQLDatabase
 
-from agent.base import AgentException, Base
-from agent.bench import Bench
-from agent.job import Job, Step, job, step
 from agent.site import Site
+from agent.bench import Bench
+from agent.base import AgentException, Base
+from agent.job import Job, Step, job, step
 
 
 class Server(Base):
