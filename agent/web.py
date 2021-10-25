@@ -3,11 +3,11 @@ import logging
 from base64 import b64decode
 
 from flask import Flask, jsonify, request
-from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
+from passlib.hash import pbkdf2_sha256 as pbkdf2
 
-from agent.job import JobModel
 from agent.proxy import Proxy
+from agent.job import JobModel
 from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
@@ -236,6 +236,7 @@ def new_site_from_backup(bench):
             data["database"],
             data["public"],
             data["private"],
+            data.get("skip_failing_patches", False)
         )
     )
     return {"job": job}
@@ -258,6 +259,7 @@ def restore_site(bench, site):
             data["database"],
             data["public"],
             data["private"],
+            data.get("skip_failing_patches", False)
         )
     )
     return {"job": job}
@@ -353,7 +355,10 @@ def backup_site(bench, site):
     methods=["POST"],
 )
 def migrate_site(bench, site):
-    job = Server().benches[bench].sites[site].migrate_job()
+    data = request.json
+    job = Server().benches[bench].sites[site].migrate_job(
+        skip_failing_patches=data.get("skip_failing_patches", False)
+    )
     return {"job": job}
 
 
@@ -373,7 +378,11 @@ def clear_site_cache(bench, site):
 def update_site_migrate(bench, site):
     data = request.json
     job = Server().update_site_migrate_job(
-        site, bench, data["target"], data.get("activate", True)
+        site, 
+        bench, 
+        data["target"], 
+        data.get("activate", True), 
+        data.get("skip_failing_patches", False)
     )
     return {"job": job}
 
