@@ -138,6 +138,28 @@ class Site(Base):
 
         return self.bench_execute("list-apps")
 
+    @step("Partial Restore Site")
+    def partial_restore(self, database_file):
+        sites_directory = self.bench.sites_directory
+        database_file = database_file.replace(
+            sites_directory, "/home/frappe/frappe-bench/sites"
+        )
+        return self.bench_execute("partial-restore {database_file}")
+
+    @job("Partial Restore Site")
+    def partial_restore_job(
+        self,
+        database,
+        skip_failing_patches
+    ):
+        files = self.bench.download_backup_file(self.name, database)
+        try:
+            self.partial_restore(files["database"])
+        finally:
+            self.bench.delete_downloaded_files(files["directory"])
+        self.migrate(skip_failing_patches=skip_failing_patches)
+        self.enable_scheduler()
+
     @job("Migrate Site")
     def migrate_job(
         self,

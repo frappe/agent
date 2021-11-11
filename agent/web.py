@@ -266,6 +266,24 @@ def restore_site(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/partial-restore", methods=["POST"]
+)
+def partial_restore_job(bench, site):
+    data = request.json
+
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .partial_restore_job(
+            data["database"],
+            data.get("skip_failing_patches", False)
+        )
+    )
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/reinstall", methods=["POST"]
 )
 def reinstall_site(bench, site):

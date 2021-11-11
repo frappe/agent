@@ -310,6 +310,20 @@ class Bench(Base):
             "public": public_file,
         }
 
+    @step("Download Backup Files")
+    def download_backup_file(self, name, database_url):
+        download_directory = os.path.join(self.sites_directory, "downloads")
+        if not os.path.exists(download_directory):
+            os.mkdir(download_directory)
+        directory = tempfile.mkdtemp(
+            prefix="agent-upload-", suffix=f"-{name}", dir=download_directory
+        )
+        database_file = download_file(database_url, prefix=directory)
+        return {
+            "directory": directory,
+            "database": database_file,
+        }
+
     @step("Delete Downloaded Backup Files")
     def delete_downloaded_files(self, backup_files_directory):
         shutil.rmtree(backup_files_directory)
