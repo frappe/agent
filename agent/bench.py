@@ -256,7 +256,7 @@ class Bench(Base):
         database,
         public,
         private,
-        skip_failing_patches
+        skip_failing_patches,
     ):
         files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)

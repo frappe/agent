@@ -118,7 +118,7 @@ class Site(Base):
         database,
         public,
         private,
-        skip_failing_patches
+        skip_failing_patches,
     ):
         files = self.bench.download_files(self.name, database, public, private)
         try:
@@ -139,10 +139,7 @@ class Site(Base):
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
-    def migrate_job(
-        self,
-        skip_failing_patches=False
-    ):
+    def migrate_job(self, skip_failing_patches=False):
         return self.migrate(skip_failing_patches=skip_failing_patches)
 
     @step("Reinstall Site")

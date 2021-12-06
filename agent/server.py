@@ -194,7 +194,9 @@ class Server(Base):
             site.disable_maintenance_mode()
 
     @job("Update Site Migrate", priority="low")
-    def update_site_migrate_job(self, name, source, target, activate, skip_failing_patches):
+    def update_site_migrate_job(
+        self, name, source, target, activate, skip_failing_patches
+    ):
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
