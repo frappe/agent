@@ -76,12 +76,12 @@ server {
 	client_body_buffer_size 16K;
 	client_header_buffer_size 1k;
 
-	add_header X-Frame-Options "SAMEORIGIN" always;
-	add_header X-XSS-Protection "1; mode=block" always;
-	add_header X-Content-Type-Options "nosniff" always;
-	add_header Referrer-Policy "no-referrer-when-downgrade" always;
-	add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
-	add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+	more_set_headers "X-Frame-Options: SAMEORIGIN";
+	more_set_headers "X-XSS-Protection: 1; mode=block";
+	more_set_headers "X-Content-Type-Options: nosniff";
+	more_set_headers "Referrer-Policy: no-referrer-when-downgrade";
+	more_set_headers "Content-Security-Policy: default-src 'self' http: https: data: blob: 'unsafe-inline'";
+	more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
 
 	{% if host_options.redirect %}
 
@@ -105,8 +105,8 @@ server {
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "";
 
-		add_header X-Proxy-Upstream $upstream_server_hash;
-		add_header X-Proxy-Cache $upstream_cache_status;
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+		more_set_headers "X-Proxy-Cache: $upstream_cache_status";
 
 		proxy_pass $upstream_server_hash;
 	}
@@ -121,7 +121,7 @@ server {
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "upgrade";
 
-		add_header X-Proxy-Upstream $upstream_server_hash;
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
 
 		proxy_pass $upstream_server_hash;
 	}
@@ -140,7 +140,8 @@ server {
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "";
 
-		add_header X-Proxy-Upstream $upstream_server_hash;
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
 		add_header Access-Control-Allow-Origin 'http://{{ ns.host.strip("*.") }}' always;
 		add_header Access-Control-Allow-Headers "Origin, Content-Type, Accept" always;
 		add_header Access-Control-Allow-Credentials true;
