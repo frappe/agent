@@ -296,7 +296,7 @@ class Site(Base):
 
     @step("Set Administrator Password")
     def set_admin_password(self, password):
-        return self.bench_execute("set-admin-password", input=password)
+        return self.bench_execute(f"set-admin-password {password}")
 
     @step("Wait for Enqueued Jobs")
     def wait_till_ready(self):
