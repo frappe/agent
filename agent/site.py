@@ -103,10 +103,12 @@ class Site(Base):
         )
         return self.bench_execute(
             "--force restore "
-            f"--mariadb-root-password {mariadb_root_password} "
-            f"--admin-password {admin_password} "
             f"--with-public-files {public_file} "
-            f"--with-private-files {private_file} {database_file}"
+            f"--with-private-files {private_file} {database_file}",
+            input=(
+                f"{mariadb_root_password}\n"
+                f"{admin_password}\n{admin_password}"
+            ),
         )
 
     @job("Restore Site")
@@ -149,9 +151,11 @@ class Site(Base):
         admin_password,
     ):
         return self.bench_execute(
-            "reinstall --yes "
-            f"--mariadb-root-password {mariadb_root_password} "
-            f"--admin-password {admin_password}"
+            "reinstall --yes",
+            input=(
+                f"{mariadb_root_password}\n"
+                f"{admin_password}\n{admin_password}"
+            ),
         )
 
     @job("Reinstall Site")

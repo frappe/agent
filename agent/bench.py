@@ -137,11 +137,11 @@ class Bench(Base):
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
         return self.docker_execute(
-            "bench new-site "
-            f"--admin-password {admin_password} "
-            f"--no-mariadb-socket "
-            f"--mariadb-root-password {mariadb_root_password} "
-            f"{name}"
+            f"bench new-site --no-mariadb-socket {name}",
+            input=(
+                f"{mariadb_root_password}\n"
+                f"{admin_password}\n{admin_password}"
+            ),
         )
 
     def fetch_monitor_data(self):
@@ -287,9 +287,8 @@ class Bench(Base):
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
         return self.docker_execute(
-            f"bench drop-site {name} "
-            f"--root-password {mariadb_root_password} --no-backup "
-            "--archived-sites-path archived"
+            f"bench drop-site {name} --archived-sites-path archived",
+            input=f"{mariadb_root_password}",
         )
 
     @step("Download Backup Files")
