@@ -101,6 +101,14 @@ class Site(Base):
         private_file = private_file.replace(
             sites_directory, "/home/frappe/frappe-bench/sites"
         )
+
+        public_file_option = (
+            f"--with-public-files {public_file}" if public_file else ""
+        )
+        private_file_option = (
+            f"--with-private-files {private_file} " if private_file else ""
+        )
+
         _, temp_user, temp_password = self.bench.create_mariadb_user(
             self.name, mariadb_root_password, self.database
         )
@@ -110,8 +118,9 @@ class Site(Base):
                 f"--mariadb-root-username {temp_user} "
                 f"--mariadb-root-password {temp_password} "
                 f"--admin-password {admin_password} "
-                f"--with-public-files {public_file} "
-                f"--with-private-files {private_file} {database_file}"
+                f"{public_file_option} "
+                f"{private_file_option} "
+                f"{database_file}"
             )
         finally:
             self.bench.drop_mariadb_user(

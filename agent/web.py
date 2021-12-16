@@ -234,8 +234,8 @@ def new_site_from_backup(bench):
             data["admin_password"],
             data["site_config"],
             data["database"],
-            data["public"],
-            data["private"],
+            data.get("public"),
+            data.get("private"),
             data.get("skip_failing_patches", False),
         )
     )
@@ -257,8 +257,8 @@ def restore_site(bench, site):
             data["mariadb_root_password"],
             data["admin_password"],
             data["database"],
-            data["public"],
-            data["private"],
+            data.get("public"),
+            data.get("private"),
             data.get("skip_failing_patches", False),
         )
     )

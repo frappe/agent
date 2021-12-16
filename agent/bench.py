@@ -358,8 +358,12 @@ class Bench(Base):
             prefix="agent-upload-", suffix=f"-{name}", dir=download_directory
         )
         database_file = download_file(database_url, prefix=directory)
-        private_file = download_file(private_url, prefix=directory)
-        public_file = download_file(public_url, prefix=directory)
+        private_file = (
+            download_file(private_url, prefix=directory) if private_url else ""
+        )
+        public_file = (
+            download_file(public_url, prefix=directory) if public_url else ""
+        )
         return {
             "directory": directory,
             "database": database_file,
