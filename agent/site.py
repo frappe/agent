@@ -101,15 +101,23 @@ class Site(Base):
         private_file = private_file.replace(
             sites_directory, "/home/frappe/frappe-bench/sites"
         )
-        return self.bench_execute(
-            "--force restore "
-            f"--with-public-files {public_file} "
-            f"--with-private-files {private_file} {database_file}",
-            input=(
-                f"{mariadb_root_password}\n"
-                f"{admin_password}\n{admin_password}"
-            ),
+        _, temp_user, temp_password = self.bench.create_mariadb_user(
+            self.name, mariadb_root_password, self.database
         )
+        try:
+            return self.bench_execute(
+                (
+                    "--force restore "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--with-public-files {public_file} "
+                    f"--with-private-files {private_file} {database_file}"
+                ),
+                input=f"{temp_password}\n{admin_password}\n{admin_password}",
+            )
+        finally:
+            self.bench.drop_mariadb_user(
+                self.name, mariadb_root_password, self.database
+            )
 
     @job("Restore Site")
     def restore_job(
@@ -150,13 +158,18 @@ class Site(Base):
         mariadb_root_password,
         admin_password,
     ):
-        return self.bench_execute(
-            "reinstall --yes",
-            input=(
-                f"{mariadb_root_password}\n"
-                f"{admin_password}\n{admin_password}"
-            ),
+        _, temp_user, temp_password = self.bench.create_mariadb_user(
+            self.name, mariadb_root_password, self.database
         )
+        try:
+            return self.bench_execute(
+                f"reinstall --yes --mariadb-root-username {temp_user}",
+                input=(f"{temp_password}\n{admin_password}\n{admin_password}"),
+            )
+        finally:
+            self.bench.drop_mariadb_user(
+                self.name, mariadb_root_password, self.database
+            )
 
     @job("Reinstall Site")
     def reinstall_job(

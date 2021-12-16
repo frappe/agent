@@ -1,10 +1,13 @@
+import hashlib
 import os
 import json
 import shutil
 import requests
+import string
 import tempfile
 import traceback
 
+from random import choices
 from glob import glob
 from datetime import datetime, timedelta
 
@@ -136,13 +139,62 @@ class Bench(Base):
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
-        return self.docker_execute(
-            f"bench new-site --no-mariadb-socket {name}",
-            input=(
-                f"{mariadb_root_password}\n"
-                f"{admin_password}\n{admin_password}"
-            ),
+        site_database, temp_user, temp_password = self.create_mariadb_user(
+            name, mariadb_root_password
         )
+        try:
+            return self.docker_execute(
+                (
+                    f"bench new-site --no-mariadb-socket "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--db-name {site_database} {name}"
+                ),
+                input=f"{temp_password}\n{admin_password}\n{admin_password}",
+            )
+        finally:
+            self.drop_mariadb_user(name, mariadb_root_password, site_database)
+
+    def get_database_name(self, site):
+        site_directory = os.path.join(self.sites_directory, "sites", site)
+        return "_" + hashlib.sha1(site_directory.encode()).hexdigest()[:16]
+
+    def get_random_string(self, length):
+        return "".join(choices(string.ascii_letters + string.digits, k=length))
+
+    def create_mariadb_user(self, site, mariadb_root_password, database=None):
+        database = database or self.get_database_name(site)
+        user = f"{database}_limited"
+        password = self.get_random_string(16)
+        queries = [
+            f"CREATE OR REPLACE USER '{user}'@'%' IDENTIFIED BY '{password}'",
+            f"CREATE OR REPLACE DATABASE {user}",
+            f"GRANT ALL ON {user}.* TO '{user}'@'%'",
+            f"GRANT RELOAD, CREATE USER ON *.* TO '{user}'@'%'",
+            f"GRANT ALL ON {database}.* TO '{user}'@'%' WITH GRANT OPTION",
+            "FLUSH PRIVILEGES",
+        ]
+        for query in queries:
+            command = (
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f' -e "{query}"'
+            )
+            self.execute(command)
+        return database, user, password
+
+    def drop_mariadb_user(self, site, mariadb_root_password, database=None):
+        database = database or self.get_database_name(site)
+        user = f"{database}_limited"
+        queries = [
+            f"DROP DATABASE IF EXISTS {user}",
+            f"DROP USER IF EXISTS '{user}'@'%'",
+            "FLUSH PRIVILEGES",
+        ]
+        for query in queries:
+            command = (
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f' -e "{query}"'
+            )
+            self.execute(command)
 
     def fetch_monitor_data(self):
         lines = []
@@ -286,10 +338,17 @@ class Bench(Base):
 
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password):
-        return self.docker_execute(
-            f"bench drop-site {name} --archived-sites-path archived",
-            input=f"{mariadb_root_password}",
+        site_database, temp_user, temp_password = self.create_mariadb_user(
+            name, mariadb_root_password, self.sites[name].database
         )
+        try:
+            return self.docker_execute(
+                f"bench drop-site --root-login {temp_user} "
+                f"--archived-sites-path archived {name}",
+                input=temp_password,
+            )
+        finally:
+            self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @step("Download Backup Files")
     def download_files(self, name, database_url, public_url, private_url):
