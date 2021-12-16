@@ -144,12 +144,11 @@ class Bench(Base):
         )
         try:
             return self.docker_execute(
-                (
-                    f"bench new-site --no-mariadb-socket "
-                    f"--mariadb-root-username {temp_user} "
-                    f"--db-name {site_database} {name}"
-                ),
-                input=f"{temp_password}\n{admin_password}\n{admin_password}",
+                f"bench new-site --no-mariadb-socket "
+                f"--mariadb-root-username {temp_user} "
+                f"--mariadb-root-password {temp_password} "
+                f"--admin-password {admin_password} "
+                f"--db-name {site_database} {name}"
             )
         finally:
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
@@ -343,9 +342,9 @@ class Bench(Base):
         )
         try:
             return self.docker_execute(
-                f"bench drop-site --root-login {temp_user} "
-                f"--archived-sites-path archived {name}",
-                input=temp_password,
+                f"bench drop-site "
+                f"--root-login {temp_user} --root-password {temp_password} "
+                f"--archived-sites-path archived {name}"
             )
         finally:
             self.drop_mariadb_user(name, mariadb_root_password, site_database)

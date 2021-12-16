@@ -106,13 +106,12 @@ class Site(Base):
         )
         try:
             return self.bench_execute(
-                (
-                    "--force restore "
-                    f"--mariadb-root-username {temp_user} "
-                    f"--with-public-files {public_file} "
-                    f"--with-private-files {private_file} {database_file}"
-                ),
-                input=f"{temp_password}\n{admin_password}\n{admin_password}",
+                "--force restore "
+                f"--mariadb-root-username {temp_user} "
+                f"--mariadb-root-password {temp_password} "
+                f"--admin-password {admin_password} "
+                f"--with-public-files {public_file} "
+                f"--with-private-files {private_file} {database_file}"
             )
         finally:
             self.bench.drop_mariadb_user(
@@ -163,8 +162,10 @@ class Site(Base):
         )
         try:
             return self.bench_execute(
-                f"reinstall --yes --mariadb-root-username {temp_user}",
-                input=(f"{temp_password}\n{admin_password}\n{admin_password}"),
+                f"reinstall --yes "
+                f"--mariadb-root-username {temp_user} "
+                f"--mariadb-root-password {temp_password} "
+                f"--admin-password {admin_password}"
             )
         finally:
             self.bench.drop_mariadb_user(
