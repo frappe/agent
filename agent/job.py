@@ -134,7 +134,7 @@ def job(name, priority="default"):
                 args=args,
                 kwargs=kwargs,
                 timeout=4 * 3600,
-                result_ttl=-1,
+                result_ttl=24 * 3600,
             )
             return instance.job_record.model.id
 
