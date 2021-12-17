@@ -130,7 +130,11 @@ def job(name, priority="default"):
         else:
             instance.job_record.enqueue(name, wrapped, args, kwargs)
             queue(priority).enqueue_call(
-                wrapped, args=args, kwargs=kwargs, timeout=3600, result_ttl=-1
+                wrapped,
+                args=args,
+                kwargs=kwargs,
+                timeout=4 * 3600,
+                result_ttl=-1,
             )
             return instance.job_record.model.id
 
