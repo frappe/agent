@@ -152,6 +152,16 @@ def get_bench_status(bench):
     return Server().benches[bench].status()
 
 
+@application.route("/benches/<string:bench>/logs")
+def get_bench_logs(bench):
+    return jsonify(Server().benches[bench].logs)
+
+
+@application.route("/benches/<string:bench>/logs/<string:log>")
+def get_bench_log(bench, log):
+    return {log: Server().benches[bench].retrieve_log(log)}
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>")
 def get_site(bench, site):
     return Server().benches[bench].sites[site].dump()

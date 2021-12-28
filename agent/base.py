@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import traceback
 from datetime import datetime
@@ -68,6 +69,46 @@ class Base:
 
     def log(self, *args):
         print(*args)
+
+    @property
+    def logs(self):
+        def path(file):
+            return os.path.join(self.logs_directory, file)
+
+        def modified_time(file):
+            return os.path.getctime(path(file))
+
+        try:
+            log_files = sorted(
+                os.listdir(self.logs_directory),
+                key=modified_time,
+                reverse=True,
+            )
+            payload = []
+
+            for x in log_files:
+                stats = os.stat(path(x))
+                payload.append(
+                    {
+                        "name": x,
+                        "size": stats.st_size / 1000,
+                        "created": str(datetime.fromtimestamp(stats.st_ctime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
+                    }
+                )
+
+            return payload
+
+        except FileNotFoundError:
+            return []
+
+    def retrieve_log(self, name):
+        if name not in {x["name"] for x in self.logs}:
+            return ""
+        log_file = os.path.join(self.logs_directory, name)
+        return open(log_file).read()
 
 
 class AgentException(Exception):
