@@ -474,6 +474,9 @@ class Bench(Base):
                 "http_timeout": self.bench_config["http_timeout"],
                 "name": self.name,
                 "statsd_host": self.bench_config["statsd_host"],
+                "is_ssh_enabled": self.bench_config.get(
+                    "is_ssh_enabled", False
+                ),
             },
             supervisor_config,
         )
