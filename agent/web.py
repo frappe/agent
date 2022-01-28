@@ -7,6 +7,7 @@ from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 
 from agent.proxy import Proxy
+from agent.ssh import SSHProxy
 from agent.job import JobModel
 from agent.server import Server
 from agent.monitor import Monitor
@@ -634,6 +635,19 @@ def get_binary_log(log):
             data["max_lines"],
         )
     )
+
+
+@application.route("/ssh/users", methods=["POST"])
+def ssh_add_user():
+    data = request.json
+
+    job = SSHProxy().add_user_job(
+        data["name"],
+        data["principal"],
+        data["ssh"],
+        data["certificate"],
+    )
+    return {"job": job}
 
 
 def to_dict(model):
