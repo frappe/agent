@@ -495,12 +495,18 @@ class Bench(Base):
             except Exception:
                 pass
 
+            ssh_port = self.bench_config.get(
+                "ssh_port", self.bench_config["web_port"] + 4000
+            )
+            ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
+
             bench_directory = "/home/frappe/frappe-bench"
             command = (
                 "docker run -d --init -u frappe "
                 "--restart always "
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
+                f"-p {ssh_ip}:{ssh_port}:2200 "
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
