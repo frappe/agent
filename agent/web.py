@@ -650,6 +650,12 @@ def ssh_add_user():
     return {"job": job}
 
 
+@application.route("/ssh/users/<string:user>", methods=["DELETE"])
+def ssh_remove_user(user):
+    job = SSHProxy().remove_user_job(user)
+    return {"job": job}
+
+
 def to_dict(model):
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)

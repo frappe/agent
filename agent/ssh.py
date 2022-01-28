@@ -45,3 +45,17 @@ class SSHProxy(Server):
             f"> /etc/ssh/principals/{name}"
         )
         return self.docker_execute(f"bash -c '{bash_command}'")
+
+    @job("Remove User from Proxy")
+    def remove_user_job(self, name):
+        self.remove_user(name)
+        self.remove_principal(name)
+
+    @step("Remove User from Proxy")
+    def remove_user(self, name):
+        return self.docker_execute(f"userdel -f -r {name}")
+
+    @step("Remove Principal from User")
+    def remove_principal(self, name):
+        command = f"rm /etc/ssh/principals/{name}"
+        return self.docker_execute(command)
