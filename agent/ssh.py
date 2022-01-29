@@ -41,7 +41,7 @@ class SSHProxy(Server):
     def add_principal(self, name, principal, ssh):
         force_command = f"ssh -vvv frappe@{ssh['ip']} -p {ssh['port']}"
         bash_command = (
-            f'echo command=\\"{force_command}\\" {principal} '
+            f'echo restrict,pty,command=\\"{force_command}\\" {principal} '
             f"> /etc/ssh/principals/{name}"
         )
         return self.docker_execute(f"bash -c '{bash_command}'")
