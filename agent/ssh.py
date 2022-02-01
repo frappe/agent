@@ -1,4 +1,5 @@
 import os
+import tempfile
 
 from agent.job import job, step
 from agent.server import Server
@@ -33,21 +34,28 @@ class SSHProxy(Server):
     def add_certificate(self, name, certificate):
         self.docker_execute(f"mkdir /home/{name}/.ssh")
         for key, value in certificate.items():
-            self.docker_execute(
-                f"""bash -c 'echo "{value}" > /home/{name}/.ssh/{key}'""",
-            )
+            source = tempfile.mkstemp()[1]
+            with open(source, "w") as f:
+                f.wrte(value)
+            target = f"/home/{name}/.ssh/{key}.pub"
+            self.execute(f"docker cp {source} {target}")
+            self.docker_execute(f"chown {name}:{name} {target}")
+            os.remove(source)
 
     @step("Add Principal to User")
     def add_principal(self, name, principal, ssh):
         cd_command = "cd frappe-bench; exec bash --login"
         force_command = (
-            f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t \\'{cd_command}\\'"
+            f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t '{cd_command}'"
         )
-        bash_command = (
-            f'echo restrict,pty,command=\\"{force_command}\\" {principal} '
-            f"> /etc/ssh/principals/{name}"
-        )
-        return self.docker_execute(f"bash -c '{bash_command}'")
+        principal_line = f'restrict,pty,command="{force_command}" {principal}'
+        source = tempfile.mkstemp()[1]
+        with open(source, "w") as f:
+            f.wrte(principal_line)
+        target = f"/etc/ssh/principals/{name}"
+        self.execute(f"docker cp {source} {target}")
+        self.docker_execute(f"chown root:root {target}")
+        os.remove(source)
 
     @job("Remove User from Proxy")
     def remove_user_job(self, name):
