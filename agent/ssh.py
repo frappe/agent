@@ -33,6 +33,7 @@ class SSHProxy(Server):
     @step("Add Certificate to User")
     def add_certificate(self, name, certificate):
         self.docker_execute(f"mkdir /home/{name}/.ssh")
+        self.docker_execute(f"chown {name}:{name} /home/{name}/.ssh")
         for key, value in certificate.items():
             source = tempfile.mkstemp()[1]
             with open(source, "w") as f:
@@ -54,7 +55,7 @@ class SSHProxy(Server):
             f.write(principal_line)
         target = f"/etc/ssh/principals/{name}"
         self.execute(f"docker cp {source} ssh:{target}")
-        self.docker_execute(f"chown root:root {target}")
+        self.docker_execute(f"chown {name}:{name} {target}")
         os.remove(source)
 
     @job("Remove User from Proxy")
