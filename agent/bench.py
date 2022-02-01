@@ -506,7 +506,7 @@ class Bench(Base):
             bench_directory = "/home/frappe/frappe-bench"
             command = (
                 "docker run -d --init -u frappe "
-                "--restart always "
+                f"--restart always --hostname {self.name} "
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
                 f"-p {ssh_ip}:{ssh_port}:2200 "
