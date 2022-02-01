@@ -36,7 +36,7 @@ class SSHProxy(Server):
         for key, value in certificate.items():
             source = tempfile.mkstemp()[1]
             with open(source, "w") as f:
-                f.wrte(value)
+                f.write(value)
             target = f"/home/{name}/.ssh/{key}.pub"
             self.execute(f"docker cp {source} {target}")
             self.docker_execute(f"chown {name}:{name} {target}")
@@ -51,7 +51,7 @@ class SSHProxy(Server):
         principal_line = f'restrict,pty,command="{force_command}" {principal}'
         source = tempfile.mkstemp()[1]
         with open(source, "w") as f:
-            f.wrte(principal_line)
+            f.write(principal_line)
         target = f"/etc/ssh/principals/{name}"
         self.execute(f"docker cp {source} {target}")
         self.docker_execute(f"chown root:root {target}")
