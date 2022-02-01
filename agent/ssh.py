@@ -38,7 +38,7 @@ class SSHProxy(Server):
             with open(source, "w") as f:
                 f.write(value)
             target = f"/home/{name}/.ssh/{key}.pub"
-            self.execute(f"docker cp {source} {target}")
+            self.execute(f"docker cp {source} ssh:{target}")
             self.docker_execute(f"chown {name}:{name} {target}")
             os.remove(source)
 
@@ -53,7 +53,7 @@ class SSHProxy(Server):
         with open(source, "w") as f:
             f.write(principal_line)
         target = f"/etc/ssh/principals/{name}"
-        self.execute(f"docker cp {source} {target}")
+        self.execute(f"docker cp {source} ssh:{target}")
         self.docker_execute(f"chown root:root {target}")
         os.remove(source)
 
