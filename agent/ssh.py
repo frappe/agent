@@ -39,7 +39,7 @@ class SSHProxy(Server):
 
     @step("Add Principal to User")
     def add_principal(self, name, principal, ssh):
-        force_command = f"ssh -vvv frappe@{ssh['ip']} -p {ssh['port']}"
+        force_command = f"ssh frappe@{ssh['ip']} -p {ssh['port']}"
         bash_command = (
             f'echo restrict,pty,command=\\"{force_command}\\" {principal} '
             f"> /etc/ssh/principals/{name}"
