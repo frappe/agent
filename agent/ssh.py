@@ -41,7 +41,7 @@ class SSHProxy(Server):
     def add_principal(self, name, principal, ssh):
         cd_command = "cd frappe-bench; exec bash --login"
         force_command = (
-            f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t '{cd_command}'"
+            f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t \\'{cd_command}\\'"
         )
         bash_command = (
             f'echo restrict,pty,command=\\"{force_command}\\" {principal} '
