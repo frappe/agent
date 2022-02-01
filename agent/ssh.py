@@ -38,7 +38,7 @@ class SSHProxy(Server):
             source = tempfile.mkstemp()[1]
             with open(source, "w") as f:
                 f.write(value)
-            target = f"/home/{name}/.ssh/{key}.pub"
+            target = f"/home/{name}/.ssh/{key}"
             self.execute(f"docker cp {source} ssh:{target}")
             self.docker_execute(f"chown {name}:{name} {target}")
             os.remove(source)
