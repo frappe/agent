@@ -34,7 +34,7 @@ class ProxySQL(Server):
         backend_id = backend["id"]
         backend_ip = backend["ip"]
         if self.proxysql_execute(
-            f"SELECT 1 from hostgroup where hostgroup_id = {backend_id}"
+            f"SELECT 1 from mysql_servers where hostgroup_id = {backend_id}"
         )["output"]:
             return
         commands = [
