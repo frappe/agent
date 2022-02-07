@@ -46,3 +46,18 @@ class ProxySQL(Server):
         ]
         for command in commands:
             self.proxysql_execute(command)
+
+    @job("Remove User from ProxySQL")
+    def remove_user_job(self, username):
+        self.remove_user(username)
+
+    @step("Remove User from ProxySQL")
+    def remove_user(self, username):
+        commands = [
+            f'DELETE FROM mysql_users WHERE username = "{username}"',
+            "LOAD MYSQL USERS TO RUNTIME",
+            "SAVE MYSQL USERS FROM RUNTIME",
+            "SAVE MYSQL USERS TO DISK",
+        ]
+        for command in commands:
+            self.proxysql_execute(command)
