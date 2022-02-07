@@ -10,5 +10,8 @@ class ProxySQL(Server):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
 
+        self.proxysql_admin_password = self.config.get(
+            "proxysql_admin_password"
+        )
         self.job = None
         self.step = None

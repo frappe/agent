@@ -288,6 +288,9 @@ class Server(Base):
     def setup_authentication(self, password):
         self.update_config({"access_token": pbkdf2.hash(password)})
 
+    def setup_proxysql(self, password):
+        self.update_config({"proxysql_admin_password": password})
+
     def update_config(self, value):
         config = self.config
         config.update(value)

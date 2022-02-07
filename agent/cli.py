@@ -142,6 +142,12 @@ def log():
     Server().setup_log()
 
 
+@setup.command()
+@click.option("--password", prompt=True, hide_input=True)
+def proxysql(password):
+    Server().setup_proxysql(password)
+
+
 @cli.group()
 def run():
     pass
