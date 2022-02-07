@@ -33,6 +33,10 @@ class ProxySQL(Server):
     def add_backend(self, backend):
         backend_id = backend["id"]
         backend_ip = backend["ip"]
+        if self.proxysql_execute(
+            f"SELECT 1 from hostgroup where hostgroup_id = {backend_id}"
+        )["output"]:
+            return
         commands = [
             (
                 "INSERT INTO mysql_servers (hostgroup_id, hostname) "
