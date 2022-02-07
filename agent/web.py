@@ -12,6 +12,7 @@ from agent.job import JobModel
 from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
+from agent.proxysql import ProxySQL
 
 
 application = Flask(__name__)
@@ -653,6 +654,19 @@ def ssh_add_user():
 @application.route("/ssh/users/<string:user>", methods=["DELETE"])
 def ssh_remove_user(user):
     job = SSHProxy().remove_user_job(user)
+    return {"job": job}
+
+
+@application.route("/proxysql/users", methods=["POST"])
+def proxysql_add_user():
+    data = request.json
+
+    job = ProxySQL().add_user_job(
+        data["username"],
+        data["password"],
+        data["database"],
+        data["backend"],
+    )
     return {"job": job}
 
 

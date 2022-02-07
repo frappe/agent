@@ -15,3 +15,34 @@ class ProxySQL(Server):
         )
         self.job = None
         self.step = None
+
+    def proxysql_execute(self, command):
+        command = (
+            "mysql -h 127.0.0.1 -P 6032 "
+            f"-u frappe -p{self.proxysql_admin_password} "
+            f"--disable-column-names -e '{command}'"
+        )
+        return self.execute(command)
+
+    @job("Add User to ProxySQL")
+    def add_user_job(self, username, password, database, backend):
+        self.add_user(username, password, database, backend)
+
+    @step("Add User to ProxySQL")
+    def add_user(self, username, password, database, backend):
+        backend_id = backend["id"]
+        commands = [
+            (
+                "INSERT INTO mysql_users ( "
+                "username, password, default_hostgroup, default_schema, "
+                "use_ssl, max_connections) "
+                "VALUES ( "
+                f'"{username}", "{password}", {backend_id}, "{database}", '
+                "1, 16)"
+            ),
+            "LOAD MYSQL USERS TO RUNTIME",
+            "SAVE MYSQL USERS FROM RUNTIME",
+            "SAVE MYSQL USERS TO DISK",
+        ]
+        for command in commands:
+            self.proxysql_execute(command)
