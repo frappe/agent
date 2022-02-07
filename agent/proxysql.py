@@ -26,7 +26,23 @@ class ProxySQL(Server):
 
     @job("Add User to ProxySQL")
     def add_user_job(self, username, password, database, backend):
+        self.add_backend(backend)
         self.add_user(username, password, database, backend)
+
+    @step("Add Backend to ProxySQL")
+    def add_backend(self, backend):
+        backend_id = backend["id"]
+        backend_ip = backend["ip"]
+        commands = [
+            (
+                "INSERT INTO mysql_servers (hostgroup_id, hostname) "
+                f'VALUES ({backend_id}, "{backend_ip}")'
+            ),
+            "LOAD MYSQL SERVERS TO RUNTIME",
+            "SAVE MYSQL SERVERS TO DISK",
+        ]
+        for command in commands:
+            self.proxysql_execute(command)
 
     @step("Add User to ProxySQL")
     def add_user(self, username, password, database, backend):
