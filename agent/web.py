@@ -722,7 +722,7 @@ def create_subscription():
         data["access_key"], 
         data["secret_key"], 
         data["policy_name"],
-        json.loads(data["policy_json"])
+        json.dumps(json.loads(data["policy_json"], indent=4))
     )
     return {"job": job}
 
