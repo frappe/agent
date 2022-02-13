@@ -10,13 +10,13 @@ class Minio(Server):
         self.job = None
         self.step = None
 
-    @job("Create Minio Subscription")
+    @job("Create Minio User")
     def create_subscription(self, access_key, secret_key, policy_name, policy_json):
         self.create_user(access_key, secret_key)
         self.create_policy(policy_name, policy_json)
         self.add_policy(access_key, policy_name)
 
-    @step("Create Minio Subscription")
+    @step("Create Minio User")
     def create_user(self, access_key, secret_key):
         # access_key = username on minio
         self.execute(f"mc admin user add {self.alias} {access_key} {secret_key}")
@@ -30,14 +30,28 @@ class Minio(Server):
     def add_policy(self, access_key, policy_name):
         self.execute(f"mc admin policy set {self.alias} {policy_name} user={access_key}")
 
-    @job("Disable Minio Subscription")
-    def disable_subscription(self, username):
+    @job("Disable Minio User")
+    def disable_user(self, username):
+        self.disable(username)
+
+    @step("Disable Minio User")
+    def disable(self, username):
         self.execute(f"mc admin user disable {self.alias} {username}")
 
-    @job("Enable Minio Subscription")
-    def enable_subscription(self, username):
+    @job("Enable Minio User")
+    def enable_user(self, username):
+        self.enable(username)
+
+    @step("Enable Minio User")
+    def enable(self, username):
         self.execute(f"mc admin user enable {self.alias} {username}")
 
     @job("Remove Minio User")
     def remove_user(self, username):
+        self.remove(username)
+
+    @step("Remove Minio User")
+    def remove(self, username):
         self.execute(f"mc admin user remove {self.alias} {username}")
+
+
