@@ -719,10 +719,10 @@ def update_agent():
 def create_subscription():
     data = request.json
     job = Minio().create_subscription(
-        data["access_key"], 
-        data["secret_key"], 
+        data["access_key"],
+        data["secret_key"],
         data["policy_name"],
-        json.dumps(json.loads(data["policy_json"]))
+        json.dumps(json.loads(data["policy_json"])),
     )
     return {"job": job}
 
@@ -733,7 +733,7 @@ def manage_subscription():
     if data["type"] == "disable":
         job = Minio().disable_user(data["username"])
     else:
-       job =  Minio().enable_user(data["username"])
+        job = Minio().enable_user(data["username"])
     return {"job": job}
 
 
