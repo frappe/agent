@@ -716,7 +716,7 @@ def update_agent():
 
 
 @application.route("/minio/create", methods=["POST"])
-def create_subscription():
+def create_user():
     data = request.json
     job = Minio().create_subscription(
         data["access_key"],
@@ -727,8 +727,8 @@ def create_subscription():
     return {"job": job}
 
 
-@application.route("/minio/subscription", methods=["POST"])
-def manage_subscription():
+@application.route("/minio/update", methods=["POST"])
+def update_user():
     data = request.json
     if data["type"] == "disable":
         job = Minio().disable_user(data["username"])
