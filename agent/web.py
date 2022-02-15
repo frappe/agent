@@ -13,6 +13,7 @@ from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
 from agent.proxysql import ProxySQL
+from agent.minio import Minio
 
 
 application = Flask(__name__)
@@ -712,3 +713,32 @@ def update_agent():
     data = request.json
     Server().update_agent_web(data.get("url"))
     return {"message": "Success"}
+
+
+@application.route("/minio/create", methods=["POST"])
+def create_user():
+    data = request.json
+    job = Minio().create_subscription(
+        data["access_key"],
+        data["secret_key"],
+        data["policy_name"],
+        json.dumps(json.loads(data["policy_json"])),
+    )
+    return {"job": job}
+
+
+@application.route("/minio/update", methods=["POST"])
+def update_user():
+    data = request.json
+    if data["type"] == "disable":
+        job = Minio().disable_user(data["username"])
+    else:
+        job = Minio().enable_user(data["username"])
+    return {"job": job}
+
+
+@application.route("/minio/remove", methods=["POST"])
+def remove_user():
+    data = request.json
+    job = Minio().remove_user(data["username"])
+    return {"job": job}
