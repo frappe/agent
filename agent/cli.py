@@ -143,6 +143,11 @@ def log():
 
 
 @setup.command()
+def analytics():
+    Server().setup_analytics()
+
+
+@setup.command()
 @click.option("--password", prompt=True, hide_input=True)
 def proxysql(password):
     Server().setup_proxysql(password)
