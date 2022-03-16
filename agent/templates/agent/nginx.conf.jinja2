@@ -115,6 +115,7 @@ server {
 	}
 
 	{% if registry %}
+
 	location /v2/ {
 		# Do not allow connections from docker 1.5 and earlier
 		# docker pre-1.6.0 did not properly set the user agent on ping, catch "Go *" user agents
@@ -156,6 +157,7 @@ server {
 		proxy_set_header  X-Forwarded-Proto $scheme;
 		proxy_read_timeout                  900;
 	}
+
 	{% elif monitor %}
 
 	location /prometheus {
@@ -235,9 +237,11 @@ server {
 	}
 
 	{% else %}
+
 	location / {
 		root {{ pages_directory }};
 		try_files /home.html /dev/null;
 	}
+
 	{% endif %}
 }
