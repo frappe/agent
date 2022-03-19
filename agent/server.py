@@ -304,6 +304,10 @@ class Server(Base):
         self.update_config({"log": True})
         self.setup_nginx()
 
+    def setup_analytics(self):
+        self.update_config({"analytics": True})
+        self.setup_nginx()
+
     def setup_nginx(self):
         self._generate_nginx_config()
         self._generate_agent_nginx_config()
@@ -559,6 +563,7 @@ class Server(Base):
                 "registry": self.config.get("registry", False),
                 "monitor": self.config.get("monitor", False),
                 "log": self.config.get("log", False),
+                "analytics": self.config.get("analytics", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
                 "pages_directory": os.path.join(

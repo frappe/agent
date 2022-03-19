@@ -14,8 +14,9 @@ setup(
     packages=find_packages(),
     zip_safe=False,
     install_requires=install_requires,
-    entry_points="""
-[console_scripts]
-agent=agent.cli:cli
-""",
+    entry_points={
+        "console_scripts": [
+            "agent = agent.cli:cli",
+        ],
+    },
 )
