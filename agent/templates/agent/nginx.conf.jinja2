@@ -179,6 +179,9 @@ server {
 	}
 	
 	location /grafana {
+		auth_basic "Grafana UI";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana-ui.htpasswd;
+
 		proxy_pass http://127.0.0.1:3000/grafana;
 
 		location /grafana/metrics {
