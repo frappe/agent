@@ -112,6 +112,10 @@ server {
 			proxy_pass http://127.0.0.1:6070/metrics;
 		}
 
+		location /metrics/elasticsearch {
+			proxy_pass http://127.0.0.1:9114/metrics;
+		}
+
 	}
 
 	{% if registry %}
