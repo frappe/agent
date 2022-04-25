@@ -56,6 +56,7 @@ class Monitor(Server):
 
         self.generate_prometheus_tls_config(targets["tls"])
         self.generate_prometheus_sites_config(targets["benches"])
+        self.generate_prometheus_domains_config(targets["domains"])
 
     def fetch_targets(self):
         press_url = self.config.get("press_url")
@@ -95,6 +96,21 @@ class Monitor(Server):
             {"block_start_string": "##", "block_end_string": "##"},
         )
         os.rename(temp_tls_config, prometheus_tls_config)
+
+    def generate_prometheus_domains_config(self, domains):
+        prometheus_domains_config = os.path.join(
+            self.prometheus_directory, "file_sd", "domains.yml"
+        )
+        temp_domains_config = tempfile.mkstemp(
+            prefix="agent-prometheus-domains-", suffix=".yml"
+        )[1]
+        self._render_template(
+            "prometheus/domains.yml",
+            {"domains": domains},
+            temp_domains_config,
+            {"block_start_string": "##", "block_end_string": "##"},
+        )
+        os.rename(temp_domains_config, prometheus_domains_config)
 
     def generate_prometheus_cluster_config(self, cluster):
         prometheus_cluster_config = os.path.join(
