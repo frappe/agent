@@ -54,6 +54,7 @@ class Monitor(Server):
         for cluster in targets["clusters"]:
             self.generate_prometheus_cluster_config(cluster)
 
+        self.generate_prometheus_tls_config(targets["tls"])
         self.generate_prometheus_sites_config(targets["benches"])
 
     def fetch_targets(self):
@@ -79,6 +80,21 @@ class Monitor(Server):
             {"block_start_string": "##", "block_end_string": "##"},
         )
         os.rename(temp_sites_config, prometheus_sites_config)
+
+    def generate_prometheus_tls_config(self, tls):
+        prometheus_tls_config = os.path.join(
+            self.prometheus_directory, "file_sd", "tls.yml"
+        )
+        temp_tls_config = tempfile.mkstemp(
+            prefix="agent-prometheus-tls-", suffix=".yml"
+        )[1]
+        self._render_template(
+            "prometheus/tls.yml",
+            {"tls": tls},
+            temp_tls_config,
+            {"block_start_string": "##", "block_end_string": "##"},
+        )
+        os.rename(temp_tls_config, prometheus_tls_config)
 
     def generate_prometheus_cluster_config(self, cluster):
         prometheus_cluster_config = os.path.join(
