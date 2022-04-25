@@ -81,7 +81,7 @@ class Monitor(Server):
         )
         os.rename(temp_sites_config, prometheus_sites_config)
 
-    def generate_prometheus_tls_config(self, tls):
+    def generate_prometheus_tls_config(self, servers):
         prometheus_tls_config = os.path.join(
             self.prometheus_directory, "file_sd", "tls.yml"
         )
@@ -90,7 +90,7 @@ class Monitor(Server):
         )[1]
         self._render_template(
             "prometheus/tls.yml",
-            {"tls": tls},
+            {"servers": servers},
             temp_tls_config,
             {"block_start_string": "##", "block_end_string": "##"},
         )
