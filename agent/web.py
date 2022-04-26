@@ -200,6 +200,13 @@ def archive_bench(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/restart", methods=["POST"])
+def restart_bench(bench):
+    data = request.json
+    job = Server().benches[bench].restart_job(**data)
+    return {"job": job}
+
+
 """
 POST /benches/bench-1/sites
 {

@@ -418,6 +418,16 @@ class Bench(Base):
     def disable_production(self):
         return self.stop()
 
+    @job("Bench Restart")
+    def restart_job(self, web_only=False):
+        return self.restart(web_only=web_only)
+
+    @step("Bench Restart")
+    def restart(self, web_only=False):
+        return self.docker_execute(
+            f"bench restart {'--web' if web_only else ''}"
+        )
+
     @property
     def apps(self):
         with open(self.apps_file, "r") as f:
