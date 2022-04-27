@@ -3,6 +3,7 @@ from agent.server import Server
 from pathlib import Path
 from datetime import datetime
 import re
+from peewee import MySQLDatabase
 
 
 class DatabaseServer(Server):
@@ -72,3 +73,23 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(files, key=lambda x: x["name"])
+
+    def processes(self, private_ip, mariadb_root_password):
+        processes = []
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            cursor = mariadb.execute_sql("SHOW FULL PROCESSLIST")
+            rows = cursor.fetchall()
+            columns = [d[0] for d in cursor.description]
+            processes = list(map(lambda x: dict(zip(columns, x)), rows))
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return processes

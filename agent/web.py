@@ -631,6 +631,12 @@ def get_binary_logs():
     return jsonify(DatabaseServer().binary_logs)
 
 
+@application.route("/database/processes")
+def get_daabase_processes():
+    data = request.json
+    return jsonify(DatabaseServer().processes(**data))
+
+
 @application.route("/database/binary/logs/<string:log>", methods=["POST"])
 def get_binary_log(log):
     data = request.json
