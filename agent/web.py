@@ -637,6 +637,12 @@ def get_daabase_processes():
     return jsonify(DatabaseServer().processes(**data))
 
 
+@application.route("/database/processes/kill", methods=["POST"])
+def kill_daabase_processes():
+    data = request.json
+    return jsonify(DatabaseServer().kill_processes(**data))
+
+
 @application.route("/database/binary/logs/<string:log>", methods=["POST"])
 def get_binary_log(log):
     data = request.json

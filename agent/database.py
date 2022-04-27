@@ -93,3 +93,23 @@ class DatabaseServer(Server):
 
             traceback.print_exc()
         return processes
+
+    def kill_processes(
+        self, private_ip, mariadb_root_password, kill_threshold
+    ):
+        processes = self.processes(private_ip, mariadb_root_password)
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            for process in processes:
+                if process.get("Time", 0) >= kill_threshold:
+                    mariadb.execute_sql(f"KILL {process['Id']}")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
