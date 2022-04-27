@@ -107,7 +107,7 @@ class DatabaseServer(Server):
                 port=3306,
             )
             for process in processes:
-                if process.get("Time", 0) >= kill_threshold:
+                if (process["Time"] or 0) >= kill_threshold:
                     mariadb.execute_sql(f"KILL {process['Id']}")
         except Exception:
             import traceback
