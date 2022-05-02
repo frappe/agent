@@ -119,9 +119,6 @@ def site_analytics():
 
 @setup.command()
 def usage():
-    import os
-    import sys
-
     from crontab import CronTab
 
     script_directory = os.path.dirname(__file__)
