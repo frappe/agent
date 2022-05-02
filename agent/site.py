@@ -538,6 +538,12 @@ print(">>>" + frappe.session.sid + "<<<")
             "backups": b2mb(backup_directory_size),
         }
 
+    def get_analytics(self):
+        analytics = self.bench_execute("execute frappe.utils.get_site_info")[
+            "output"
+        ]
+        return json.loads(analytics)
+
     def get_database_size(self):
         # only specific to mysql/mariaDB. use a different query for postgres.
         # or try using frappe.db.get_database_size if possible
