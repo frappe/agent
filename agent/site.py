@@ -23,6 +23,10 @@ class Site(Base):
         self.touched_tables_file = os.path.join(
             self.directory, "touched_tables.json"
         )
+        self.analytics_file = os.path.join(
+            self.directory,
+            "analytics.json",
+        )
 
         if not os.path.isdir(self.directory):
             raise OSError(f"Path {self.directory} is not a directory")
