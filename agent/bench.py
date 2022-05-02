@@ -115,6 +115,17 @@ class Bench(Base):
 
         return info
 
+    def fetch_sites_analytics(self):
+        analytics = {}
+        for site in self.sites.values():
+            try:
+                analytics[site.name] = site.fetch_site_analytics()
+            except Exception:
+                import traceback
+
+                traceback.print_exc()
+        return analytics
+
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 

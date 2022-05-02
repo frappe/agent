@@ -133,6 +133,11 @@ def fetch_sites_info(bench):
     return Server().benches[bench].fetch_sites_info(since=since)
 
 
+@application.route("/benches/<string:bench>/analytics", methods=["GET"])
+def fetch_sites_analytics(bench):
+    return Server().benches[bench].fetch_sites_analytics()
+
+
 @application.route("/benches/<string:bench>/sites")
 def get_sites(bench):
     sites = Server().benches[bench].sites
@@ -357,6 +362,13 @@ def fetch_site_status(bench, site):
 )
 def fetch_site_info(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_info()}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/analytics", methods=["GET"]
+)
+def fetch_site_analytics(bench, site):
+    return {"data": Server().benches[bench].sites[site].fetch_site_analytics()}
 
 
 @application.route(

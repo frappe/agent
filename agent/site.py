@@ -448,6 +448,9 @@ class Site(Base):
         }
         return data
 
+    def fetch_site_analytics(self):
+        return json.load(open(self.analytics_file))
+
     def sid(self, user="Administrator"):
         code = f"""import frappe
 from frappe.app import init_request
