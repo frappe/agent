@@ -112,8 +112,8 @@ def site_analytics():
 
     if command not in str(cron):
         job = cron.new(command=command)
-        job.every(6).hours()
-        job.minute.on(45)
+        job.hour.on(23)
+        job.minute.on(0)
         cron.write()
 
 
