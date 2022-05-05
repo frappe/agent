@@ -644,13 +644,13 @@ def get_binary_logs():
 
 
 @application.route("/database/processes", methods=["POST"])
-def get_daabase_processes():
+def get_database_processes():
     data = request.json
     return jsonify(DatabaseServer().processes(**data))
 
 
 @application.route("/database/processes/kill", methods=["POST"])
-def kill_daabase_processes():
+def kill_database_processes():
     data = request.json
     return jsonify(DatabaseServer().kill_processes(**data))
 
