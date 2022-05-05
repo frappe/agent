@@ -110,11 +110,13 @@ def site_analytics():
         f" 1>> {stdout} 2>> {stderr}"
     )
 
-    if command not in str(cron):
-        job = cron.new(command=command)
-        job.hour.on(23)
-        job.minute.on(0)
-        cron.write()
+    if command in str(cron):
+        cron.remove_all(command=command)
+
+    job = cron.new(command=command)
+    job.hour.on(23)
+    job.minute.on(0)
+    cron.write()
 
 
 @setup.command()
