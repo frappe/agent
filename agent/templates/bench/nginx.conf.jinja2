@@ -64,7 +64,7 @@ server {
 		rewrite ^(.+)/index\.html$ https://$host$1 permanent;
 		rewrite ^(.+)\.html$ https://$host$1 permanent;
 
-		location ~ ^/files/.*.(htm|html|svg|xml) {
+		location ~* ^/files/.*.(htm|html|svg|xml) {
 			add_header Content-disposition "attachment";
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
