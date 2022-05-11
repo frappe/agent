@@ -29,6 +29,10 @@ class ProxySQL(Server):
         self.add_backend(backend)
         self.add_user(username, password, database, backend)
 
+    @job("Add Backend to ProxySQL")
+    def add_backend_job(self, backend):
+        self.add_backend(backend)
+
     @step("Add Backend to ProxySQL")
     def add_backend(self, backend):
         backend_id = backend["id"]

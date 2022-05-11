@@ -702,6 +702,14 @@ def proxysql_add_user():
     return {"job": job}
 
 
+@application.route("/proxysql/backends", methods=["POST"])
+def proxysql_add_backend():
+    data = request.json
+
+    job = ProxySQL().add_backend_job(data["backend"])
+    return {"job": job}
+
+
 @application.route("/proxysql/users/<string:username>", methods=["DELETE"])
 def proxysql_remove_user(username):
     job = ProxySQL().remove_user_job(username)
