@@ -84,6 +84,10 @@ server {
 			proxy_pass http://127.0.0.1:9104/metrics;
 		}
 	
+		location /metrics/mariadb_proxy {
+			proxy_pass http://127.0.0.1:9104/metrics;
+		}
+
 		location /metrics/gunicorn {
 			proxy_pass http://127.0.0.1:9102/metrics;
 		}
