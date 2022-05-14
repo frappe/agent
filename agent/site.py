@@ -158,6 +158,9 @@ class Site(Base):
         self.set_admin_password(admin_password)
         self.enable_scheduler()
 
+        self.bench.setup_nginx()
+        self.bench.server.reload_nginx()
+
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
