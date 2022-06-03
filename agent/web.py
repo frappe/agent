@@ -781,3 +781,14 @@ def toggle_minio_user(username, action):
 def remove_minio_user(username):
     job = Minio().remove_user(username)
     return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/update/saas",
+    methods=["POST"],
+)
+def update_saas_plan(bench, site):
+    data = request.json
+    job = Server().benches[bench].sites[site].update_saas_plan(data["plan"])
+
+    return job

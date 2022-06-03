@@ -288,6 +288,14 @@ class Site(Base):
     def update_config_job(self, value, remove):
         self.update_config(value, remove)
 
+    @job("Update Saas Plan")
+    def update_saas_plan(self, plan):
+        self.update_plan(plan)
+
+    @step("Update Saas Plan")
+    def update_plan(self, plan):
+        self.bench_execute(f"update-site-plan {plan}")
+
     @step("Backup Site")
     def backup(self, with_files=False):
         with_files = "--with-files" if with_files else ""
