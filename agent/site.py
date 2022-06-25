@@ -403,6 +403,13 @@ class Site(Base):
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
+        try:
+            self.bench_execute(
+                "execute frappe.modules.patch_handler.block_user "
+                "--args False,",
+            )
+        except Exception:
+            pass
         return self.bench_execute("set-maintenance-mode off")
 
     @step("Restore Touched Tables")
