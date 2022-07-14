@@ -526,9 +526,13 @@ print(">>>" + frappe.session.sid + "<<<")
 
         for file in os.listdir(backup_directory):
             path = os.path.join(backup_directory, file)
-            if file.endswith("database.sql.gz") or file.endswith("database-enc.sql.gz"):
+            if file.endswith("database.sql.gz") or file.endswith(
+                "database-enc.sql.gz"
+            ):
                 databases.append(path)
-            elif file.endswith("private-files.tar") or file.endswith("private-files-enc.tar"):
+            elif file.endswith("private-files.tar") or file.endswith(
+                "private-files-enc.tar"
+            ):
                 privates.append(path)
             elif file.endswith("files.tar") or file.endswith("files-enc.tar"):
                 publics.append(path)
