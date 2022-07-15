@@ -353,7 +353,7 @@ class Bench(Base):
         )
         try:
             return self.docker_execute(
-                f"bench drop-site "
+                f"bench drop-site --no-backup "
                 f"--root-login {temp_user} --root-password {temp_password} "
                 f"--archived-sites-path archived {name}"
             )
