@@ -287,7 +287,7 @@ class Proxy(Server):
                 for site in os.listdir(upstream_directory):
                     with open(os.path.join(upstream_directory, site)) as f:
                         status = f.read().strip()
-                    if status in ("deactivated", "suspended"):
+                    if status in ("deactivated", "suspended", "suspended_saas"):
                         actual_upstream = status
                     else:
                         actual_upstream = hashed_upstream
