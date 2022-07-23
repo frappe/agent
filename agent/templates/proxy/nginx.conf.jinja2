@@ -20,6 +20,11 @@ upstream suspended {
 	keepalive 100;
 }
 
+upstream suspended_saas {
+	server 127.0.0.1:10093;
+	keepalive 100;
+}
+
 map $actual_host $upstream_server_hash {
 {% for upstream in upstreams.values() -%}
 	{% for site in upstream["sites"] %}
@@ -227,6 +232,22 @@ server {
 	}
 
 	location = /suspended.html {
+		internal;
+	}
+}
+
+
+server {
+	listen 127.0.0.1:10093;
+
+	root {{ error_pages_directory }};
+	error_page 402 /suspended_saas.html;
+
+	location / {
+		return 402;
+	}
+
+	location = /suspended_saas.html {
 		internal;
 	}
 
