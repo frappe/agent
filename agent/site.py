@@ -66,6 +66,19 @@ class Site(Base):
         self.disable_maintenance_mode()
         self.enable_scheduler()
 
+    @job("Run After Migrate Steps")
+    def run_after_migrate_steps_job(self, admin_password):
+        """
+        Run after migrate steps
+
+        Used to run after-migrate steps for when migrations break.
+        """
+        self.set_admin_password(admin_password)
+        self.bench.setup_nginx()
+        self.bench.server.reload_nginx()
+        self.disable_maintenance_mode()
+        self.enable_scheduler()
+
     @step("Install Apps")
     def install_apps(self, apps):
         data = {"apps": {}}

@@ -790,5 +790,19 @@ def remove_minio_user(username):
 def update_saas_plan(bench, site):
     data = request.json
     job = Server().benches[bench].sites[site].update_saas_plan(data["plan"])
+    return job
 
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/run_after_migrate_steps",
+    methods=["POST"],
+)
+def run_after_migrate_steps(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .run_after_migrate_steps_job(data["admin_password"])
+    )
     return job

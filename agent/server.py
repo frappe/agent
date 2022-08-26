@@ -5,6 +5,7 @@ import shutil
 import tempfile
 
 from datetime import datetime
+from typing import Dict
 from peewee import MySQLDatabase
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
@@ -337,7 +338,7 @@ class Server(Base):
                 pass
 
     @property
-    def benches(self):
+    def benches(self) -> Dict[str, Bench]:
         benches = {}
         for directory in os.listdir(self.benches_directory):
             try:

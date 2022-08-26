@@ -2,6 +2,7 @@ import hashlib
 import os
 import json
 import shutil
+from typing import Dict
 import requests
 import string
 import tempfile
@@ -556,7 +557,7 @@ class Bench(Base):
         return self.server.job_record
 
     @property
-    def sites(self):
+    def sites(self) -> Dict[str, Site]:
         sites = {}
         for directory in os.listdir(self.sites_directory):
             try:
