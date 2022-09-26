@@ -89,6 +89,7 @@ class Site(Base):
             if app != "frappe":
                 log["install"] = self.bench_execute(f"install-app {app}")
                 output.append(log["install"]["output"])
+        data["output"] = "\n".join(output)
         return data
 
     @step("Install App on Site")
