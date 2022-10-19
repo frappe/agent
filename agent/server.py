@@ -278,6 +278,10 @@ class Server(Base):
             command, directory=directory, skip_output_log=skip_output_log
         )
 
+    @job("Reload NGINX")
+    def restart_nginx(self):
+        return self.reload_nginx()
+
     @step("Reload NGINX")
     def reload_nginx(self):
         return self._reload_nginx()

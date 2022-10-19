@@ -104,6 +104,12 @@ def get_server():
     return Server().dump()
 
 
+@application.route("/server/reload", methods=["POST"])
+def restart_nginx():
+    job = Server().restart_nginx()
+    return {"job": job}
+
+
 @application.route("/server/status", methods=["POST"])
 def get_server_status():
     data = request.json
