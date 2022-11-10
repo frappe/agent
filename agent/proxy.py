@@ -78,6 +78,7 @@ class Proxy(Server):
     @step("Add Site File to Upstream Directory")
     def add_site_to_upstream(self, upstream, site):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
+        os.makedirs(upstream_directory, exist_ok=True)
         site_file = os.path.join(upstream_directory, site)
         Path(site_file).touch()
 
