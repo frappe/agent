@@ -348,13 +348,14 @@ class Bench(Base):
         return site.bench_execute("list-apps")
 
     @step("Archive Site")
-    def bench_archive_site(self, name, mariadb_root_password):
+    def bench_archive_site(self, name, mariadb_root_password, force):
         site_database, temp_user, temp_password = self.create_mariadb_user(
             name, mariadb_root_password, self.sites[name].database
         )
+        force_flag = "--force" if force else ""
         try:
             return self.docker_execute(
-                f"bench drop-site --no-backup "
+                f"bench drop-site --no-backup {force_flag} "
                 f"--root-login {temp_user} --root-password {temp_password} "
                 f"--archived-sites-path archived {name}"
             )
@@ -388,8 +389,8 @@ class Bench(Base):
         shutil.rmtree(backup_files_directory)
 
     @job("Archive Site")
-    def archive_site(self, name, mariadb_root_password):
-        self.bench_archive_site(name, mariadb_root_password)
+    def archive_site(self, name, mariadb_root_password, force):
+        self.bench_archive_site(name, mariadb_root_password, force)
         self.setup_nginx()
         self.server._reload_nginx()
 

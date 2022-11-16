@@ -497,7 +497,7 @@ def archive_site(bench, site):
     job = (
         Server()
         .benches[bench]
-        .archive_site(site, data["mariadb_root_password"])
+        .archive_site(site, data["mariadb_root_password"], data.get("force"))
     )
     return {"job": job}
 
