@@ -1,5 +1,5 @@
 [program:web]
-command={{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} --max_requests 5000 --max_requests_jitter 1000 agent.web:application
+command={{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application
 environment=PYTHONUNBUFFERED=1
 autostart=true
 autorestart=true
