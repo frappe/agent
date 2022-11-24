@@ -60,7 +60,12 @@ class Server(Base):
             f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
             f"{config['docker_image']} cp -LR config/. configmount"
         )
-        self.execute(command, directory=bench_directory)
+        try:
+            self.execute(command, directory=bench_directory)
+        except AgentException as e:
+            if "Create failed: unexpected EOF" in e.data["output"]:
+                self.move_bench_to_archived_directory()
+            raise e
 
         sites_directory = os.path.join(bench_directory, "sites")
         # Copy sites directory from image to host system
