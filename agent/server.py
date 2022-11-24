@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 from peewee import MySQLDatabase
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
@@ -104,6 +104,14 @@ class Server(Base):
         self.remove_archived_benches()
         self.remove_temporary_files()
         self.remove_unused_docker_artefacts()
+
+    def remove_benches_without_container(self, benches: List[str]):
+        for bench in benches:
+            try:
+                self.execute(f"docker ps -a | grep {bench}")
+            except AgentException as e:
+                if e.data.returncode:
+                    self.move_to_archived_directory(Bench(bench, self))
 
     @step("Remove Archived Benches")
     def remove_archived_benches(self):
