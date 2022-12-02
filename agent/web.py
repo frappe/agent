@@ -812,3 +812,13 @@ def run_after_migrate_steps(bench, site):
         .run_after_migrate_steps_job(data["admin_password"])
     )
     return job
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/move_to_bench",
+    methods=["POST"],
+)
+def move_site_to_bench(bench, site):
+    data = request.json
+    job = Server().move_site_to_bench(site, bench, data["destination_bench"])
+    return job
