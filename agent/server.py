@@ -272,6 +272,41 @@ class Server(Base):
         if activate:
             site.disable_maintenance_mode()
 
+    @job("Move Site to Bench")
+    def move_site_to_bench(
+        self, name, source, target, deactivate, activate, skip_failing_patches
+    ):
+        # Dangerous method (no backup), use update_site_migrate if you don't know what you're doing
+        source = Bench(source, self)
+        target = Bench(target, self)
+        site = Site(name, source)
+
+        if deactivate:  # cases when python is broken in bench
+            site.enable_maintenance_mode()
+            site.wait_till_ready()
+
+        self.move_site(site, target)
+
+        source.setup_nginx()
+        target.setup_nginx_target()
+        self.reload_nginx()
+
+        site = Site(name, target)
+
+        site.migrate(skip_failing_patches=skip_failing_patches)
+
+        try:
+            site.bench_execute(
+                "execute"
+                " frappe.website.doctype.website_theme.website_theme"
+                ".generate_theme_files_if_not_exist"
+            )
+        except Exception:
+            pass
+
+        if activate:
+            site.disable_maintenance_mode()
+
     @job("Recover Failed Site Update", priority="high")
     def update_site_recover_job(self, name, bench):
         site = self.benches[bench].sites[name]
