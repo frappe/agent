@@ -796,7 +796,7 @@ def remove_minio_user(username):
 def update_saas_plan(bench, site):
     data = request.json
     job = Server().benches[bench].sites[site].update_saas_plan(data["plan"])
-    return job
+    return {"job": job}
 
 
 @application.route(
@@ -811,7 +811,7 @@ def run_after_migrate_steps(bench, site):
         .sites[site]
         .run_after_migrate_steps_job(data["admin_password"])
     )
-    return job
+    return {"job": job}
 
 
 @application.route(
@@ -828,4 +828,4 @@ def move_site_to_bench(bench, site):
         data.get("activate", True),
         data.get("skip_failing_patches", False),
     )
-    return job
+    return {"job": job}
