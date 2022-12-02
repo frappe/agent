@@ -820,5 +820,12 @@ def run_after_migrate_steps(bench, site):
 )
 def move_site_to_bench(bench, site):
     data = request.json
-    job = Server().move_site_to_bench(site, bench, data["destination_bench"])
+    job = Server().move_site_to_bench(
+        site,
+        bench,
+        data["target"],
+        data.get("deactivate", True),
+        data.get("activate", True),
+        data.get("skip_failing_patches", False),
+    )
     return job

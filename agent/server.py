@@ -274,15 +274,16 @@ class Server(Base):
 
     @job("Move Site to Bench")
     def move_site_to_bench(
-        self, name, source, target, activate, skip_failing_patches
+        self, name, source, target, deactivate, activate, skip_failing_patches
     ):
         # Dangerous method (no backup), use update_site_migrate if you don't know what you're doing
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
 
-        site.enable_maintenance_mode()
-        site.wait_till_ready()
+        if deactivate:  # cases when python is broken in bench
+            site.enable_maintenance_mode()
+            site.wait_till_ready()
 
         self.move_site(site, target)
 
