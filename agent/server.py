@@ -93,6 +93,8 @@ class Server(Base):
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
+        if not os.path.exists(os.path.join(self.benches_directory, name)):
+            return
         bench = Bench(name, self)
         if bench.sites:
             raise Exception("Bench has sites")
