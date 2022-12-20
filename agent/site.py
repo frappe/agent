@@ -326,11 +326,21 @@ class Site(Base):
             offsite["auth"],
             offsite["path"],
         )
-        s3 = boto3.client(
-            "s3",
-            aws_access_key_id=auth["ACCESS_KEY"],
-            aws_secret_access_key=auth["SECRET_KEY"],
-        )
+        region = auth.get("REGION")
+
+        if region:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+                region_name=region,
+            )
+        else:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+            )
 
         for backup_file in backup_files.values():
             file_name = backup_file["file"].split(os.sep)[-1]

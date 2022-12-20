@@ -278,7 +278,8 @@ class Server(Base):
     def move_site_to_bench(
         self, name, source, target, deactivate, activate, skip_failing_patches
     ):
-        # Dangerous method (no backup), use update_site_migrate if you don't know what you're doing
+        # Dangerous method (no backup),
+        # use update_site_migrate if you don't know what you're doing
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
