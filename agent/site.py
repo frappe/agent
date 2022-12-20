@@ -333,7 +333,7 @@ class Site(Base):
                 "s3",
                 aws_access_key_id=auth["ACCESS_KEY"],
                 aws_secret_access_key=auth["SECRET_KEY"],
-                region=region,
+                region_name=region,
             )
         else:
             s3 = boto3.client(
