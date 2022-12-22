@@ -399,7 +399,8 @@ def migrate_site(bench, site):
         .benches[bench]
         .sites[site]
         .migrate_job(
-            skip_failing_patches=data.get("skip_failing_patches", False)
+            skip_failing_patches=data.get("skip_failing_patches", False),
+            activate=data.get("activate", True),
         )
     )
     return {"job": job}

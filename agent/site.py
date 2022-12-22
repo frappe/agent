@@ -178,8 +178,10 @@ class Site(Base):
         return self.bench_execute("list-apps")
 
     @job("Migrate Site")
-    def migrate_job(self, skip_failing_patches=False):
-        return self.migrate(skip_failing_patches=skip_failing_patches)
+    def migrate_job(self, skip_failing_patches=False, activate=True):
+        self.migrate(skip_failing_patches=skip_failing_patches)
+        if activate:
+            self.disable_maintenance_mode()
 
     @step("Reinstall Site")
     def reinstall(
