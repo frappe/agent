@@ -830,3 +830,10 @@ def move_site_to_bench(bench, site):
         data.get("skip_failing_patches", False),
     )
     return {"job": job}
+
+
+@application.errorhandler(Exception)
+def all_exception_handler(error):
+    import traceback
+
+    return {"error": str(error), "traceback": traceback.format_exc()}, 500
