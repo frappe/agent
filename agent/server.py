@@ -103,6 +103,9 @@ class Server(Base):
             raise Exception("Container exists")
 
     def sites_directory_empty(self, bench_directory):
+        """
+        Throw if sites bench has sites
+        """
         sites_directory = os.path.join(bench_directory, "sites")
         for directory in os.listdir(sites_directory):
             if directory.count(".") >= 2:  # x.frappe.cloud
@@ -119,11 +122,11 @@ class Server(Base):
         except FileNotFoundError as e:
             if not e.filename.endswith("common_site_config.json"):
                 raise
-            self.container_exists(name)
         else:
             if bench.sites:
                 raise Exception("Bench has sites")
             bench.disable_production()
+        self.container_exists(name)
         self.move_bench_to_archived_directory(name)
 
     @job("Cleanup Unused Files", priority="low")
