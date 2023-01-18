@@ -102,10 +102,18 @@ class Server(Base):
         else:
             raise Exception("Container exists")
 
+    def sites_directory_empty(self, bench_directory):
+        sites_directory = os.path.join(bench_directory, "sites")
+        for directory in os.listdir(sites_directory):
+            if directory.count(".") >= 2:  # x.frappe.cloud
+                raise Exception("Bench has sites")
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
-        if not os.path.exists(os.path.join(self.benches_directory, name)):
+        bench_directory = os.path.join(self.benches_directory, name)
+        if not os.path.exists(bench_directory):
             return
+        self.sites_directory_empty(bench_directory)
         try:
             bench = Bench(name, self)
         except FileNotFoundError as e:
