@@ -1,5 +1,7 @@
 import json
 import logging
+import sys
+import traceback
 from base64 import b64decode
 
 from flask import Flask, jsonify, request
@@ -834,4 +836,8 @@ def move_site_to_bench(bench, site):
 
 @application.errorhandler(Exception)
 def all_exception_handler(error):
-    return {"error": traceback.format_exception(*sys.exc_info())}, 500
+    return {
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
+    }, 500
