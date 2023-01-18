@@ -116,7 +116,7 @@ class Server(Base):
             if bench.sites:
                 raise Exception("Bench has sites")
             bench.disable_production()
-        self.move_bench_to_archived_directory(bench)
+        self.move_bench_to_archived_directory(name)
 
     @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self):
@@ -185,13 +185,14 @@ class Server(Base):
         }
 
     @step("Move Bench to Archived Directory")
-    def move_bench_to_archived_directory(self, bench):
+    def move_bench_to_archived_directory(self, bench_name):
         if not os.path.exists(self.archived_directory):
             os.mkdir(self.archived_directory)
-        target = os.path.join(self.archived_directory, bench.name)
+        target = os.path.join(self.archived_directory, bench_name)
         if os.path.exists(target):
             shutil.rmtree(target)
-        self.execute(f"mv {bench.directory} {self.archived_directory}")
+        bench_directory = os.path.join(self.benches_directory, bench_name)
+        self.execute(f"mv {bench_directory} {self.archived_directory}")
 
     @job("Update Site Pull", priority="low")
     def update_site_pull_job(self, name, source, target, activate):
