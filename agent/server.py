@@ -91,14 +91,31 @@ class Server(Base):
         bench.deploy()
         bench.setup_nginx()
 
+    def container_exists(self, name: str):
+        """
+        Throw if container exists
+        """
+        try:
+            self.execute(f"""docker ps --filter "name={name}" | grep {name}""")
+        except AgentException:
+            pass  # container does not exist
+        else:
+            raise Exception("Container exists")
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         if not os.path.exists(os.path.join(self.benches_directory, name)):
             return
-        bench = Bench(name, self)
-        if bench.sites:
-            raise Exception("Bench has sites")
-        bench.disable_production()
+        try:
+            bench = Bench(name, self)
+        except FileNotFoundError as e:
+            if not e.filename.endswith("common_site_config.json"):
+                raise
+            self.container_exists(name)
+        else:
+            if bench.sites:
+                raise Exception("Bench has sites")
+            bench.disable_production()
         self.move_bench_to_archived_directory(bench)
 
     @job("Cleanup Unused Files", priority="low")
