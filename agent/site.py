@@ -429,7 +429,11 @@ class Site(Base):
     @step("Restore Touched Tables")
     def restore_touched_tables(self):
         data = {"tables": {}}
-        for table in self.touched_tables:
+        try:
+            tables_to_restore = self.touched_tables
+        except Exception:
+            tables_to_restore = self.tables
+        for table in tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             if os.path.exists(backup_file):
                 output = self.execute(
