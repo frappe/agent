@@ -317,7 +317,7 @@ def reinstall_site(bench, site):
 )
 def rename_site(bench, site):
     data = request.json
-    job = Server().benches[bench].sites[site].rename_job(data["new_name"])
+    job = Server().benches[bench].rename_site_job(site, data["new_name"])
     return {"job": job}
 
 

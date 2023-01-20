@@ -165,6 +165,25 @@ class Bench(Base):
         finally:
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
+    @job("Rename Site", priority="high")
+    def rename_site_job(self, site: str, new_name: str):
+        try:
+            site = Site(site, self)
+        except OSError:
+            site = Site(new_name, self)
+            return
+        except OSError:
+            raise Exception(f"Neither {site} nor {new_name} exists")
+        site.enable_maintenance_mode()
+        site.wait_till_ready()
+        if site.config.get("host_name") == f"https://{site.name}":
+            site.update_config({"host_name": f"https://{new_name}"})
+        site.rename(new_name)
+        self.setup_nginx()
+        self.server.reload_nginx()
+        site.disable_maintenance_mode()
+        site.enable_scheduler()
+
     def get_database_name(self, site):
         site_directory = os.path.join(self.sites_directory, "sites", site)
         return "_" + hashlib.sha1(site_directory.encode()).hexdigest()[:16]

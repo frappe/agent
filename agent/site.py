@@ -54,18 +54,6 @@ class Site(Base):
         )
         self.name = new_name
 
-    @job("Rename Site", priority="high")
-    def rename_job(self, new_name):
-        self.enable_maintenance_mode()
-        self.wait_till_ready()
-        if self.config.get("host_name") == f"https://{self.name}":
-            self.update_config({"host_name": f"https://{new_name}"})
-        self.rename(new_name)
-        self.bench.setup_nginx()
-        self.bench.server.reload_nginx()
-        self.disable_maintenance_mode()
-        self.enable_scheduler()
-
     @job("Run After Migrate Steps")
     def run_after_migrate_steps_job(self, admin_password):
         """

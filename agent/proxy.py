@@ -175,6 +175,8 @@ class Proxy(Server):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         old_site_file = os.path.join(upstream_directory, site)
         new_site_file = os.path.join(upstream_directory, new_name)
+        if not os.path.exists(old_site_file) and os.path.exists(new_site_file):
+            return
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
