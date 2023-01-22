@@ -452,7 +452,12 @@ class Bench(Base):
 
     @step("Bench Disable Production")
     def disable_production(self):
-        return self.stop()
+        try:
+            return self.stop()
+        except AgentException as e:
+            if "No such container" in e.data["output"]:
+                pass
+            raise
 
     @job("Bench Restart")
     def restart_job(self, web_only=False):
