@@ -702,20 +702,3 @@ class Server(Base):
 
     def _get_tree_size(self, path):
         return self.execute(f"du -sh {path}")["output"].split()[0]
-
-    def long_method(
-        self,
-    ):
-        return self.execute("du -h -d 1 /home/aditya/Frappe")["output"]
-
-    @job("Long")
-    def long_step(
-        self,
-    ):
-        return self.long_method()
-
-    @job("Long")
-    def long_job(
-        self,
-    ):
-        return self.long_step()
