@@ -584,10 +584,6 @@ class Bench(Base):
             return self.execute(f"docker stack rm {self.name}")
 
     @property
-    def job_record(self):
-        return self.server.job_record
-
-    @property
     def sites(self) -> Dict[str, Site]:
         sites = {}
         for directory in os.listdir(self.sites_directory):
@@ -596,10 +592,6 @@ class Bench(Base):
             except Exception:
                 pass
         return sites
-
-    @property
-    def step_record(self):
-        return self.server.step_record
 
     def get_usage(self):
         return {

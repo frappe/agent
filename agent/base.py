@@ -6,6 +6,8 @@ from datetime import datetime
 
 
 class Base:
+    job = None
+    step = None
     def __init__(self):
         self.directory = None
         self.config_file = None

@@ -27,9 +27,6 @@ class Server(Base):
         )
         self.nginx_directory = self.config["nginx_directory"]
 
-        self.job = None
-        self.step = None
-
     def docker_login(self, registry):
         url = registry["url"]
         username = registry["username"]
@@ -425,18 +422,6 @@ class Server(Base):
             except Exception:
                 pass
         return benches
-
-    @property
-    def job_record(self):
-        if self.job is None:
-            self.job = Job()
-        return self.job
-
-    @property
-    def step_record(self):
-        if self.step is None:
-            self.step = Step()
-        return self.step
 
     def update_agent_web(self, url=None):
         directory = os.path.join(self.directory, "repo")

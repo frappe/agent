@@ -13,9 +13,6 @@ class SSHProxy(Server):
 
         self.ssh_directory = os.path.join(self.directory, "ssh")
 
-        self.job = None
-        self.step = None
-
     def docker_execute(self, command):
         command = f"docker exec ssh {command}"
         return self.execute(command)

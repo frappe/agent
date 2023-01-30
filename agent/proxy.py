@@ -26,9 +26,6 @@ class Proxy(Server):
             self.directory, "repo", "agent", "pages"
         )
 
-        self.job = None
-        self.step = None
-
     @job("Add Host to Proxy")
     def add_host_job(self, host, target, certificate):
         self.add_host(host, target, certificate)
