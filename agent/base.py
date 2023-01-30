@@ -33,20 +33,17 @@ class Base:
         try:
             self.run_subprocess(command, directory, input)
         except subprocess.CalledProcessError as e:
-            end = datetime.now()
-            self.data.update({"duration": end - start, "end": end})
             self.data.update(
                 {
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
-            self.log()
             raise AgentException(self.data)
-
-        end = datetime.now()
-        self.data.update({"duration": end - start, "end": end})
-        self.log()
+        finally:
+            end = datetime.now()
+            self.data.update({"duration": end - start, "end": end})
+            self.log()
         return self.data
 
     def run_subprocess(self, command, directory, input):
