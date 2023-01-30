@@ -743,7 +743,7 @@ def to_dict(model):
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         job["data"] = json.loads(job["data"]) or {}
-        job_key = f"agent:job:{job['id']}:"
+        job_key = f"agent:job:{job['id']}"
         job["commands"] = [
             json.loads(command) for command in redis.lrange(job_key, 0, -1)
         ]
