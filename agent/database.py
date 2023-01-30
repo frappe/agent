@@ -36,9 +36,8 @@ class DatabaseServer(Server):
 
         events = []
         timestamp = 0
-        for line in self.execute(command, skip_output_log=True)[
-            "output"
-        ].split(DELIMITER):
+        self.skip_output_log = True
+        for line in self.execute(command)["output"].split(DELIMITER):
             line = line.strip()
             if line.startswith("SET TIMESTAMP"):
                 timestamp = int(line.split("=")[-1].split(".")[0])
@@ -54,6 +53,7 @@ class DatabaseServer(Server):
                             ),
                         }
                     )
+        self.skip_output_log = False
         return events
 
     @property

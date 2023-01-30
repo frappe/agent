@@ -345,9 +345,11 @@ class Server(Base):
     def move_site(self, site, target):
         shutil.move(site.directory, target.sites_directory)
 
-    def execute(self, command, directory=None, skip_output_log=False):
+    def execute(self, command, directory=None, input=None):
         return super().execute(
-            command, directory=directory, skip_output_log=skip_output_log
+            command,
+            directory=directory,
+            input=input,
         )
 
     @job("Reload NGINX")
