@@ -21,11 +21,8 @@ class Base:
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
 
-    def execute(
-        self, command, directory=None, input=None, skip_output_log=False
-    ):
+    def execute(self, command, directory=None, input=None):
         directory = directory or self.directory
-        self.skip_output_log = skip_output_log
         start = datetime.now()
         self.data = {
             "command": command,
