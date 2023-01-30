@@ -3,11 +3,13 @@ import os
 import subprocess
 import traceback
 from datetime import datetime
+from functools import partial
 
 
 class Base:
     job = None
     step = None
+
     def __init__(self):
         self.directory = None
         self.config_file = None
@@ -24,20 +26,13 @@ class Base:
         self.log("Directory", directory)
         start = datetime.now()
         data = {"command": command, "directory": directory, "start": start}
+        output = None
         try:
-            process = subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=directory,
-                shell=True,
-                input=input.encode() if input else None,
-            )
+            output = self.run_subprocess(command, directory, input)
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
-            output = self.remove_crs(e.output)
+            output = e.output
             if not skip_output_log:
                 self.log("Output", output)
             data.update(
@@ -50,11 +45,54 @@ class Base:
             raise AgentException(data)
 
         end = datetime.now()
-        output = self.remove_crs(process.stdout)
         if not skip_output_log:
             self.log("Output", output)
         data.update({"duration": end - start, "end": end, "output": output})
         return data
+
+    def run_subprocess(self, command, directory, input):
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE if input else None,
+            cwd=directory,
+            shell=True,
+        ) as process:
+            if input:
+                process._stdin_write(input.encode())
+
+            output = self.parse_output(process)
+            retcode = process.poll()
+            if retcode:
+                raise subprocess.CalledProcessError(
+                    retcode, process.args, output=process.stdout
+                )
+        return output
+
+    def parse_output(self, process):
+        lines = []
+        if process.stdout:
+            line = ""
+            for char in iter(partial(process.stdout.read, 1), ""):
+                char = char.decode()
+                if char == "" and process.poll() is not None:
+                    break
+                elif char == "\r":
+                    lines[-1] = line
+                    line = ""
+                    self.publish_output(lines)
+                elif char == "\n":
+                    lines.append(line)
+                    line = ""
+                    self.publish_output(lines)
+                else:
+                    line += char
+        return "\n".join(lines)
+
+    def publish_output(self, lines):
+        output = "\n".join(lines)
+        print(output)
 
     @property
     def config(self):
@@ -64,10 +102,6 @@ class Base:
     def setconfig(self, value, indent=1):
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
-
-    def remove_crs(self, input):
-        output = subprocess.check_output(["col", "-b"], input=input)
-        return output.decode().strip()
 
     def log(self, *args):
         print(*args)
