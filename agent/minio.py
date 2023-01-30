@@ -8,8 +8,6 @@ class Minio(Server):
         self.directory = directory or os.getcwd()
         self.policy_path = "/home/frappe/minio/tmp_policy.json"
         self.host = "localhost"
-        self.job = None
-        self.step = None
 
     @job("Create Minio User")
     def create_subscription(

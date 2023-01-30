@@ -13,8 +13,6 @@ class ProxySQL(Server):
         self.proxysql_admin_password = self.config.get(
             "proxysql_admin_password"
         )
-        self.job = None
-        self.step = None
 
     def proxysql_execute(self, command):
         command = (

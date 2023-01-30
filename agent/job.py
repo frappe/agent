@@ -91,19 +91,20 @@ class Job(Action):
 def step(name):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
-        instance.step_record.start(name, instance.job_record.model.id)
+        instance.step = Step()
+        instance.step.start(name, instance.job.model.id)
         try:
             result = wrapped(*args, **kwargs)
         except AgentException as e:
-            instance.step_record.failure(e.data)
+            instance.step.failure(e.data)
             raise e
         except Exception as e:
-            instance.step_record.failure(
+            instance.step.failure(
                 {"traceback": "".join(traceback.format_exc())}
             )
             raise e
         else:
-            instance.step_record.success(result)
+            instance.step.success(result)
         return result
 
     return wrapper
@@ -113,22 +114,25 @@ def job(name, priority="default"):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         if get_current_job(connection=connection()):
-            instance.job_record.start()
+            instance.job.start()
             try:
                 result = wrapped(*args, **kwargs)
             except AgentException as e:
-                instance.job_record.failure(e.data)
+                instance.job.failure(e.data)
                 raise e
             except Exception as e:
-                instance.job_record.failure(
+                instance.job.failure(
                     {"traceback": "".join(traceback.format_exc())}
                 )
                 raise e
             else:
+                instance.job.success(result)
                 instance.job_record.success(result)
             return result
         else:
-            instance.job_record.enqueue(name, wrapped, args, kwargs)
+            if not instance.job:
+                instance.job = Job()
+            instance.job.enqueue(name, wrapped, args, kwargs)
             queue(priority).enqueue_call(
                 wrapped,
                 args=args,
@@ -136,7 +140,7 @@ def job(name, priority="default"):
                 timeout=4 * 3600,
                 result_ttl=24 * 3600,
             )
-            return instance.job_record.model.id
+            return instance.job.model.id
 
     return wrapper
 
