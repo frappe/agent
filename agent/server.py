@@ -13,7 +13,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 from agent.site import Site
 from agent.bench import Bench
 from agent.base import AgentException, Base
-from agent.job import Job, Step, job, step
+from agent.job import job, step
 
 
 class Server(Base):
