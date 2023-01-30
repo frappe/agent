@@ -103,7 +103,7 @@ class Base:
         data = self.data.copy()
         if self.skip_output_log:
             data.pop("output", None)
-        print(data)
+        print(json.dumps(data, default=str))
 
     @property
     def logs(self):
