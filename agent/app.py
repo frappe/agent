@@ -6,6 +6,7 @@ from agent.base import Base
 class App(Base):
     def __init__(self, name, bench):
         self.name = name
+        self.bench = bench
         self.directory = os.path.join(bench.directory, "apps", name)
         if not os.path.isdir(self.directory):
             raise Exception
@@ -44,3 +45,19 @@ class App(Base):
         if "origin" in remotes:
             return "origin"
         raise Exception(f"Invalid remote for {self.directory}")
+
+    @property
+    def job_record(self):
+        return self.bench.server.job_record
+
+    @job_record.setter
+    def job_record(self, value):
+        self.bench.server.job_record = value
+
+    @property
+    def step_record(self):
+        return self.bench.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.bench.server.step_record = value

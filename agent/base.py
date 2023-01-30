@@ -101,10 +101,10 @@ class Base:
 
     @property
     def redis_key(self):
-        if self.job:
-            key = f"agent:job:{self.job.model.id}"
-            if self.step:
-                return f"{key}:step:{self.step.model.id}"
+        if self.job_record and self.job_record.model:
+            key = f"agent:job:{self.job_record.model.id}"
+            if self.step_record and self.step_record.model:
+                return f"{key}:step:{self.step_record.model.id}"
             return key
         return None
 
