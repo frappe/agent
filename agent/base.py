@@ -81,6 +81,9 @@ class Base:
                     self.publish_output(lines)
                 else:
                     line += char
+            if line:
+                lines.append(line)
+            self.publish_output(lines)
 
     def publish_output(self, lines):
         output = "\n".join(lines)
