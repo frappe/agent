@@ -92,6 +92,9 @@ def step(name):
     def wrapper(wrapped, instance, args, kwargs):
         from agent.base import AgentException
 
+        if not instance.job:
+            instance.job = Job()
+            instance.job.enqueue(name, wrapped, args, kwargs)
         instance.step = Step()
         instance.step.start(name, instance.job.model.id)
         try:
