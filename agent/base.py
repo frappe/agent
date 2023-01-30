@@ -10,11 +10,13 @@ class Base:
     job = None
     step = None
     data = {}
+    skip_output_log = False
 
     def __init__(self):
         self.directory = None
         self.config_file = None
         self.name = None
+        self
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -23,35 +25,31 @@ class Base:
         self, command, directory=None, input=None, skip_output_log=False
     ):
         directory = directory or self.directory
-        self.log("Command", command)
-        self.log("Directory", directory)
+        self.skip_output_log = skip_output_log
         start = datetime.now()
         self.data = {
             "command": command,
             "directory": directory,
             "start": start,
         }
-        output = None
+        self.log()
         try:
-            output = self.run_subprocess(command, directory, input)
+            self.run_subprocess(command, directory, input)
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             self.data.update({"duration": end - start, "end": end})
-            output = e.output
-            if not skip_output_log:
-                self.log("Output", output)
             self.data.update(
                 {
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
+            self.log()
             raise AgentException(self.data)
 
         end = datetime.now()
-        if not skip_output_log:
-            self.log("Output", output)
         self.data.update({"duration": end - start, "end": end})
+        self.log()
         return self.data
 
     def run_subprocess(self, command, directory, input):
@@ -66,13 +64,10 @@ class Base:
             if input:
                 process._stdin_write(input.encode())
 
-            output = self.parse_output(process)
+            self.parse_output(process)
             retcode = process.poll()
             if retcode:
-                raise subprocess.CalledProcessError(
-                    retcode, process.args, output=process.stdout
-                )
-        return output
+                raise subprocess.CalledProcessError(retcode, process.args)
 
     def parse_output(self, process):
         lines = []
@@ -92,7 +87,6 @@ class Base:
                     self.publish_output(lines)
                 else:
                     line += char
-        return "\n".join(lines)
 
     def publish_output(self, lines):
         output = "\n".join(lines)
@@ -108,8 +102,11 @@ class Base:
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
 
-    def log(self, *args):
-        print(*args)
+    def log(self):
+        data = self.data.copy()
+        if self.skip_output_log:
+            data.pop("output", None)
+        print(data)
 
     @property
     def logs(self):
