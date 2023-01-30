@@ -481,6 +481,21 @@ class Server(Base):
 
         self.setup_nginx()
 
+    def get_agent_version(self):
+        directory = os.path.join(self.directory, "repo")
+        return {
+            "commit": self.execute("git rev-parse HEAD", directory=directory)[
+                "output"
+            ],
+            "status": self.execute("git status --short", directory=directory)[
+                "output"
+            ],
+            "upstream": self.execute(
+                "git remote get-url upstream", directory=directory
+            )["output"],
+            "show": self.execute("git show", directory=directory)["output"],
+        }
+
     def status(self, mariadb_root_password):
         return {
             "mariadb": self.mariadb_processlist(

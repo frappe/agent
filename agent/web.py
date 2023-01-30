@@ -768,6 +768,11 @@ def update_agent():
     return {"message": "Success"}
 
 
+@application.route("/version", methods=["GET"])
+def get_version():
+    return Server().get_agent_version()
+
+
 @application.route("/minio/users", methods=["POST"])
 def create_minio_user():
     data = request.json
