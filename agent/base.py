@@ -9,6 +9,7 @@ from functools import partial
 class Base:
     job = None
     step = None
+    data = {}
 
     def __init__(self):
         self.directory = None
@@ -25,30 +26,33 @@ class Base:
         self.log("Command", command)
         self.log("Directory", directory)
         start = datetime.now()
-        data = {"command": command, "directory": directory, "start": start}
+        self.data = {
+            "command": command,
+            "directory": directory,
+            "start": start,
+        }
         output = None
         try:
             output = self.run_subprocess(command, directory, input)
         except subprocess.CalledProcessError as e:
             end = datetime.now()
-            data.update({"duration": end - start, "end": end})
+            self.data.update({"duration": end - start, "end": end})
             output = e.output
             if not skip_output_log:
                 self.log("Output", output)
-            data.update(
+            self.data.update(
                 {
-                    "output": output,
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
-            raise AgentException(data)
+            raise AgentException(self.data)
 
         end = datetime.now()
         if not skip_output_log:
             self.log("Output", output)
-        data.update({"duration": end - start, "end": end, "output": output})
-        return data
+        self.data.update({"duration": end - start, "end": end})
+        return self.data
 
     def run_subprocess(self, command, directory, input):
         with subprocess.Popen(
@@ -92,6 +96,7 @@ class Base:
 
     def publish_output(self, lines):
         output = "\n".join(lines)
+        self.data["output"] = output
         print(output)
 
     @property
