@@ -37,6 +37,8 @@ def save(wrapped, instance, args, kwargs):
 
 
 class Action:
+    model = None
+
     def success(self, data):
         self.model.status = "Success"
         self.model.data = json.dumps(data, default=str)
@@ -92,25 +94,24 @@ def step(name):
     def wrapper(wrapped, instance, args, kwargs):
         from agent.base import AgentException
 
-        if not instance.job:
-            instance.job = Job()
-            instance.job.enqueue(name, wrapped, args, kwargs)
-        instance.step = Step()
-        instance.step.start(name, instance.job.model.id)
+        if not instance.job_record.model:
+            instance.job_record.enqueue(name, wrapped, args, kwargs)
+        instance.step_record = Step()
+        instance.step_record.start(name, instance.job_record.model.id)
         try:
             result = wrapped(*args, **kwargs)
         except AgentException as e:
-            instance.step.failure(e.data)
+            instance.step_record.failure(e.data)
             raise e
         except Exception as e:
-            instance.step.failure(
+            instance.step_record.failure(
                 {"traceback": "".join(traceback.format_exc())}
             )
             raise e
         else:
-            instance.step.success(result)
+            instance.step_record.success(result)
         finally:
-            instance.step = None
+            instance.step_record = None
         return result
 
     return wrapper
@@ -122,26 +123,24 @@ def job(name, priority="default"):
         from agent.base import AgentException
 
         if get_current_job(connection=connection()):
-            instance.job.start()
+            instance.job_record.start()
             try:
                 result = wrapped(*args, **kwargs)
             except AgentException as e:
-                instance.job.failure(e.data)
+                instance.job_record.failure(e.data)
                 raise e
             except Exception as e:
-                instance.job.failure(
+                instance.job_record.failure(
                     {"traceback": "".join(traceback.format_exc())}
                 )
                 raise e
             else:
-                instance.job.success(result)
+                instance.job_record.success(result)
             finally:
-                instance.job = None
+                instance.job_record = None
             return result
         else:
-            if not instance.job:
-                instance.job = Job()
-            instance.job.enqueue(name, wrapped, args, kwargs)
+            instance.job_record.enqueue(name, wrapped, args, kwargs)
             queue(priority).enqueue_call(
                 wrapped,
                 args=args,
@@ -149,7 +148,7 @@ def job(name, priority="default"):
                 timeout=4 * 3600,
                 result_ttl=24 * 3600,
             )
-            return instance.job.model.id
+            return instance.job_record.model.id
 
     return wrapper
 

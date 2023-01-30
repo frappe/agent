@@ -609,3 +609,19 @@ class Bench(Base):
     def set_bench_config(self, value, indent=1):
         with open(self.bench_config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
+
+    @property
+    def job_record(self):
+        return self.server.job_record
+
+    @job_record.setter
+    def job_record(self, value):
+        self.server.job_record = value
+
+    @property
+    def step_record(self):
+        return self.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.server.step_record = value

@@ -613,3 +613,19 @@ print(">>>" + frappe.session.sid + "<<<")
             return int(database_size)
         except Exception:
             return 0
+
+    @property
+    def job_record(self):
+        return self.bench.server.job_record
+
+    @job_record.setter
+    def job_record(self, value):
+        self.bench.server.job_record = value
+
+    @property
+    def step_record(self):
+        return self.bench.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.bench.server.step_record = value

@@ -13,7 +13,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 from agent.site import Site
 from agent.bench import Bench
 from agent.base import AgentException, Base
-from agent.job import job, step
+from agent.job import job, step, Job, Step
 
 
 class Server(Base):
@@ -702,3 +702,23 @@ class Server(Base):
 
     def _get_tree_size(self, path):
         return self.execute(f"du -sh {path}")["output"].split()[0]
+
+    @property
+    def job_record(self):
+        if not self.job:
+            self.job = Job()
+        return self.job
+
+    @job_record.setter
+    def job_record(self, value):
+        self.job = value
+
+    @property
+    def step_record(self):
+        if not self.step:
+            self.step = Step()
+        return self.step
+
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
