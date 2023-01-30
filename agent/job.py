@@ -106,6 +106,8 @@ def step(name):
             raise e
         else:
             instance.step.success(result)
+        finally:
+            instance.step = None
         return result
 
     return wrapper
@@ -130,7 +132,8 @@ def job(name, priority="default"):
                 raise e
             else:
                 instance.job.success(result)
-                instance.job_record.success(result)
+            finally:
+                instance.job = None
             return result
         else:
             if not instance.job:
