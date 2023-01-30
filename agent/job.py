@@ -15,7 +15,6 @@ from peewee import (
 from redis import Redis
 from rq import Queue, get_current_job
 
-from agent.base import AgentException
 
 agent_database = SqliteDatabase("jobs.sqlite3")
 
@@ -91,6 +90,8 @@ class Job(Action):
 def step(name):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
+        from agent.base import AgentException
+
         instance.step = Step()
         instance.step.start(name, instance.job.model.id)
         try:
@@ -113,6 +114,8 @@ def step(name):
 def job(name, priority="default"):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
+        from agent.base import AgentException
+
         if get_current_job(connection=connection()):
             instance.job.start()
             try:
