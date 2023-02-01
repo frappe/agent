@@ -368,10 +368,6 @@ class Bench(Base):
 
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password, force):
-        site_directory = os.path.join(self.sites_directory, name)
-        if not os.path.exists(site_directory):
-            return
-
         site_database, temp_user, temp_password = self.create_mariadb_user(
             name, mariadb_root_password, self.sites[name].database
         )
@@ -413,7 +409,9 @@ class Bench(Base):
 
     @job("Archive Site")
     def archive_site(self, name, mariadb_root_password, force):
-        self.bench_archive_site(name, mariadb_root_password, force)
+        site_directory = os.path.join(self.sites_directory, name)
+        if os.path.exists(site_directory):
+            self.bench_archive_site(name, mariadb_root_password, force)
         self.setup_nginx()
         self.server._reload_nginx()
 
