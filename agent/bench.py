@@ -457,7 +457,8 @@ class Bench(Base):
         except AgentException as e:
             if "No such container" in e.data["output"]:
                 pass
-            raise
+            else:
+                raise
 
     @job("Bench Restart")
     def restart_job(self, web_only=False):
