@@ -118,16 +118,16 @@ class Proxy(Server):
 
     @job("Remove Site from Upstream")
     def remove_site_from_upstream_job(self, upstream, site):
-        self.remove_site_from_upstream(upstream, site)
+        upstream_directory = os.path.join(self.upstreams_directory, upstream)
+        site_file = os.path.join(upstream_directory, site)
+        if os.path.exists(site_file):
+            self.remove_site_from_upstream(site_file)
         self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
-    def remove_site_from_upstream(self, upstream, site):
-        upstream_directory = os.path.join(self.upstreams_directory, upstream)
-        site_file = os.path.join(upstream_directory, site)
-        if os.path.exists(site_file):
-            os.remove(site_file)
+    def remove_site_from_upstream(self, site_file):
+        os.remove(site_file)
 
     @job("Rename Site on Upstream")
     def rename_site_on_upstream_job(
