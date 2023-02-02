@@ -587,6 +587,11 @@ def proxy_add_upstream():
     return {"job": job}
 
 
+@application.route("/proxy/upstreams", methods=["GET"])
+def get_upstreams():
+    return Proxy().upstreams
+
+
 @application.route(
     "/proxy/upstreams/<string:upstream>/rename", methods=["POST"]
 )
