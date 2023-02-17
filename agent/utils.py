@@ -48,4 +48,4 @@ def cint(x):
 
 def b2mb(x):
     """Return B value in MiB"""
-    return ceil(cint(x) / (1024**2))
+    return ceil(cint(x) / (1024 ** 2))
