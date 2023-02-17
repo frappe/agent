@@ -82,7 +82,10 @@ class Bench(Base):
                 print(f"Deleting {file}")
                 os.remove(file)
             else:
-                usage_data.extend(json.load(open(file)))
+                try:
+                    usage_data.extend(json.load(open(file)))
+                except json.decoder.JSONDecodeError:
+                    print(f"Error loading JSON from {file}")
 
         for site in self.sites.values():
             try:
