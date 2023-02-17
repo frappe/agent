@@ -510,10 +510,13 @@ print(">>>" + frappe.session.sid + "<<<")
             f"select defvalue from {self.database}.tabDefaultValue where"
             " defkey = 'time_zone' and parent = '__default'"
         )
-        timezone = self.execute(
-            f"mysql -h {self.host} -u{self.database} -p{self.password} "
-            f'-sN -e "{query}"'
-        )["output"].strip()
+        try:
+            timezone = self.execute(
+                f"mysql -h {self.host} -u{self.database} -p{self.password} "
+                f'-sN -e "{query}"'
+            )["output"].strip()
+        except Exception:
+            timezone = ""
         return timezone
 
     @property
