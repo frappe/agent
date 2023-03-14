@@ -307,10 +307,9 @@ class Site(Base):
         for key in self.bench.docker_execute(keys_command)[
             "output"
         ].splitlines():
-            delete = self.bench.docker_execute(
-                f"redis-cli -p 13000 DEL '{key}'"
-            )
-            data[key] = delete["output"]
+            get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
+            data[key] = get["output"]
+            self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
         return data
 
     @job("Update Saas Plan")
