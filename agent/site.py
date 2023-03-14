@@ -303,13 +303,15 @@ class Site(Base):
     def reset_site_usage(self):
         pattern = f"{self.database}|rate-limit-counter-[0-9]*"
         keys_command = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
-        data = {}
-        for key in self.bench.docker_execute(keys_command)[
-            "output"
-        ].splitlines():
+        keys = self.bench.docker_execute(keys_command)
+        data = {"keys": keys, "get": [], "delete": []}
+        for key in keys["output"].splitlines():
             get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
-            data[key] = get["output"]
-            self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
+            delete = self.bench.docker_execute(
+                f"redis-cli -p 13000 DEL '{key}'"
+            )
+            data["get"].append(get)
+            data["delete"].append(delete)
         return data
 
     @job("Update Saas Plan")
