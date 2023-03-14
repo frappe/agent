@@ -308,7 +308,7 @@ class Site(Base):
             "output"
         ].splitlines():
             delete = self.bench.docker_execute(
-                f"redis-cli -p 13000 DELETE '{key}'"
+                f"redis-cli -p 13000 DEL '{key}'"
             )
             data[key] = delete["output"]
         return data
