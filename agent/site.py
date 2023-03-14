@@ -292,6 +292,17 @@ class Site(Base):
     def update_config_job(self, value, remove):
         self.update_config(value, remove)
 
+    @job("Reset Site Usage", priority="high")
+    def reset_site_usage_job(self):
+        return self.reset_site_usage()
+
+    @step("Reset Site Usage")
+    def reset_site_usage(self):
+        pattern = f"{self.database}|rate-limit-counter-[0-9]*"
+        keys = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
+        delete = "xargs -I% redis-cli -p 13000 GET '%'"
+        return self.bench.execute(f"{keys} | {delete}")
+
     @job("Update Saas Plan")
     def update_saas_plan(self, plan):
         self.update_plan(plan)

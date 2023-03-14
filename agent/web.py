@@ -520,6 +520,14 @@ def site_update_config(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/usage", methods=["DELETE"]
+)
+def reset_site_usage(bench, site):
+    job = Server().benches[bench].sites[site].reset_site_usage_job()
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/domains", methods=["POST"]
 )
 def site_add_domain(bench, site):
