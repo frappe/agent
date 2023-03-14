@@ -299,9 +299,12 @@ class Site(Base):
     @step("Reset Site Usage")
     def reset_site_usage(self):
         pattern = f"{self.database}|rate-limit-counter-[0-9]*"
-        keys = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
-        delete = "xargs -I% redis-cli -p 13000 GET '%'"
-        return self.bench.execute(f"{keys} | {delete}")
+        keys_command = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
+        data = {}
+        for key in self.bench.docker_execute(keys_command)["output"]:
+            delete = self.bench.docker_execute(f"redis-cli -p 13000 GET {key}")
+            data[key] = delete["output"]
+        return data
 
     @job("Update Saas Plan")
     def update_saas_plan(self, plan):
