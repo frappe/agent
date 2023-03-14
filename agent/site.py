@@ -23,6 +23,9 @@ class Site(Base):
         self.touched_tables_file = os.path.join(
             self.directory, "touched_tables.json"
         )
+        self.previous_tables_file = os.path.join(
+            self.directory, "previous_tables.json"
+        )
         self.analytics_file = os.path.join(
             self.directory,
             "analytics.json",
@@ -392,8 +395,12 @@ class Site(Base):
 
     @step("Backup Site Tables")
     def tablewise_backup(self):
+        tables = self.tables
+        json.dump(
+            open(self.previous_tables_file), tables, indent=4, sort_keys=True
+        )
         data = {"tables": {}}
-        for table in self.tables:
+        for table in tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             output = self.execute(
                 "mysqldump --single-transaction --quick --lock-tables=false "
@@ -447,7 +454,7 @@ class Site(Base):
 
     @step("Restore Touched Tables")
     def restore_touched_tables(self):
-        data = {"tables": {}}
+        data = {"restored": {}}
         try:
             tables_to_restore = self.touched_tables
         except Exception:
@@ -459,7 +466,21 @@ class Site(Base):
                     f"mysql -h {self.host} -u {self.user} -p{self.password} "
                     f"{self.database} < '{backup_file}'"
                 )
-                data["tables"][table] = output
+                data["restored"][table] = output
+
+        dropped_tables = self.drop_new_tables()
+        data.update(dropped_tables)
+        return data
+
+    def drop_new_tables(self):
+        new_tables = set(self.tables) - set(self.previous_tables)
+        data = {"dropped": {}}
+        for table in new_tables:
+            output = self.execute(
+                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"{self.database} -e 'DROP TABLE `{table}`'"
+            )
+            data["dropped"][table] = output
         return data
 
     @step("Pause Scheduler")
@@ -548,6 +569,11 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def touched_tables(self):
         with open(self.touched_tables_file, "r") as f:
+            return json.load(f)
+
+    @property
+    def previous_tables(self):
+        with open(self.previous_tables_file, "r") as f:
             return json.load(f)
 
     @job("Backup Site", priority="low")
