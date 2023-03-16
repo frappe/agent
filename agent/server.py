@@ -109,7 +109,7 @@ class Server(Base):
         sites_directory = os.path.join(bench_directory, "sites")
         for directory in os.listdir(sites_directory):
             if directory.count(".") >= 2:  # x.frappe.cloud
-                raise Exception("Bench has sites")
+                raise Exception(f"Bench has sites: {directory}")
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
