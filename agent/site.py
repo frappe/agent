@@ -461,7 +461,7 @@ class Site(Base):
         try:
             tables_to_restore = self.touched_tables
         except Exception:
-            tables_to_restore = self.tables
+            tables_to_restore = self.previous_tables
         for table in tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql")
             if os.path.exists(backup_file):
