@@ -235,7 +235,7 @@ class Server(Base):
 
     @job("Update Site Migrate", priority="low")
     def update_site_migrate_job(
-        self, name, source, target, activate, skip_failing_patches
+        self, name, source, target, activate, skip_failing_patches, skip_backups
     ):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -243,8 +243,10 @@ class Server(Base):
 
         site.enable_maintenance_mode()
         site.wait_till_ready()
-        site.clear_backup_directory()
-        site.tablewise_backup()
+
+        if not skip_backups:
+            site.clear_backup_directory()
+            site.tablewise_backup()
 
         self.move_site(site, target)
 

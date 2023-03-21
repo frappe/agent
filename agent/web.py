@@ -429,6 +429,7 @@ def update_site_migrate(bench, site):
         data["target"],
         data.get("activate", True),
         data.get("skip_failing_patches", False),
+        data.get("skip_backups", False),
     )
     return {"job": job}
 
