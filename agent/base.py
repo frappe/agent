@@ -15,7 +15,12 @@ class Base:
         return f"{self.__class__.__name__}({self.name})"
 
     def execute(
-        self, command, directory=None, input=None, skip_output_log=False
+        self,
+        command,
+        directory=None,
+        input=None,
+        skip_output_log=False,
+        executable=None,
     ):
         directory = directory or self.directory
         self.log("Command", command)
@@ -31,6 +36,7 @@ class Base:
                 cwd=directory,
                 shell=True,
                 input=input.encode() if input else None,
+                executable=executable,
             )
         except subprocess.CalledProcessError as e:
             end = datetime.now()

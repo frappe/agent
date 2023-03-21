@@ -270,7 +270,8 @@ class Site(Base):
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
                 f"mysql -h {self.host} -u {self.user} -p{self.password} "
-                f"{self.database}"
+                f"{self.database}",
+                executable="/bin/bash",
             )
             data["tables"][backup_file] = output
         return data
@@ -414,7 +415,8 @@ class Site(Base):
                 "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
-                f" | gzip > '{backup_file}'"
+                f" | gzip > '{backup_file}'",
+                executable="/bin/bash",
             )
             data["tables"][table] = output
         return data
@@ -476,7 +478,8 @@ class Site(Base):
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
                     f"mysql -h {self.host} -u {self.user} -p{self.password} "
-                    f"{self.database}"
+                    f"{self.database}",
+                    executable="/bin/bash",
                 )
                 data["restored"][table] = output
 
