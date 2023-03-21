@@ -267,8 +267,9 @@ class Site(Base):
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
             output = self.execute(
+                f"gunzip -c '{backup_file_path}' | "
                 f"mysql -h {self.host} -u {self.user} -p{self.password} "
-                f"{self.database} < '{backup_file_path}'"
+                f"{self.database}"
             )
             data["tables"][backup_file] = output
         return data
@@ -404,12 +405,14 @@ class Site(Base):
         )
         data = {"tables": {}}
         for table in tables:
-            backup_file = os.path.join(self.backup_directory, f"{table}.sql")
+            backup_file = os.path.join(
+                self.backup_directory, f"{table}.sql.gz"
+            )
             output = self.execute(
                 "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
-                f"> '{backup_file}'"
+                f" | gzip > '{backup_file}'"
             )
             data["tables"][table] = output
         return data
@@ -463,11 +466,14 @@ class Site(Base):
         except Exception:
             tables_to_restore = self.previous_tables
         for table in tables_to_restore:
-            backup_file = os.path.join(self.backup_directory, f"{table}.sql")
+            backup_file = os.path.join(
+                self.backup_directory, f"{table}.sql.gz"
+            )
             if os.path.exists(backup_file):
                 output = self.execute(
+                    f"gunzip -c '{backup_file}' | "
                     f"mysql -h {self.host} -u {self.user} -p{self.password} "
-                    f"{self.database} < '{backup_file}'"
+                    f"{self.database}"
                 )
                 data["restored"][table] = output
 
