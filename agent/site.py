@@ -267,6 +267,7 @@ class Site(Base):
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
             output = self.execute(
+                "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
                 f"mysql -h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database}"
@@ -409,6 +410,7 @@ class Site(Base):
                 self.backup_directory, f"{table}.sql.gz"
             )
             output = self.execute(
+                "set -o pipefail && "
                 "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
@@ -471,6 +473,7 @@ class Site(Base):
             )
             if os.path.exists(backup_file):
                 output = self.execute(
+                    "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
                     f"mysql -h {self.host} -u {self.user} -p{self.password} "
                     f"{self.database}"
