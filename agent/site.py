@@ -397,7 +397,10 @@ class Site(Base):
     def tablewise_backup(self):
         tables = self.tables
         json.dump(
-            open(self.previous_tables_file), tables, indent=4, sort_keys=True
+            tables,
+            open(self.previous_tables_file, "w"),
+            indent=4,
+            sort_keys=True,
         )
         data = {"tables": {}}
         for table in tables:
