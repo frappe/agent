@@ -102,21 +102,11 @@ class Server(Base):
         else:
             raise Exception("Container exists")
 
-    def sites_directory_empty(self, bench_directory):
-        """
-        Throw if sites bench has sites
-        """
-        sites_directory = os.path.join(bench_directory, "sites")
-        for directory in os.listdir(sites_directory):
-            if directory.count(".") >= 2:  # x.frappe.cloud
-                raise Exception(f"Bench has sites: {directory}")
-
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench_directory = os.path.join(self.benches_directory, name)
         if not os.path.exists(bench_directory):
             return
-        self.sites_directory_empty(bench_directory)
         try:
             bench = Bench(name, self)
         except FileNotFoundError as e:
@@ -124,7 +114,7 @@ class Server(Base):
                 raise
         else:
             if bench.sites:
-                raise Exception("Bench has sites")
+                raise Exception(f"Bench has sites: {bench.sites}")
             bench.disable_production()
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
@@ -235,7 +225,13 @@ class Server(Base):
 
     @job("Update Site Migrate", priority="low")
     def update_site_migrate_job(
-        self, name, source, target, activate, skip_failing_patches, skip_backups
+        self,
+        name,
+        source,
+        target,
+        activate,
+        skip_failing_patches,
+        skip_backups,
     ):
         source = Bench(source, self)
         target = Bench(target, self)
