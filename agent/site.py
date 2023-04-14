@@ -255,7 +255,7 @@ class Site(Base):
         }.get(mode, "SELECT")
         queries = [
             f"CREATE OR REPLACE USER '{user}'@'%' IDENTIFIED BY '{password}'",
-            f"GRANT {privileges} ON *.{database} TO '{user}'@'%'",
+            f"GRANT {privileges} ON {database}.* TO '{user}'@'%'",
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
