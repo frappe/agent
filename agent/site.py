@@ -248,7 +248,7 @@ class Site(Base):
     def create_database_access_credentials(self, mode, mariadb_root_password):
         database = self.database
         user = f"{self.user}_{mode}"
-        password = self.get_random_string(16)
+        password = self.bench.get_random_string(16)
         privileges = {
             "read_only": "SELECT",
             "read_write": "ALL",
