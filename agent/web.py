@@ -564,7 +564,7 @@ def site_create_database_access_credentials(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/credentials",
+    "/benches/<string:bench>/sites/<string:site>/credentials/revoke",
     methods=["POST"],
 )
 def site_revoke_database_access_credentials(bench, site):
