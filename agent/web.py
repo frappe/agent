@@ -546,6 +546,39 @@ def site_remove_domain(bench, site, domain):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/credentials",
+    methods=["POST"],
+)
+def site_create_database_access_credentials(bench, site):
+    data = request.json
+    credentials = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .create_database_access_credentials(
+            data["mode"], data["mariadb_root_password"]
+        )
+    )
+    return credentials
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/credentials",
+    methods=["POST"],
+)
+def site_revoke_database_access_credentials(bench, site):
+    data = request.json
+    return (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .revoke_database_access_credentials(
+            data["user"], data["mariadb_root_password"]
+        )
+    )
+
+
 @application.route("/benches/<string:bench>/config", methods=["POST"])
 def bench_set_config(bench):
     data = request.json

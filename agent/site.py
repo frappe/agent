@@ -245,6 +245,42 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
+    def create_database_access_credentials(self, mode, mariadb_root_password):
+        database = self.database
+        user = f"{self.user}_{mode}"
+        password = self.get_random_string(16)
+        privileges = {
+            "read_only": "SELECT",
+            "read_write": "ALL",
+        }.get(mode, "SELECT")
+        queries = [
+            f"CREATE OR REPLACE USER '{user}'@'%' IDENTIFIED BY '{password}'",
+            f"GRANT {privileges} ON *.{database} TO '{user}'@'%'",
+            "FLUSH PRIVILEGES",
+        ]
+        for query in queries:
+            command = (
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f' -e "{query}"'
+            )
+            self.execute(command)
+        return {"database": database, "user": user, "password": password}
+
+    def revoke_database_access_credentials(self, user, mariadb_root_password):
+        if user == self.user:
+            # Do not revoke access for the main user
+            return
+        queries = [
+            f"DROP USER IF EXISTS '{user}'@'%'",
+            "FLUSH PRIVILEGES",
+        ]
+        for query in queries:
+            command = (
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f' -e "{query}"'
+            )
+            self.execute(command)
+
     @job("Setup ERPNext", priority="high")
     def setup_erpnext(self, user, config):
         self.create_user(
