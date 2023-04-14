@@ -269,7 +269,7 @@ class Site(Base):
     def revoke_database_access_credentials(self, user, mariadb_root_password):
         if user == self.user:
             # Do not revoke access for the main user
-            return
+            return {}
         queries = [
             f"DROP USER IF EXISTS '{user}'@'%'",
             "FLUSH PRIVILEGES",
@@ -280,6 +280,7 @@ class Site(Base):
                 f' -e "{query}"'
             )
             self.execute(command)
+        return {}
 
     @job("Setup ERPNext", priority="high")
     def setup_erpnext(self, user, config):
