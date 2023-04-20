@@ -232,7 +232,7 @@ class Server(Base):
         activate,
         skip_failing_patches,
         skip_backups,
-        before_migrate_scripts: dict[str, str],
+        before_migrate_scripts: Dict[str, str],
     ):
         source = Bench(source, self)
         target = Bench(target, self)
