@@ -1,19 +1,19 @@
-import os
-import time
 import json
+import os
 import shutil
 import tempfile
-
+import time
 from datetime import datetime
 from typing import Dict, List
-from peewee import MySQLDatabase
+
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import MySQLDatabase
 
-from agent.site import Site
-from agent.bench import Bench
 from agent.base import AgentException, Base
+from agent.bench import Bench
 from agent.job import Job, Step, job, step
+from agent.site import Site
 
 
 class Server(Base):
@@ -253,9 +253,8 @@ class Server(Base):
 
         site = Site(name, target)
 
-        for app_name in before_migrate_scripts:
-            script = before_migrate_scripts[app_name]
-            site.bench_execute("console", input=script)
+        if before_migrate_scripts:
+            site.run_before_migrate_scripts(before_migrate_scripts)
 
         site.migrate(skip_failing_patches=skip_failing_patches)
 
