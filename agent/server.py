@@ -232,6 +232,7 @@ class Server(Base):
         activate,
         skip_failing_patches,
         skip_backups,
+        before_migrate_scripts: dict[str, str],
     ):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -251,6 +252,10 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
+
+        for app_name in before_migrate_scripts:
+            script = before_migrate_scripts[app_name]
+            site.bench_execute("console", input=script)
 
         site.migrate(skip_failing_patches=skip_failing_patches)
 
