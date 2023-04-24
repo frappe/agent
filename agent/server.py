@@ -256,7 +256,10 @@ class Server(Base):
         if before_migrate_scripts:
             site.run_before_migrate_scripts(before_migrate_scripts)
 
-        site.migrate(skip_failing_patches=skip_failing_patches)
+        site.migrate(
+            skip_search_index=True, skip_failing_patches=skip_failing_patches
+        )
+        site.build_search_index()
 
         try:
             site.bench_execute(

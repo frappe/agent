@@ -466,11 +466,17 @@ class Site(Base):
             self.bench_execute("console", input=script)
 
     @step("Migrate Site")
-    def migrate(self, skip_failing_patches=False):
+    def migrate(self, skip_search_index=False, skip_failing_patches=False):
+        cmd = "migrate"
+        if skip_search_index:
+            cmd += " --skip-search-index"
         if skip_failing_patches:
-            return self.bench_execute("migrate --skip-failing")
-        else:
-            return self.bench_execute("migrate")
+            cmd += " --skip-failing"
+        return self.bench_execute(cmd)
+
+    @step("Build Search Index")
+    def build_search_index(self):
+        return self.bench_execute("build-search-index")
 
     @job("Clear Cache")
     def clear_cache_job(self):
