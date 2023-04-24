@@ -594,7 +594,13 @@ print(">>>" + frappe.session.sid + "<<<")
 """
 
         output = self.bench_execute("console", input=code)["output"]
-        return re.search(r">>>(.*)<<<", output).group(1)
+        sid = re.search(r">>>(.*)<<<", output).group(1)
+        if sid == user: # case when it fails
+            output = self.bench_execute(f"browse --user {user}", input=code)[
+                "output"
+            ]
+            sid = re.search(r"\?sid=([a-z0-9]*)", output).group(1)
+        return sid
 
     @property
     def timezone(self):
