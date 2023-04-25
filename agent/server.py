@@ -259,7 +259,6 @@ class Server(Base):
         site.migrate(
             skip_search_index=True, skip_failing_patches=skip_failing_patches
         )
-        site.build_search_index()
 
         try:
             site.bench_execute(
@@ -272,6 +271,7 @@ class Server(Base):
 
         if activate:
             site.disable_maintenance_mode()
+        site.build_search_index()
 
     @job("Recover Failed Site Migrate", priority="high")
     def update_site_recover_migrate_job(self, name, source, target, activate):
