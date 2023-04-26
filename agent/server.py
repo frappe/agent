@@ -1,19 +1,19 @@
-import os
-import time
 import json
+import os
 import shutil
 import tempfile
-
+import time
 from datetime import datetime
 from typing import Dict, List
-from peewee import MySQLDatabase
+
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import MySQLDatabase
 
-from agent.site import Site
-from agent.bench import Bench
 from agent.base import AgentException, Base
+from agent.bench import Bench
 from agent.job import Job, Step, job, step
+from agent.site import Site
 
 
 class Server(Base):
@@ -232,6 +232,7 @@ class Server(Base):
         activate,
         skip_failing_patches,
         skip_backups,
+        before_migrate_scripts: Dict[str, str],
     ):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -251,6 +252,9 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
+
+        if before_migrate_scripts:
+            site.run_before_migrate_scripts(before_migrate_scripts)
 
         site.migrate(skip_failing_patches=skip_failing_patches)
 

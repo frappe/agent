@@ -4,12 +4,13 @@ import re
 import shutil
 import time
 from datetime import datetime
+from typing import Dict
 
 import requests
 
 from agent.base import Base
 from agent.job import job, step
-from agent.utils import get_size, b2mb
+from agent.utils import b2mb, get_size
 
 
 class Site(Base):
@@ -457,6 +458,12 @@ class Site(Base):
             )
             data["tables"][table] = output
         return data
+
+    @step("Run Before Migrate Scripts")
+    def run_before_migrate_scripts(self, scripts: Dict[str, str]):
+        for app_name in scripts:
+            script = scripts[app_name]
+            self.bench_execute("console", input=script)
 
     @step("Migrate Site")
     def migrate(self, skip_failing_patches=False):
