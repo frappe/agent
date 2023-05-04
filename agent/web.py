@@ -430,7 +430,7 @@ def update_site_migrate(bench, site):
         data.get("activate", True),
         data.get("skip_failing_patches", False),
         data.get("skip_backups", False),
-        data.get("before_migrate_scripts", {})
+        data.get("before_migrate_scripts", {}),
     )
     return {"job": job}
 
@@ -453,7 +453,11 @@ def update_site_pull(bench, site):
 def update_site_recover_migrate(bench, site):
     data = request.json
     job = Server().update_site_recover_migrate_job(
-        site, bench, data["target"], data.get("activate", True)
+        site,
+        bench,
+        data["target"],
+        data.get("activate", True),
+        data.get("rollback_scripts", {}),
     )
     return {"job": job}
 

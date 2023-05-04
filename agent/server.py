@@ -232,7 +232,7 @@ class Server(Base):
         activate,
         skip_failing_patches,
         skip_backups,
-        before_migrate_scripts: Dict[str, str],
+        before_migrate_scripts: Dict[str, str] = {},
     ):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -254,7 +254,7 @@ class Server(Base):
         site = Site(name, target)
 
         if before_migrate_scripts:
-            site.run_before_migrate_scripts(before_migrate_scripts)
+            site.run_app_scripts(before_migrate_scripts)
 
         site.migrate(
             skip_search_index=True, skip_failing_patches=skip_failing_patches
@@ -274,7 +274,9 @@ class Server(Base):
         site.build_search_index()
 
     @job("Recover Failed Site Migrate", priority="high")
-    def update_site_recover_migrate_job(self, name, source, target, activate):
+    def update_site_recover_migrate_job(
+        self, name, source, target, activate, rollback_scripts
+    ):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -287,6 +289,9 @@ class Server(Base):
 
         site = Site(name, target)
         site.restore_touched_tables()
+
+        if rollback_scripts:
+            site.run_app_scripts(rollback_scripts)
 
         if activate:
             site.disable_maintenance_mode()

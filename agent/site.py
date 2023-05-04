@@ -459,8 +459,8 @@ class Site(Base):
             data["tables"][table] = output
         return data
 
-    @step("Run Before Migrate Scripts")
-    def run_before_migrate_scripts(self, scripts: Dict[str, str]):
+    @step("Run App Specific Scripts")
+    def run_app_scripts(self, scripts: Dict[str, str]):
         for app_name in scripts:
             script = scripts[app_name]
             self.bench_execute("console", input=script)
