@@ -43,7 +43,8 @@ def ping_server(password: str):
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-def config(name, user, workers):
+@click.option("--proxy-ip", required=False, type=str)
+def config(name, user, workers, proxy_ip=None):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
@@ -55,6 +56,9 @@ def config(name, user, workers):
         "gunicorn_workers": 2,
         "web_port": 25052,
     }
+    if proxy_ip:
+        config["proxy_ip"] = proxy_ip
+
     json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)
 
 

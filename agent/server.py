@@ -658,7 +658,9 @@ class Server(Base):
         nginx_config = os.path.join(self.nginx_directory, "nginx.conf")
         self._render_template(
             "nginx/nginx.conf.jinja2",
-            {},
+            {
+                "proxy_ip": self.config.get("proxy_ip"),
+            },
             nginx_config,
         )
 
