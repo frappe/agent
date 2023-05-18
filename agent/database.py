@@ -113,3 +113,35 @@ class DatabaseServer(Server):
             import traceback
 
             traceback.print_exc()
+
+    def get_deadlocks(
+        self,
+        database,
+        start_datetime,
+        stop_datetime,
+        max_lines,
+        private_ip,
+        mariadb_root_password,
+    ):
+        mariadb = MySQLDatabase(
+            "percona",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        cursor = mariadb.execute_sql(
+            f"""
+            select *
+            from deadlock
+            where user = %s
+            and ts >= %s
+            and ts <= %s
+            order by ts
+            limit {int(max_lines)}""",
+            (database, start_datetime, stop_datetime),
+        )
+        rows = cursor.fetchall()
+        columns = [d[0] for d in cursor.description]
+        return list(map(lambda x: dict(zip(columns, x)), rows))

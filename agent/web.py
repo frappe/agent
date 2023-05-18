@@ -731,6 +731,12 @@ def get_binary_log(log):
     )
 
 
+@application.route("/database/deadlocks", methods=["POST"])
+def get_database_deadlocks():
+    data = request.json
+    return jsonify(DatabaseServer().get_deadlocks(**data))
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json
