@@ -142,6 +142,25 @@ server {
 }
 
 {% endfor %}
+
+server {
+	listen 80;
+	server_name
+		{% for site in sites -%}
+			{{ site.name }}
+		{% endfor -%}
+		{% for domain in domains -%}
+			{{ domain }}
+		{% endfor -%}
+		;
+		
+	location ^~ /.well-known/acme-challenge/ {
+		return 301 http://ssl.{{ domain }}$request_uri;
+	}
+	location / {
+		return 301 https://$host$request_uri;
+	}
+}
 {% else %}
 server {
 	listen 80;

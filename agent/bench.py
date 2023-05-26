@@ -446,6 +446,7 @@ class Bench(Base):
         config = {
             "bench_name": self.name,
             "bench_name_slug": self.name.replace("-", "_"),
+            "domain": self.server.config.get("domain"),
             "sites": sites,
             "domains": domains,
             "http_timeout": self.bench_config["http_timeout"],
