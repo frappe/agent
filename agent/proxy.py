@@ -252,6 +252,7 @@ class Proxy(Server):
                 "wildcards": self.wildcards,
                 "nginx_directory": self.config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
+                "tls_protocols": self.config.get("tls_protocols"),
             },
             proxy_config_file,
         )

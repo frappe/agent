@@ -664,6 +664,7 @@ class Server(Base):
             "nginx/nginx.conf.jinja2",
             {
                 "proxy_ip": self.config.get("proxy_ip"),
+                "tls_protocols": self.config.get("tls_protocols"),
             },
             nginx_config,
         )
@@ -685,6 +686,7 @@ class Server(Base):
                 "pages_directory": os.path.join(
                     self.directory, "repo", "agent", "pages"
                 ),
+                "tls_protocols": self.config.get("tls_protocols"),
             },
             agent_nginx_config,
         )

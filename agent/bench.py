@@ -456,6 +456,7 @@ class Bench(Base):
             "standalone": standalone,
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
+            "tls_protocols": self.server.config.get("tls_protocols"),
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self.server._render_template(

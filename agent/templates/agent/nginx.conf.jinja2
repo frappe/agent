@@ -20,7 +20,7 @@ server {
 	ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
 	ssl_session_tickets off;
 
-	ssl_protocols TLSv1.3;
+	ssl_protocols {{ tls_protocols or 'TLSv1.3' }};
 	ssl_prefer_server_ciphers off;
 
 	ssl_stapling on;
