@@ -90,6 +90,17 @@ def proxy(domain=None):
 
 
 @setup.command()
+@click.option("--domain")
+def standalone(domain=None):
+    server = Server()
+    if domain:
+        config = server.config
+        config["domain"] = domain
+        config["standalone"] = True
+        server.setconfig(config, indent=4)
+
+
+@setup.command()
 def database():
     from agent.job import JobModel, StepModel
     from agent.job import agent_database as database

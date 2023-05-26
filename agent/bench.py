@@ -436,6 +436,13 @@ class Bench(Base):
             for domain in site.config.get("domains", []):
                 domains[domain] = site.name
 
+        standalone = self.server.config.get("standalone")
+        if standalone:
+            for site in sites:
+                for wildcard_domain in self.server.wildcards:
+                    if site.name.endswith("." + wildcard_domain):
+                        site.host = "*." + wildcard_domain
+
         config = {
             "bench_name": self.name,
             "bench_name_slug": self.name.replace("-", "_"),
@@ -445,6 +452,9 @@ class Bench(Base):
             "web_port": self.bench_config["web_port"],
             "socketio_port": self.bench_config["socketio_port"],
             "sites_directory": self.sites_directory,
+            "standalone": standalone,
+            "error_pages_directory": self.server.error_pages_directory,
+            "nginx_directory": self.server.nginx_directory,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self.server._render_template(

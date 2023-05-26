@@ -26,7 +26,11 @@ class Server(Base):
             os.path.dirname(self.benches_directory), "archived"
         )
         self.nginx_directory = self.config["nginx_directory"]
+        self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
 
+        self.error_pages_directory = os.path.join(
+            self.directory, "repo", "agent", "pages"
+        )
         self.job = None
         self.step = None
 
@@ -744,3 +748,11 @@ class Server(Base):
         self,
     ):
         return self.long_step()
+
+    @property
+    def wildcards(self) -> List[str]:
+        wildcards = []
+        for host in os.listdir(self.hosts_directory):
+            if "*" in host:
+                wildcards.append(host.strip("*."))
+        return wildcards
