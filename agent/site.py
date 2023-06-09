@@ -671,7 +671,9 @@ print(">>>" + frappe.session.sid + "<<<")
                 privates.append(path)
             elif file.endswith("files.tar") or file.endswith("files-enc.tar"):
                 publics.append(path)
-            elif file.endswith("site_config_backup.json"):
+            elif file.endswith("site_config_backup.json") or file.endswith(
+                "site_config_backup-enc.json"
+            ):
                 site_configs.append(path)
 
         backups = {
