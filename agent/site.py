@@ -656,7 +656,7 @@ print(">>>" + frappe.session.sid + "<<<")
         return {"backups": backup_files, "offsite": uploaded_files}
 
     def fetch_latest_backup(self, with_files=True):
-        databases, publics, privates = [], [], []
+        databases, publics, privates, site_configs = [], [], [], []
         backup_directory = os.path.join(self.directory, "private", "backups")
 
         for file in os.listdir(backup_directory):
@@ -671,8 +671,15 @@ print(">>>" + frappe.session.sid + "<<<")
                 privates.append(path)
             elif file.endswith("files.tar") or file.endswith("files-enc.tar"):
                 publics.append(path)
+            elif file.endswith("site_config_backup.json") or file.endswith(
+                "site_config_backup-enc.json"
+            ):
+                site_configs.append(path)
 
-        backups = {"database": {"path": max(databases, key=os.path.getmtime)}}
+        backups = {
+            "database": {"path": max(databases, key=os.path.getmtime)},
+            "site_config": {"path": max(site_configs, key=os.path.getmtime)},
+        }
 
         if with_files:
             backups["private"] = {"path": max(privates, key=os.path.getmtime)}
