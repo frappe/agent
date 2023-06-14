@@ -542,6 +542,9 @@ class Bench(Base):
                 "is_ssh_enabled": self.bench_config.get(
                     "is_ssh_enabled", False
                 ),
+                "multiple_rq_queues": self.bench_config.get(
+                    "multiple_rq_queues", False
+                ),
             },
             supervisor_config,
         )
