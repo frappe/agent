@@ -545,6 +545,9 @@ class Bench(Base):
                 "multiple_rq_queues": self.bench_config.get(
                     "multiple_rq_queues", False
                 ),
+                "environment_variables": self.bench_config.get(
+                    "environment_variables"
+                ),
             },
             supervisor_config,
         )
