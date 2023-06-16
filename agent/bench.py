@@ -542,8 +542,11 @@ class Bench(Base):
                 "is_ssh_enabled": self.bench_config.get(
                     "is_ssh_enabled", False
                 ),
-                "multiple_rq_queues": self.bench_config.get(
-                    "multiple_rq_queues", False
+                "merge_all_rq_queues": self.bench_config.get(
+                    "merge_all_rq_queues", False
+                ),
+                "merge_default_and_short_rq_queues": self.bench_config.get(
+                    "merge_default_and_short_rq_queues", False
                 ),
                 "environment_variables": self.bench_config.get(
                     "environment_variables"
