@@ -431,6 +431,7 @@ def update_site_migrate(bench, site):
         data.get("skip_failing_patches", False),
         data.get("skip_backups", False),
         data.get("before_migrate_scripts", {}),
+        data.get("skip_search_index", True),
     )
     return {"job": job}
 

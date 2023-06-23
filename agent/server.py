@@ -237,6 +237,7 @@ class Server(Base):
         skip_failing_patches,
         skip_backups,
         before_migrate_scripts: Dict[str, str] = {},
+        skip_search_index=True,
     ):
         source = Bench(source, self)
         target = Bench(target, self)
@@ -261,7 +262,8 @@ class Server(Base):
             site.run_app_scripts(before_migrate_scripts)
 
         site.migrate(
-            skip_search_index=True, skip_failing_patches=skip_failing_patches
+            skip_search_index=skip_search_index,
+            skip_failing_patches=skip_failing_patches,
         )
 
         try:
