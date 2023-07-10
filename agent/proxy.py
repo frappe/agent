@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from agent.job import job, step
 from agent.server import Server
+from configparser import ConfigParser
 
 
 class Proxy(Server):
@@ -117,13 +118,15 @@ class Proxy(Server):
         shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
-    def remove_site_from_upstream_job(self, upstream, site):
+    def remove_site_from_upstream_job(
+        self, upstream, site, skip_if_reloading=True
+    ):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
         if os.path.exists(site_file):
             self.remove_site_from_upstream(site_file)
         self.generate_proxy_config()
-        self.reload_nginx()
+        self.reload_nginx(skip_if_reloading)
 
     @step("Remove Site File from Upstream Directory")
     def remove_site_from_upstream(self, site_file):
@@ -183,7 +186,7 @@ class Proxy(Server):
     def update_site_status_job(self, upstream, site, status):
         self.update_site_status(upstream, site, status)
         self.generate_proxy_config()
-        self.reload_nginx()
+        self.reload_nginx(status == "suspended")
 
     @step("Update Site File")
     def update_site_status(self, upstream, site, status):
@@ -234,7 +237,11 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     @step("Reload NGINX")
-    def reload_nginx(self):
+    def reload_nginx(self, skip_if_reloading=False):
+        if skip_if_reloading:
+            state = self.execute("systemctl show nginx --property=ActiveState")
+            if state == "ActiveState=reloading":
+                return
         return self.execute("sudo systemctl reload nginx")
 
     @step("Generate NGINX Configuration")
