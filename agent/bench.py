@@ -564,6 +564,25 @@ class Bench(Base):
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
 
+    @job("Setup Code Server")
+    def setup_code_server(self, codeserver_name):
+       self.create_code_server_config(codeserver_name)
+		
+    @step("Create Code Server Config")
+    def create_code_server_config(self, codeserver_name):
+        codeserver_path = os.path.join(self.directory, "codeserver")
+        if not os.path.exists(download_directory):
+            os.mkdir(codeserver_path)
+            
+        filename = os.path.join(codeserver_path, codeserver_name)
+        with open(filename, "w") as file:
+            file.write(self.bench_config.get("codeserver_port"))
+
+    @step("Start Code Server")
+    def start_code_server(self):
+        self.execute("supervisorctl start code-server:")
+        #self.execute("code-server --bind-addr localhost:8088 .")
+
     def start(self):
         if self.bench_config.get("single_container"):
             try:
