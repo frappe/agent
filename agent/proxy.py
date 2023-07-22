@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+from cachetools import cached, TTLCache
 from hashlib import sha512 as sha
 from pathlib import Path
 from typing import Dict, List
@@ -236,12 +237,15 @@ class Proxy(Server):
             # default domain
             os.rmdir(host_directory)
 
+    @cached(cache=TTLCache(maxsize=128, ttl=10))
+    def is_nginx_reloading(self) -> bool:
+        state = self.execute("systemctl show nginx --property=ActiveState")
+        return state == "ActiveState=reloading"
+
     @step("Reload NGINX")
     def reload_nginx(self, skip_if_reloading=False):
-        if skip_if_reloading:
-            state = self.execute("systemctl show nginx --property=ActiveState")
-            if state == "ActiveState=reloading":
-                return
+        if skip_if_reloading and self.is_nginx_reloading():
+            return
         return self.execute("sudo systemctl reload nginx")
 
     @step("Generate NGINX Configuration")

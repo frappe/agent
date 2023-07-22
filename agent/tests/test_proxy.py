@@ -302,3 +302,14 @@ class TestProxy(unittest.TestCase):
             self.assertDictEqual(
                 json.load(m), {self.domain_1: "yyy.frappe.cloud"}
             )
+
+    @patch("agent.proxy.Proxy.execute", wraps=lambda x: "ActiveState=reloading")
+    def test_is_nginx_reloading_returns_cached_value_in_timeframe(self, mock_execute):
+        """Test is_nginx_reloading returns cached value."""
+        proxy = self._get_fake_proxy()
+        proxy.is_nginx_reloading()
+        self.assertEqual(mock_execute.call_count, 1)
+        proxy.is_nginx_reloading()
+        self.assertEqual(mock_execute.call_count, 1)
+
+
