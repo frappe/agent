@@ -187,7 +187,7 @@ class Proxy(Server):
     def update_site_status_job(self, upstream, site, status):
         self.update_site_status(upstream, site, status)
         self.generate_proxy_config()
-        self.reload_nginx(status == "suspended")
+        self.reload_nginx(status in ["suspended", "suspended_saas"])
 
     @step("Update Site File")
     def update_site_status(self, upstream, site, status):
@@ -249,6 +249,7 @@ class Proxy(Server):
         return self.execute("sudo systemctl reload nginx")
 
     @step("Generate NGINX Configuration")
+    @cached(cache=TTLCache(maxsize=128, ttl=10))
     def generate_proxy_config(self):
         return self._generate_proxy_config()
 

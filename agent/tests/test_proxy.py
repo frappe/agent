@@ -311,5 +311,3 @@ class TestProxy(unittest.TestCase):
         self.assertEqual(mock_execute.call_count, 1)
         proxy.is_nginx_reloading()
         self.assertEqual(mock_execute.call_count, 1)
-
-
