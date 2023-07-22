@@ -444,11 +444,14 @@ class Bench(Base):
                         site.host = "*." + wildcard_domain
 
         codeserver_directory = os.path.join(self.directory, "codeserver")
-        codeservers = os.listdir(codeserver_directory)
-        if codeservers:
-            with open(os.path.join(codeserver_directory, codeservers[0])) as file:
-                port = file.read()
-            codeserver = {"name": codeservers[0], "port": port}
+        if os.path.exists(codeserver_directory):
+            codeservers = os.listdir(codeserver_directory)
+            if codeservers:
+                with open(os.path.join(codeserver_directory, codeservers[0])) as file:
+                    port = file.read()
+                codeserver = {"name": codeservers[0], "port": port}
+            else:
+                codeserver = {}
         else:
             codeserver = {}
 
