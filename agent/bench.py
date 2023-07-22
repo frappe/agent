@@ -443,6 +443,15 @@ class Bench(Base):
                     if site.name.endswith("." + wildcard_domain):
                         site.host = "*." + wildcard_domain
 
+        codeserver_directory = os.path.join(self.directory, "codeserver")
+        codeservers = os.listdir(codeserver_directory)
+        if codeservers:
+            with open(os.path.join(codeserver_directory, codeservers[0])) as file:
+                port = file.read()
+            codeserver = {"name": codeservers[0], "port": port}
+        else:
+            codeserver = {}
+
         config = {
             "bench_name": self.name,
             "bench_name_slug": self.name.replace("-", "_"),
@@ -457,6 +466,7 @@ class Bench(Base):
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
+			"code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self.server._render_template(
@@ -565,23 +575,25 @@ class Bench(Base):
         )
 
     @job("Setup Code Server")
-    def setup_code_server(self, codeserver_name):
-       self.create_code_server_config(codeserver_name)
+    def setup_code_server(self, name):
+        self.create_code_server_config(name)
+        self.start_code_server()
+        self.generate_nginx_config()
+        self.server._reload_nginx()
 		
     @step("Create Code Server Config")
-    def create_code_server_config(self, codeserver_name):
-        codeserver_path = os.path.join(self.directory, "codeserver")
-        if not os.path.exists(download_directory):
-            os.mkdir(codeserver_path)
-            
-        filename = os.path.join(codeserver_path, codeserver_name)
+    def create_code_server_config(self, name):
+        code_server_path = os.path.join(self.directory, "codeserver")
+        if not os.path.exists(code_server_path):
+            os.mkdir(code_server_path)
+
+        filename = os.path.join(code_server_path, name)
         with open(filename, "w") as file:
-            file.write(self.bench_config.get("codeserver_port"))
+            file.write(str(self.bench_config.get("codeserver_port")))
 
     @step("Start Code Server")
     def start_code_server(self):
-        self.execute("supervisorctl start code-server:")
-        #self.execute("code-server --bind-addr localhost:8088 .")
+        self.docker_execute("supervisorctl start code-server:")
 
     def start(self):
         if self.bench_config.get("single_container"):
