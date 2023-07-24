@@ -255,7 +255,7 @@ class Proxy(Server):
 
     @step("Reload NGINX")
     def reload_nginx(self, skip_if_reloading=False):
-        if skip_if_reloading and self.is_nginx_reloading:
+        if skip_if_reloading and self.is_nginx_reloading():
             return
         return self.execute("sudo systemctl reload nginx")
 
