@@ -237,7 +237,6 @@ class Proxy(Server):
             # default domain
             os.rmdir(host_directory)
 
-    @cached(cache=TTLCache(maxsize=128, ttl=10))
     def is_nginx_reloading(self) -> bool:
         state = self.execute("systemctl show nginx --property=ActiveState")
         return state == "ActiveState=reloading"
