@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from cachetools import cached, TTLCache
 from hashlib import sha512 as sha
 from pathlib import Path
 from typing import Dict, List
@@ -256,7 +255,6 @@ class Proxy(Server):
     def generate_proxy_config(self):
         return self._generate_proxy_config()
 
-    @cached(cache=TTLCache(maxsize=128, ttl=10))
     def _generate_proxy_config(self):
         proxy_config_file = os.path.join(self.nginx_directory, "proxy.conf")
         self._render_template(
