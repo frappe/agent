@@ -241,7 +241,6 @@ class Proxy(Server):
 
     def is_nginx_reloading(self) -> bool:
         global ttl_cache
-        ttl_cache.expire()
         if ttl_cache.get("reloading") is None:
             shutting_down_processes = int(
                 self.execute(
@@ -250,7 +249,9 @@ class Proxy(Server):
             )
             if shutting_down_processes > 0:
                 ttl_cache["reloading"] = True
-        return ttl_cache["reloading"]
+            else:
+                return False  # Only True result needs to stay for TTL seconds
+        return ttl_cache.get("reloading", True)
 
     @step("Reload NGINX")
     def reload_nginx(self, skip_if_reloading=False):
