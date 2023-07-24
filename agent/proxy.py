@@ -238,8 +238,13 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     def is_nginx_reloading(self) -> bool:
-        state = self.execute("systemctl show nginx --property=ActiveState")
-        return state == "ActiveState=reloading"
+        shutting_down_processes = int(
+            self.execute(
+                "ps ef | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
+            )
+        )
+        if shutting_down_processes > 0:
+            return True
 
     @step("Reload NGINX")
     def reload_nginx(self, skip_if_reloading=False):
