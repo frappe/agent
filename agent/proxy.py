@@ -240,7 +240,7 @@ class Proxy(Server):
         shutting_down_processes = int(
             self.execute(
                 "ps ef | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
-            )
+            )["output"]
         )
         if shutting_down_processes > 0:
             return True
