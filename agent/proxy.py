@@ -242,7 +242,7 @@ class Proxy(Server):
     def is_nginx_reloading(self) -> bool:
         global ttl_cache
         ttl_cache.expire()
-        if ttl_cache["reloading"] is None:
+        if ttl_cache.get("reloading") is None:
             shutting_down_processes = int(
                 self.execute(
                     "ps ax | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
