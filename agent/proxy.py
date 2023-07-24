@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+from cachetools import TTLCache
 from hashlib import sha512 as sha
 from pathlib import Path
 from typing import Dict, List
@@ -9,6 +10,8 @@ from collections import defaultdict
 from agent.job import job, step
 from agent.server import Server
 from configparser import ConfigParser
+
+ttl_cache = TTLCache(maxsize=100, ttl=10)
 
 
 class Proxy(Server):
@@ -237,17 +240,20 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     def is_nginx_reloading(self) -> bool:
-        shutting_down_processes = int(
-            self.execute(
-                "ps ax | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
-            )["output"]
-        )
-        if shutting_down_processes > 0:
-            return True
+        global ttl_cache
+        if ttl_cache["reloading"] is None:
+            shutting_down_processes = int(
+                self.execute(
+                    "ps ax | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
+                )["output"]
+            )
+            if shutting_down_processes > 0:
+                ttl_cache["reloading"] = True
+        return ttl_cache["reloading"]
 
     @step("Reload NGINX")
     def reload_nginx(self, skip_if_reloading=False):
-        if skip_if_reloading and self.is_nginx_reloading():
+        if skip_if_reloading and self.is_nginx_reloading:
             return
         return self.execute("sudo systemctl reload nginx")
 
