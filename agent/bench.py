@@ -582,7 +582,7 @@ class Bench(Base):
     @job("Setup Code Server")
     def setup_code_server(self, name):
         self.create_code_server_config(name)
-        self.start_code_server()
+        self._start_code_server()
         self.generate_nginx_config()
         self.server._reload_nginx()
 
@@ -597,8 +597,21 @@ class Bench(Base):
             file.write(str(self.bench_config.get("codeserver_port")))
 
     @step("Start Code Server")
-    def start_code_server(self):
+    def _start_code_server(self):
         self.docker_execute("supervisorctl start code-server:")
+
+    @step("Stop Code Server")
+    def _stop_code_server(self):
+        self.docker_execute("supervisorctl stop code-server:")
+
+    @job("Start Code Server")
+    def start_code_server(self):
+        self._start_code_server()
+
+    @job("Stop Code Server")
+    def stop_code_server(self):
+        self._stop_code_server()
+    
 
     def start(self):
         if self.bench_config.get("single_container"):

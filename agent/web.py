@@ -906,6 +906,16 @@ def setup_code_server(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/codeserver/start", methods=["POST"])
+def start_code_server(bench):
+    job = Server().benches[bench].start_code_server()
+    return {"job": job}
+
+@application.route("/benches/<string:bench>/codeserver/stop", methods=["POST"])
+def stop_code_server(bench):
+    job = Server().benches[bench].stop_code_server()
+    return {"job": job}
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
