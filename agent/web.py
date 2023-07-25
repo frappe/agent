@@ -669,7 +669,8 @@ def proxy_add_upstream_site(upstream):
     methods=["DELETE"],
 )
 def proxy_remove_upstream_site(upstream, site):
-    job = Proxy().remove_site_from_upstream_job(upstream, site)
+    data = request.json
+    job = Proxy().remove_site_from_upstream_job(upstream, site, data.get("skip_reload", False)))
     return {"job": job}
 
 

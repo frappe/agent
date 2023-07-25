@@ -118,15 +118,15 @@ class Proxy(Server):
         shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
-    def remove_site_from_upstream_job(
-        self, upstream, site, skip_if_reloading=True
-    ):
+    def remove_site_from_upstream_job(self, upstream, site, skip_reload=False):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
         if os.path.exists(site_file):
             self.remove_site_from_upstream(site_file)
+        if skip_reload:
+            return
         self.generate_proxy_config()
-        self.reload_nginx(skip_if_reloading)
+        self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
     def remove_site_from_upstream(self, site_file):
@@ -187,9 +187,9 @@ class Proxy(Server):
         self, upstream, site, status, skip_reload=False
     ):
         self.update_site_status(upstream, site, status)
-        self.generate_proxy_config()
         if skip_reload:
             return
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Update Site File")
@@ -246,6 +246,7 @@ class Proxy(Server):
 
     @job("Reload NGINX Job")
     def reload_nginx_job(self):
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Generate NGINX Configuration")
