@@ -302,23 +302,3 @@ class TestProxy(unittest.TestCase):
             self.assertDictEqual(
                 json.load(m), {self.domain_1: "yyy.frappe.cloud"}
             )
-
-    @patch("agent.proxy.Proxy.execute", wraps=lambda x: {"output": "1"})
-    def test_is_nginx_reloading_true_result_is_cached_for_10s(self, mock_execute):
-        proxy = self._get_fake_proxy()
-        self.assertTrue(proxy.is_nginx_reloading())
-        mock_execute.assert_called_once()
-        self.assertTrue(proxy.is_nginx_reloading())
-        mock_execute.assert_called_once()
-        import time
-        time.sleep(10)
-        self.assertTrue(proxy.is_nginx_reloading())
-        self.assertEqual(mock_execute.call_count, 2)
-
-    @patch("agent.proxy.Proxy.execute", wraps=lambda x: {"output": "0"})
-    def test_is_nginx_reloading_false_result_is_not_cached(self, mock_execute):
-        proxy = self._get_fake_proxy()
-        self.assertFalse(proxy.is_nginx_reloading())
-        mock_execute.assert_called_once()
-        self.assertFalse(proxy.is_nginx_reloading())
-        self.assertEqual(mock_execute.call_count, 2)

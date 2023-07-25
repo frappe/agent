@@ -688,7 +688,9 @@ def proxy_rename_upstream_site(upstream, site):
 )
 def update_site_status(upstream, site):
     data = request.json
-    job = Proxy().update_site_status_job(upstream, site, data["status"])
+    job = Proxy().update_site_status_job(
+        upstream, site, data["status"], data.get("skip_reload", False)
+    )
     return {"job": job}
 
 

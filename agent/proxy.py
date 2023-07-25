@@ -1,7 +1,6 @@
 import json
 import os
 import shutil
-from cachetools import TTLCache
 from hashlib import sha512 as sha
 from pathlib import Path
 from typing import Dict, List
@@ -10,8 +9,6 @@ from collections import defaultdict
 from agent.job import job, step
 from agent.server import Server
 from configparser import ConfigParser
-
-ttl_cache = TTLCache(maxsize=100, ttl=10)
 
 
 class Proxy(Server):
@@ -186,10 +183,14 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status):
+    def update_site_status_job(
+        self, upstream, site, status, skip_reload=False
+    ):
         self.update_site_status(upstream, site, status)
         self.generate_proxy_config()
-        self.reload_nginx(status in ["suspended", "suspended_saas"])
+        if skip_reload:
+            return
+        self.reload_nginx()
 
     @step("Update Site File")
     def update_site_status(self, upstream, site, status):
@@ -239,24 +240,8 @@ class Proxy(Server):
             # default domain
             os.rmdir(host_directory)
 
-    def is_nginx_reloading(self) -> bool:
-        global ttl_cache
-        if ttl_cache.get("reloading") is None:
-            shutting_down_processes = int(
-                self.execute(
-                    "ps ax | grep 'nginx: worker process is shutting down' | grep -v grep | wc -l"
-                )["output"]
-            )
-            if shutting_down_processes > 0:
-                ttl_cache["reloading"] = True
-            else:
-                return False  # Only True result needs to stay for TTL seconds
-        return ttl_cache.get("reloading", True)
-
     @step("Reload NGINX")
-    def reload_nginx(self, skip_if_reloading=False):
-        if skip_if_reloading and self.is_nginx_reloading():
-            return
+    def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
 
     @step("Generate NGINX Configuration")
