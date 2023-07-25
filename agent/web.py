@@ -112,6 +112,12 @@ def restart_nginx():
     return {"job": job}
 
 
+@application.route("/proxy/reload", methods=["POST"])
+def reload_nginx():
+    job = Proxy().reload_nginx_job()
+    return {"job": job}
+
+
 @application.route("/server/status", methods=["POST"])
 def get_server_status():
     data = request.json

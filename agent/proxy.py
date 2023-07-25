@@ -244,6 +244,10 @@ class Proxy(Server):
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
 
+    @job("Reload NGINX Job")
+    def reload_nginx_job(self):
+        self.reload_nginx()
+
     @step("Generate NGINX Configuration")
     def generate_proxy_config(self):
         return self._generate_proxy_config()
