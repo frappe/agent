@@ -37,7 +37,9 @@ map $actual_host $upstream_server_hash {
 map $host $actual_host {
 {% for host in hosts.values() -%}
 	{% for from, to in host.items() if from != 'redirect'%}
+	{% if from != 'codeserver' %}
 	{{ from }} {{ to }};
+	{% endif %}
 	{%- endfor %}
 {%- endfor %}
 }
