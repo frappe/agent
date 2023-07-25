@@ -112,6 +112,12 @@ def restart_nginx():
     return {"job": job}
 
 
+@application.route("/proxy/reload", methods=["POST"])
+def reload_nginx():
+    job = Proxy().reload_nginx_job()
+    return {"job": job}
+
+
 @application.route("/server/status", methods=["POST"])
 def get_server_status():
     data = request.json
@@ -663,7 +669,8 @@ def proxy_add_upstream_site(upstream):
     methods=["DELETE"],
 )
 def proxy_remove_upstream_site(upstream, site):
-    job = Proxy().remove_site_from_upstream_job(upstream, site)
+    data = request.json
+    job = Proxy().remove_site_from_upstream_job(upstream, site, data.get("skip_reload", False))
     return {"job": job}
 
 
@@ -688,7 +695,9 @@ def proxy_rename_upstream_site(upstream, site):
 )
 def update_site_status(upstream, site):
     data = request.json
-    job = Proxy().update_site_status_job(upstream, site, data["status"])
+    job = Proxy().update_site_status_job(
+        upstream, site, data["status"], data.get("skip_reload", False)
+    )
     return {"job": job}
 
 

@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from agent.job import job, step
 from agent.server import Server
+from configparser import ConfigParser
 
 
 class Proxy(Server):
@@ -117,11 +118,13 @@ class Proxy(Server):
         shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
-    def remove_site_from_upstream_job(self, upstream, site):
+    def remove_site_from_upstream_job(self, upstream, site, skip_reload=False):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
         if os.path.exists(site_file):
             self.remove_site_from_upstream(site_file)
+        if skip_reload:
+            return
         self.generate_proxy_config()
         self.reload_nginx()
 
@@ -180,8 +183,12 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status):
+    def update_site_status_job(
+        self, upstream, site, status, skip_reload=False
+    ):
         self.update_site_status(upstream, site, status)
+        if skip_reload:
+            return
         self.generate_proxy_config()
         self.reload_nginx()
 
@@ -236,6 +243,11 @@ class Proxy(Server):
     @step("Reload NGINX")
     def reload_nginx(self):
         return self.execute("sudo systemctl reload nginx")
+
+    @job("Reload NGINX Job")
+    def reload_nginx_job(self):
+        self.generate_proxy_config()
+        self.reload_nginx()
 
     @step("Generate NGINX Configuration")
     def generate_proxy_config(self):
