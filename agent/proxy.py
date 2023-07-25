@@ -68,6 +68,8 @@ class Proxy(Server):
             for key, value in wildcard["certificate"].items():
                 with open(os.path.join(host_directory, key), "w") as f:
                     f.write(value)
+            if wildcard.get("code_server"):
+                Path(os.path.join(host_directory, "codeserver")).touch()
 
     @job("Add Site to Upstream")
     def add_site_to_upstream_job(self, upstream, site):
@@ -325,6 +327,12 @@ class Proxy(Server):
                     if "*" in host:
                         hosts[_from] = {_from: _from}
                     hosts[_from]["redirect"] = to
+            hosts[host]["codeserver"] = (
+                True
+                if os.path.exists(os.path.join(host_directory, "codeserver"))
+                else False
+            )
+
         return hosts
 
     @property
