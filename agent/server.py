@@ -100,7 +100,9 @@ class Server(Base):
         Throw if container exists
         """
         try:
-            self.execute(f"""docker ps --filter "name=^{name}$" | grep {name}""")
+            self.execute(
+                f"""docker ps --filter "name=^{name}$" | grep {name}"""
+            )
         except AgentException:
             pass  # container does not exist
         else:

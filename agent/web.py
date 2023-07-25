@@ -897,12 +897,14 @@ def move_site_to_bench(bench, site):
     )
     return {"job": job}
 
+
 @application.route("/benches/<string:bench>/codeserver", methods=["POST"])
 def setup_code_server(bench):
     data = request.json
     job = Server().benches[bench].setup_code_server(**data)
 
     return {"job": job}
+
 
 @application.errorhandler(Exception)
 def all_exception_handler(error):

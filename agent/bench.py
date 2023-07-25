@@ -447,7 +447,9 @@ class Bench(Base):
         if os.path.exists(codeserver_directory):
             codeservers = os.listdir(codeserver_directory)
             if codeservers:
-                with open(os.path.join(codeserver_directory, codeservers[0])) as file:
+                with open(
+                    os.path.join(codeserver_directory, codeservers[0])
+                ) as file:
                     port = file.read()
                 codeserver = {"name": codeservers[0], "port": port}
             else:
@@ -469,7 +471,7 @@ class Bench(Base):
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
-			"code_server": codeserver,
+            "code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self.server._render_template(
@@ -583,7 +585,7 @@ class Bench(Base):
         self.start_code_server()
         self.generate_nginx_config()
         self.server._reload_nginx()
-		
+
     @step("Create Code Server Config")
     def create_code_server_config(self, name):
         code_server_path = os.path.join(self.directory, "codeserver")
