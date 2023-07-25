@@ -598,10 +598,10 @@ class Bench(Base):
 
     @step("Start Code Server")
     def _start_code_server(self, password):
-        self.docker_execute("supervisorctl start code-server:")
         self.docker_execute(
-            f"sed -i 's/^password:.*/password: {password}/' ~/.config/code-server/config.yaml"
+            f"sed -i 's/^password:.*/password: {password}/' /home/frappe/.config/code-server/config.yaml"
         )
+        self.docker_execute("supervisorctl start code-server:")
 
     @step("Stop Code Server")
     def _stop_code_server(self):
