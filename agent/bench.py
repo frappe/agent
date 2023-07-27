@@ -615,6 +615,18 @@ class Bench(Base):
     def stop_code_server(self):
         self._stop_code_server()
 
+    @job("Archive Code Server")
+    def archive_code_server(self):
+        if os.path.exists(self.directory):
+            self.remove_code_server()
+            self.setup_nginx()
+            self.server._reload_nginx()
+
+    @step("Remove Code Server")
+    def remove_code_server(self):
+        code_server_path = os.path.join(self.directory, "codeserver")
+        shutil.rmtree(code_server_path)
+
     def start(self):
         if self.bench_config.get("single_container"):
             try:

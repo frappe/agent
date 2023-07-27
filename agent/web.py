@@ -921,6 +921,18 @@ def stop_code_server(bench):
     return {"job": job}
 
 
+@application.route(
+    "/benches/<string:bench>/codeserver/archive", methods=["POST"]
+)
+def archive_code_server(bench):
+    job = (
+        Server()
+        .benches[bench]
+        .archive_code_server()
+    )
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
