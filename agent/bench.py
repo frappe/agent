@@ -582,7 +582,7 @@ class Bench(Base):
     @job("Setup Code Server")
     def setup_code_server(self, name, password):
         self.create_code_server_config(name)
-        self._start_code_server(password)
+        self._start_code_server(password, setup=True)
         self.generate_nginx_config()
         self.server._reload_nginx()
 
@@ -597,11 +597,14 @@ class Bench(Base):
             file.write(str(self.bench_config.get("codeserver_port")))
 
     @step("Start Code Server")
-    def _start_code_server(self, password):
+    def _start_code_server(self, password, setup=False):
+        if setup:
+            self.docker_execute("supervisorctl start code-server:")
+
         self.docker_execute(
             f"sed -i 's/^password:.*/password: {password}/' /home/frappe/.config/code-server/config.yaml"
         )
-        self.docker_execute("supervisorctl start code-server:")
+        self.docker_execute("supervisorctl restart code-server:")
 
     @step("Stop Code Server")
     def _stop_code_server(self):
@@ -626,6 +629,7 @@ class Bench(Base):
     def remove_code_server(self):
         code_server_path = os.path.join(self.directory, "codeserver")
         shutil.rmtree(code_server_path)
+        self.docker_execute("supervisorctl stop code-server:")
 
     def start(self):
         if self.bench_config.get("single_container"):
