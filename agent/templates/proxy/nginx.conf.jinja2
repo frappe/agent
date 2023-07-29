@@ -37,7 +37,9 @@ map $actual_host $upstream_server_hash {
 map $host $actual_host {
 {% for host in hosts.values() -%}
 	{% for from, to in host.items() if from != 'redirect'%}
+	{% if from != 'codeserver' %}
 	{{ from }} {{ to }};
+	{% endif %}
 	{%- endfor %}
 {%- endfor %}
 }
@@ -162,7 +164,14 @@ server {
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
+		{% if host_options.codeserver %}
+		proxy_set_header Connection "upgrade";
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection upgrade;
+		proxy_set_header Accept-Encoding gzip;
+		{% else %}
 		proxy_set_header Connection "";
+		{% endif %}
 
 		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
 

@@ -266,3 +266,17 @@ server {
 {% endif %}
 {%- endif %}
 
+{% if code_server -%}
+server {
+    listen 80;
+	server_name {{ code_server.name }};
+
+    location / {
+      	proxy_set_header Host $host;
+      	proxy_set_header Upgrade $http_upgrade;
+      	proxy_set_header Connection upgrade;
+      	proxy_set_header Accept-Encoding gzip;
+		proxy_pass http://127.0.0.1:{{ code_server.port }}/;
+    }
+}
+{% endif %}

@@ -907,6 +907,41 @@ def move_site_to_bench(bench, site):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/codeserver", methods=["POST"])
+def setup_code_server(bench):
+    data = request.json
+    job = Server().benches[bench].setup_code_server(**data)
+
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/codeserver/start", methods=["POST"]
+)
+def start_code_server(bench):
+    data = request.json
+    job = Server().benches[bench].start_code_server(**data)
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/codeserver/stop", methods=["POST"])
+def stop_code_server(bench):
+    job = Server().benches[bench].stop_code_server()
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/codeserver/archive", methods=["POST"]
+)
+def archive_code_server(bench):
+    job = (
+        Server()
+        .benches[bench]
+        .archive_code_server()
+    )
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

@@ -443,6 +443,20 @@ class Bench(Base):
                     if site.name.endswith("." + wildcard_domain):
                         site.host = "*." + wildcard_domain
 
+        codeserver_directory = os.path.join(self.directory, "codeserver")
+        if os.path.exists(codeserver_directory):
+            codeservers = os.listdir(codeserver_directory)
+            if codeservers:
+                with open(
+                    os.path.join(codeserver_directory, codeservers[0])
+                ) as file:
+                    port = file.read()
+                codeserver = {"name": codeservers[0], "port": port}
+            else:
+                codeserver = {}
+        else:
+            codeserver = {}
+
         config = {
             "bench_name": self.name,
             "bench_name_slug": self.name.replace("-", "_"),
@@ -457,6 +471,7 @@ class Bench(Base):
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
+            "code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
         self.server._render_template(
@@ -564,6 +579,58 @@ class Bench(Base):
             "bench/docker-compose.yml.jinja2", config, docker_compose
         )
 
+    @job("Setup Code Server")
+    def setup_code_server(self, name, password):
+        self.create_code_server_config(name)
+        self._start_code_server(password, setup=True)
+        self.generate_nginx_config()
+        self.server._reload_nginx()
+
+    @step("Create Code Server Config")
+    def create_code_server_config(self, name):
+        code_server_path = os.path.join(self.directory, "codeserver")
+        if not os.path.exists(code_server_path):
+            os.mkdir(code_server_path)
+
+        filename = os.path.join(code_server_path, name)
+        with open(filename, "w") as file:
+            file.write(str(self.bench_config.get("codeserver_port")))
+
+    @step("Start Code Server")
+    def _start_code_server(self, password, setup=False):
+        if setup:
+            self.docker_execute("supervisorctl start code-server:")
+
+        self.docker_execute(
+            f"sed -i 's/^password:.*/password: {password}/' /home/frappe/.config/code-server/config.yaml"
+        )
+        self.docker_execute("supervisorctl restart code-server:")
+
+    @step("Stop Code Server")
+    def _stop_code_server(self):
+        self.docker_execute("supervisorctl stop code-server:")
+
+    @job("Start Code Server")
+    def start_code_server(self, password):
+        self._start_code_server(password)
+
+    @job("Stop Code Server")
+    def stop_code_server(self):
+        self._stop_code_server()
+
+    @job("Archive Code Server")
+    def archive_code_server(self):
+        if os.path.exists(self.directory):
+            self.remove_code_server()
+            self.setup_nginx()
+            self.server._reload_nginx()
+
+    @step("Remove Code Server")
+    def remove_code_server(self):
+        code_server_path = os.path.join(self.directory, "codeserver")
+        shutil.rmtree(code_server_path)
+        self.docker_execute("supervisorctl stop code-server:")
+
     def start(self):
         if self.bench_config.get("single_container"):
             try:
@@ -583,6 +650,7 @@ class Bench(Base):
                 f"--restart always --hostname {self.name} "
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
+                f"-p 127.0.0.1:{self.bench_config['codeserver_port']}:8088 "
                 f"-p {ssh_ip}:{ssh_port}:2200 "
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
