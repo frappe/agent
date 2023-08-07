@@ -38,6 +38,9 @@ class Node(Server):
 
     @step("Initialize Container")
     def container_init(self, name, config):
+        if not os.path.exists(self.containers_directory):
+            os.mkdir(self.containers_directory)
+
         container_directory = os.path.join(self.containers_directory, name)
         os.mkdir(container_directory)
 
