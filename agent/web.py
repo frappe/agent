@@ -918,6 +918,12 @@ def new_container():
     return {"job": job}
 
 
+@application.route("/containers/<string:container>", methods=["DELETE"])
+def archive_container(container):
+    job = Node().archive_container(container)
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
