@@ -12,6 +12,7 @@ from agent.proxy import Proxy
 from agent.ssh import SSHProxy
 from agent.job import JobModel
 from agent.server import Server
+from agent.node import Node
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
 from agent.proxysql import ProxySQL
@@ -895,6 +896,25 @@ def move_site_to_bench(bench, site):
         data.get("activate", True),
         data.get("skip_failing_patches", False),
     )
+    return {"job": job}
+
+
+@application.route("/containers")
+def get_containers():
+    return {
+        name: container.dump() for name, container in Node().containers.items()
+    }
+
+
+@application.route("/containers/<string:container>")
+def get_container(container):
+    return Node().containers[container].dump()
+
+
+@application.route("/containers", methods=["POST"])
+def new_container():
+    data = request.json
+    job = Node().new_container(**data)
     return {"job": job}
 
 
