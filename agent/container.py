@@ -38,10 +38,44 @@ class Container(Base):
 
         command = (
             "docker run -d "
+            f" {self.mounts} "
+            f" {self.ports} "
+            f" {self.environment_variables} "
             f"--restart always --hostname {self.name} "
             f"--name {self.name} {self.config['image']}"
         )
         return self.execute(command)
+
+    @property
+    def mounts(self):
+        mounts = []
+        for mount in self.config["mounts"]:
+            mounts.append(
+                (
+                    f"-v {mount['source']}:{mount['destination']}"
+                    f":{mount['options']}"
+                )
+            )
+        return " ".join(mounts)
+
+    @property
+    def ports(self):
+        ports = []
+        for port in self.config["ports"]:
+            ports.append(
+                (
+                    f"-p {port['host_ip']}:{port['host_port']}"
+                    f":{port['container_port']}/{port['protocol']}"
+                )
+            )
+        return " ".join(ports)
+
+    @property
+    def environment_variables(self):
+        environment_variables = []
+        for key, value in self.config["environment_variables"].items():
+            environment_variables.append((f"-e {key}={value}"))
+        return " ".join(environment_variables)
 
     @step("Stop Container")
     def stop(self):
