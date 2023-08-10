@@ -16,6 +16,7 @@ from agent.monitor import Monitor
 from agent.database import DatabaseServer
 from agent.proxysql import ProxySQL
 from agent.minio import Minio
+from agent.security import Security
 
 
 application = Flask(__name__)
@@ -200,6 +201,16 @@ def get_logs(bench, site):
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
 
+
+@application.route("/security/ssh_session_logs")
+def get_ssh_session_logs():
+    return {"logs": Security().ssh_session_logs}
+
+
+@application.route("/security/retrieve_ssh_session_log/<string:filename>")
+def retrieve_ssh_session_log(filename):
+    return {'log_details': Security().retrieve_ssh_session_log(filename)}
+    
 
 @application.route("/benches/<string:bench>/sites/<string:site>/sid")
 def get_site_sid(bench, site):
