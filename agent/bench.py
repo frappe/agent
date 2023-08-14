@@ -326,6 +326,7 @@ class Bench(Base):
         site = Site(name, self)
         site.install_apps(apps)
         site.update_config(config)
+        site.enable_scheduler()
         self.setup_nginx()
         self.server.reload_nginx()
 
