@@ -37,8 +37,10 @@ class Node(Server):
         if registry:
             self.docker_login(registry)
         self.container_init(name, config)
-        bench = Container(name, self)
-        bench.start()
+        container = Container(name, self)
+        container.create_overlay_network()
+        container.start()
+        container.attach_to_overlay_network()
 
     @step("Initialize Container")
     def container_init(self, name, config):

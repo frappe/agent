@@ -46,6 +46,68 @@ class Container(Base):
         )
         return self.execute(command)
 
+    @step("Create Overlay Network")
+    def create_overlay_network(self):
+        namespace = self.config["network"]
+        commands = [
+            # Create Bridge
+            f"sudo ip netns add {namespace}",
+            f"sudo ip netns exec {namespace} ip link add dev br0 type bridge",
+            f"sudo ip netns exec {namespace} ip addr add dev br0 10.0.0.0/8",
+            # Attach VxLan to Bridge
+            "sudo ip link add dev vxlan1 type vxlan id 1 proxy learning l2miss l3miss dstport 4789",
+            f"sudo ip link set vxlan1 netns {namespace}",
+            f"sudo ip netns exec {namespace} ip link set vxlan1 master br0",
+            # Bring up interfaces
+            f"sudo ip netns exec {namespace} ip link set vxlan1 up",
+            f"sudo ip netns exec {namespace} ip link set br0 up",
+        ]
+        results = []
+        for command in commands:
+            results.append(self.execute(command))
+        return results
+
+    @step("Attach Container to Overlay Network")
+    def attach_to_overlay_network(self):
+        namespace = self.config["network"]
+        container_namespace_path = self.execute(
+            "docker inspect --format='{{ .NetworkSettings.SandboxKey}}'"
+        )["output"]
+        container_namespace = container_namespace_path.split("/")[-1]
+
+        commands = [
+            f"sudo ln -sf /var/run/docker/netns/{container_namespace} /var/run/netns/{container_namespace}",
+            # create veth interfaces
+            "sudo ip link add dev veth1 mtu 1450 type veth peer name veth2 mtu 1450",
+            # attach first peer to the bridge in our overlay namespace
+            f"sudo ip link set dev veth1 netns {namespace}",
+            f"sudo ip netns exec {namespace} ip link set veth1 master br0",
+            f"sudo ip netns exec {namespace} ip link set veth1 up",
+            # crate symlink to be able to use ip netns commands
+            f"sudo ip link set dev veth2 netns {container_namespace}",
+            # move second peer tp container network namespace and configure it
+            f"sudo ip netns exec {container_namespace} ip link set dev veth2 name eth0 address {self.config['mac_address']}",
+            f"sudo ip netns exec {container_namespace} ip addr add dev eth0 {self.config['ip_address']}/8",
+            f"sudo ip netns exec {container_namespace} ip link set dev eth0 up",
+            # Clean up symlink
+            f"sudo rm /var/run/netns/{container_namespace}",
+        ]
+        results = []
+        for command in commands:
+            results.append(self.execute(command))
+        return results
+
+    @step("Delete Overlay Network")
+    def delete_overlay_network(self):
+        namespace = self.config["network"]
+        commands = [
+            f"sudo ip netns delete {namespace}",
+        ]
+        results = []
+        for command in commands:
+            results.append(self.execute(command))
+        return results
+
     @property
     def mounts(self):
         mounts = []
