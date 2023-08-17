@@ -71,7 +71,7 @@ class Container(Base):
     def attach_to_overlay_network(self):
         namespace = self.config["network"]
         container_namespace_path = self.execute(
-            "docker inspect --format='{{ .NetworkSettings.SandboxKey}}'"
+            f"docker inspect --format='{{{{ .NetworkSettings.SandboxKey }}}}' {self.name}"
         )["output"]
         container_namespace = container_namespace_path.split("/")[-1]
 
