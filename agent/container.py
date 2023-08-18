@@ -79,15 +79,15 @@ class Container(Base):
         commands = [
             f"sudo ln -sf /var/run/docker/netns/{container_namespace} /var/run/netns/{container_namespace}",
             # create veth interfaces
-            f"sudo ip link add dev veth-1-{self.name} mtu 1450 type veth peer name veth-2-{self.name} mtu 1450",
+            f"sudo ip link add dev ve1-{self.name} mtu 1450 type veth peer name ve2-{self.name} mtu 1450",
             # attach first peer to the bridge in our overlay namespace
-            f"sudo ip link set dev veth-1-{self.name} netns {namespace}",
-            f"sudo ip netns exec {namespace} ip link set veth-1-{self.name} master br0",
-            f"sudo ip netns exec {namespace} ip link set veth-1-{self.name} up",
+            f"sudo ip link set dev ve1-{self.name} netns {namespace}",
+            f"sudo ip netns exec {namespace} ip link set ve1-{self.name} master br0",
+            f"sudo ip netns exec {namespace} ip link set ve1-{self.name} up",
             # crate symlink to be able to use ip netns commands
-            f"sudo ip link set dev veth-2-{self.name} netns {container_namespace}",
+            f"sudo ip link set dev ve2-{self.name} netns {container_namespace}",
             # move second peer tp container network namespace and configure it
-            f"sudo ip netns exec {container_namespace} ip link set dev veth-2-{self.name} name eth0 address {self.config['mac_address']}",
+            f"sudo ip netns exec {container_namespace} ip link set dev ve2-{self.name} name eth0 address {self.config['mac_address']}",
             f"sudo ip netns exec {container_namespace} ip addr add dev eth0 {self.config['ip_address']}/8",
             f"sudo ip netns exec {container_namespace} ip link set dev eth0 up",
             # Clean up symlink
