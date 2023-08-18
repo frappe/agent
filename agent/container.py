@@ -87,9 +87,9 @@ class Container(Base):
             # crate symlink to be able to use ip netns commands
             f"sudo ip link set dev ve2-{self.name} netns {container_namespace}",
             # move second peer tp container network namespace and configure it
-            f"sudo ip netns exec {container_namespace} ip link set dev ve2-{self.name} name eth0 address {self.config['mac_address']}",
-            f"sudo ip netns exec {container_namespace} ip addr add dev eth0 {self.config['ip_address']}/8",
-            f"sudo ip netns exec {container_namespace} ip link set dev eth0 up",
+            f"sudo ip netns exec {container_namespace} ip link set dev ve2-{self.name} name eth1 address {self.config['mac_address']}",
+            f"sudo ip netns exec {container_namespace} ip addr add dev eth1 {self.config['ip_address']}/8",
+            f"sudo ip netns exec {container_namespace} ip link set dev eth1 up",
             # Clean up symlink
             f"sudo rm /var/run/netns/{container_namespace}",
         ]
