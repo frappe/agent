@@ -56,11 +56,11 @@ class Container(Base):
             f"sudo ip netns exec {namespace} ip link add dev br0 type bridge",
             f"sudo ip netns exec {namespace} ip addr add dev br0 10.0.0.0/8",
             # Attach VxLan to Bridge
-            f"sudo ip link add dev vxlan-{network} type vxlan id 1 proxy learning l2miss l3miss dstport 4789",
-            f"sudo ip link set vxlan-{network} netns {namespace}",
-            f"sudo ip netns exec {namespace} ip link set vxlan-{network} master br0",
+            f"sudo ip link add dev vx-{network} type vxlan id 1 proxy learning l2miss l3miss dstport 4789",
+            f"sudo ip link set vx-{network} netns {namespace}",
+            f"sudo ip netns exec {namespace} ip link set vx-{network} master br0",
             # Bring up interfaces
-            f"sudo ip netns exec {namespace} ip link set vxlan-{network} up",
+            f"sudo ip netns exec {namespace} ip link set vx-{network} up",
             f"sudo ip netns exec {namespace} ip link set br0 up",
         ]
         results = []
