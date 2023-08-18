@@ -41,6 +41,7 @@ class Node(Server):
         container.create_overlay_network()
         container.start()
         container.attach_to_overlay_network()
+        container.add_arp_and_fdb_entries()
 
     @step("Initialize Container")
     def container_init(self, name, config):

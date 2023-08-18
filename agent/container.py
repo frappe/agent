@@ -98,6 +98,20 @@ class Container(Base):
             results.append(self.execute(command))
         return results
 
+    @step("Add ARP and FDB entries")
+    def add_arp_and_fdb_entries(self):
+        namespace = self.config["network"]
+        network = self.config["network"]
+        results = []
+        for peer in self.config["peers"]:
+            commands = [
+                f"sudo ip netns exec {namespace} ip neighbor add {peer['ip_address']} lladdr {peer['mac_address']} dev vx-{network} nud permanent",
+                f"sudo ip netns exec {namespace} bridge fdb add {peer['mac_address']} dev vx-{network} self dst {peer['node_ip_address']} vni 1 port 4789",
+            ]
+            for command in commands:
+                results.append(self.execute(command))
+        return results
+
     @step("Delete Overlay Network")
     def delete_overlay_network(self):
         namespace = self.config["network"]
