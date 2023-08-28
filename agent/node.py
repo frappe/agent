@@ -16,6 +16,7 @@ class Node(Server):
         self.containers_directory = self.config.get(
             "containers_directory", os.path.join(self.directory, "containers")
         )
+        self.systemd_directory = os.path.join(self.directory, "systemd")
         self.archived_directory = os.path.join(
             os.path.dirname(self.containers_directory), "archived"
         )

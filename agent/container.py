@@ -9,6 +9,10 @@ class Container(Base):
         self.server = server
         self.directory = os.path.join(self.server.containers_directory, name)
         self.config_file = os.path.join(self.directory, "config.json")
+        self.container_file = os.path.join(
+            self.server.systemd_directory,
+            f"{self.name}.container",
+        )
         self.image = self.config.get("image")
         if not (
             os.path.isdir(self.directory) and os.path.exists(self.config_file)
@@ -31,20 +35,27 @@ class Container(Base):
 
     @step("Start Container")
     def start(self):
-        try:
-            self.stop()
-        except Exception:
-            pass
+        self.create_container_file()
+        self.reload_systemd()
+        self.start_container_unit()
 
-        command = (
-            "docker run -d "
-            f" {self.mounts} "
-            f" {self.ports} "
-            f" {self.environment_variables} "
-            f"--restart always --hostname {self.name} "
-            f"--name {self.name} {self.config['image']}"
+    def create_container_file(self):
+        os.makedirs(self.server.systemd_directory, exist_ok=True)
+        self.server._render_template(
+            "container/container.jinja2",
+            {
+                "name": self.name,
+                "image": self.image,
+            },
+            self.container_file,
         )
-        return self.execute(command)
+
+    def reload_systemd(self):
+        self.execute("sudo systemctl daemon-reload")
+
+    def start_container_unit(self):
+        name = self.name
+        self.execute(f"sudo systemctl start {name}.service")
 
     @step("Create Overlay Network")
     def create_overlay_network(self):
