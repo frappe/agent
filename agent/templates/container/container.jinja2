@@ -19,3 +19,7 @@ Environment={{ variable }}
 [Service]
 Restart=always
 
+
+[Install]
+# Start by default on boot
+WantedBy=multi-user.target default.target
