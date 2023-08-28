@@ -45,11 +45,8 @@ class Node(Server):
 
     @step("Initialize Container")
     def container_init(self, name, config):
-        if not os.path.exists(self.containers_directory):
-            os.mkdir(self.containers_directory)
-
         container_directory = os.path.join(self.containers_directory, name)
-        os.mkdir(container_directory)
+        os.makedirs(container_directory, exist_ok=True)
 
         config_file = os.path.join(container_directory, "config.json")
         with open(config_file, "w") as f:
@@ -67,8 +64,7 @@ class Node(Server):
 
     @step("Move Container to Archived Directory")
     def move_container_to_archived_directory(self, container_name):
-        if not os.path.exists(self.archived_directory):
-            os.mkdir(self.archived_directory)
+        os.makedirs(self.archived_directory, exist_ok=True)
         target = os.path.join(self.archived_directory, container_name)
         if os.path.exists(target):
             shutil.rmtree(target)
