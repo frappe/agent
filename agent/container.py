@@ -46,6 +46,9 @@ class Container(Base):
             {
                 "name": self.name,
                 "image": self.image,
+                "mounts": self.mounts,
+                "ports": self.ports,
+                "environment_variables": self.environment_variables,
             },
             self.container_file,
         )
@@ -136,34 +139,27 @@ class Container(Base):
 
     @property
     def mounts(self):
-        mounts = []
-        for mount in self.config["mounts"]:
-            mounts.append(
-                (
-                    f"-v {mount['source']}:{mount['destination']}"
-                    f":{mount['options']}"
-                )
-            )
-        return " ".join(mounts)
+        return [
+            f"{mount['source']}:{mount['destination']}:{mount['options']}"
+            for mount in self.config["mounts"]
+        ]
 
     @property
     def ports(self):
-        ports = []
-        for port in self.config["ports"]:
-            ports.append(
-                (
-                    f"-p {port['host_ip']}:{port['host_port']}"
-                    f":{port['container_port']}/{port['protocol']}"
-                )
+        return [
+            (
+                f"{port['host_ip']}:{port['host_port']}"
+                f":{port['container_port']}/{port['protocol']}"
             )
-        return " ".join(ports)
+            for port in self.config["ports"]
+        ]
 
     @property
     def environment_variables(self):
-        environment_variables = []
-        for key, value in self.config["environment_variables"].items():
-            environment_variables.append((f"-e {key}={value}"))
-        return " ".join(environment_variables)
+        return [
+            (f"{key}={value}")
+            for key, value in self.config["environment_variables"].items()
+        ]
 
     @step("Stop Container")
     def stop(self):

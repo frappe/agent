@@ -4,6 +4,18 @@ Image={{ image }}
 HostName={{ name }}
 ContainerName={{ name }}
 
+{% for mount in mounts %}
+Volume={{ mount }}
+{% endfor %}
+
+{% for port in ports %}
+PublishPort={{ port }}
+{% endfor %}
+
+{% for variable in environment_variables %}
+Environment={{ variable }}
+{% endfor %}
+
 [Service]
 Restart=always
 
