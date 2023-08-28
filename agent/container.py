@@ -1,4 +1,5 @@
 import os
+import tempfile
 from agent.base import Base
 from agent.job import step
 
@@ -35,23 +36,37 @@ class Container(Base):
 
     @step("Start Container")
     def start(self):
-        self.create_container_file()
+        quadlet_result = self.create_container_file()
         self.reload_systemd()
         self.start_container_unit()
+        return quadlet_result
 
     def create_container_file(self):
         os.makedirs(self.server.systemd_directory, exist_ok=True)
-        self.server._render_template(
-            "container/container.jinja2",
-            {
-                "name": self.name,
-                "image": self.image,
-                "mounts": self.mounts,
-                "ports": self.ports,
-                "environment_variables": self.environment_variables,
-            },
-            self.container_file,
-        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_unit = os.path.join(
+                temporary_directory, f"{self.name}.container"
+            )
+            self.server._render_template(
+                "container/container.jinja2",
+                {
+                    "name": self.name,
+                    "image": self.image,
+                    "mounts": self.mounts,
+                    "ports": self.ports,
+                    "environment_variables": self.environment_variables,
+                },
+                temporary_unit,
+            )
+
+            quadlet = (
+                "/usr/lib/systemd/system-generators/podman-system-generator"
+            )
+            quadlet_result = self.execute(
+                f"QUADLET_UNIT_DIRS={temporary_directory} {quadlet} -dryrun"
+            )
+            os.rename(temporary_unit, self.container_file)
+        return quadlet_result
 
     def reload_systemd(self):
         self.execute("sudo systemctl daemon-reload")
