@@ -36,10 +36,15 @@ class Container(Base):
 
     @step("Start Container")
     def start(self):
+        self.create_mount_directories()
         quadlet_result = self.create_container_file()
         self.reload_systemd()
         self.start_container_unit()
         return quadlet_result
+
+    def create_mount_directories(self):
+        for mount in self.config["mounts"]:
+            os.makedirs(mount["source"], exist_ok=True)
 
     def create_container_file(self):
         os.makedirs(self.server.systemd_directory, exist_ok=True)
