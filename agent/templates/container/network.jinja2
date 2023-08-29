@@ -13,10 +13,10 @@ ExecStart=/usr/bin/env ip netns add {{ namespace }}
 
 # Create Bridge
 ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link add dev br0 type bridge
-ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip addr add dev br0 10.0.0.0/8
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip addr add dev br0 {{ subnet_cidr_block }}
 
 # Attach VXLAN to Bridge
-ExecStart=/usr/bin/env ip link add dev vx-{{ network }} type vxlan id 1 proxy learning l2miss l3miss dstport 4789
+ExecStart=/usr/bin/env ip link add dev vx-{{ network }} type vxlan id {{ vxlan_id }} proxy learning l2miss l3miss dstport 4789
 ExecStart=/usr/bin/env ip link set vx-{{ network }} netns {{ namespace }}
 ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set vx-{{ network }} master br0
 

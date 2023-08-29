@@ -98,6 +98,8 @@ class Container(Base):
             {
                 "namespace": self.config["network"],
                 "network": self.config["network"],
+                "vxlan_id": self.config["vxlan_id"],
+                "subnet_cidr_block": self.config["subnet_cidr_block"],
             },
             network_service_file,
         )
@@ -115,6 +117,7 @@ class Container(Base):
                 "name": self.name,
                 "ip_address": self.config["ip_address"],
                 "mac_address": self.config["mac_address"],
+                "netmask": self.config["subnet_cidr_block"].split("/")[1],
             },
             self.attach_script,
         )

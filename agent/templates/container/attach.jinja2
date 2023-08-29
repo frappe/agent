@@ -14,5 +14,5 @@ container_namespace=${container_namespace_path##*/} ## Remove everything from th
 
 ip link set dev ve2-{{ name }} netns $container_namespace
 ip netns exec $container_namespace ip link set dev ve2-{{ name }} name eth1 address {{ mac_address }}
-ip netns exec $container_namespace ip addr add dev eth1 {{ ip_address }}/8
+ip netns exec $container_namespace ip addr add dev eth1 {{ ip_address }}/{{ netmask }}
 ip netns exec $container_namespace ip link set dev eth1 up
