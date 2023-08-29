@@ -1,0 +1,18 @@
+#! /bin/bash
+
+# Create veth peers
+ip link add dev ve1-{{ name }} mtu 1450 type veth peer name ve2-{{ name }} mtu 1450
+
+# Attach first peer to the overlay network bridge
+ip link set dev ve1-{{ name }} netns {{ namesapce }}
+ip netns exec {{ namesapce }} ip link set ve1-{{ name }} master br0
+ip netns exec {{ namesapce }} ip link set ve1-{{ name }} up
+
+# Move second peer to the container network namespace and configure it
+container_namespace_path=$(podman container inspect --format='{% raw %}{{ .NetworkSettings.SandboxKey }}{% endraw %}' {{ name }})
+container_namespace=${container_namespace_path##*/} ## Remove everything from the path before the last slash
+
+ip link set dev ve2-{{ name }} netns $container_namespace
+ip netns exec $container_namespace ip link set dev ve2-{{ name }} name eth1 address {{ mac_address }}
+ip netns exec $container_namespace ip addr add dev eth1 {{ ip_address }}/8
+ip netns exec $container_namespace ip link set dev eth1 up

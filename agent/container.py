@@ -15,6 +15,7 @@ class Container(Base):
             f"{self.name}.container",
         )
         self.network_service = f"overlay-{self.config['network']}.service"
+        self.attach_script = os.path.join(self.directory, "attach.sh")
         self.image = self.config.get("image")
         if not (
             os.path.isdir(self.directory) and os.path.exists(self.config_file)
@@ -38,6 +39,7 @@ class Container(Base):
     @step("Start Container")
     def start(self):
         self.create_mount_directories()
+        self.create_attach_script()
         quadlet_result = self.create_container_file()
         self.reload_systemd()
         self.start_container_unit()
@@ -60,6 +62,7 @@ class Container(Base):
                     "mounts": self.mounts,
                     "ports": self.ports,
                     "environment_variables": self.environment_variables,
+                    "attach_script": self.attach_script,
                 },
                 temporary_unit,
             )
@@ -104,35 +107,17 @@ class Container(Base):
     def start_network_service(self):
         self.execute(f"sudo systemctl start {self.network_service}")
 
-    @step("Attach Container to Overlay Network")
-    def attach_to_overlay_network(self):
-        namespace = self.config["network"]
-        container_namespace_path = self.execute(
-            f"docker inspect --format='{{{{ .NetworkSettings.SandboxKey }}}}' {self.name}"
-        )["output"]
-        container_namespace = container_namespace_path.split("/")[-1]
-
-        commands = [
-            f"sudo ln -sf /var/run/docker/netns/{container_namespace} /var/run/netns/{container_namespace}",
-            # create veth interfaces
-            f"sudo ip link add dev ve1-{self.name} mtu 1450 type veth peer name ve2-{self.name} mtu 1450",
-            # attach first peer to the bridge in our overlay namespace
-            f"sudo ip link set dev ve1-{self.name} netns {namespace}",
-            f"sudo ip netns exec {namespace} ip link set ve1-{self.name} master br0",
-            f"sudo ip netns exec {namespace} ip link set ve1-{self.name} up",
-            # crate symlink to be able to use ip netns commands
-            f"sudo ip link set dev ve2-{self.name} netns {container_namespace}",
-            # move second peer tp container network namespace and configure it
-            f"sudo ip netns exec {container_namespace} ip link set dev ve2-{self.name} name eth1 address {self.config['mac_address']}",
-            f"sudo ip netns exec {container_namespace} ip addr add dev eth1 {self.config['ip_address']}/8",
-            f"sudo ip netns exec {container_namespace} ip link set dev eth1 up",
-            # Clean up symlink
-            f"sudo rm /var/run/netns/{container_namespace}",
-        ]
-        results = []
-        for command in commands:
-            results.append(self.execute(command))
-        return results
+    def create_attach_script(self):
+        self.server._render_template(
+            "container/attach.jinja2",
+            {
+                "namespace": self.config["network"],
+                "name": self.name,
+                "ip_address": self.config["ip_address"],
+                "mac_address": self.config["mac_address"],
+            },
+            self.attach_script,
+        )
 
     @step("Add ARP and FDB entries")
     def add_arp_and_fdb_entries(self):

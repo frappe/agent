@@ -18,6 +18,7 @@ Environment={{ variable }}
 
 [Service]
 Restart=always
+ExecStartPost=/bin/bash {{ attach_script }}
 
 
 [Install]
