@@ -174,11 +174,11 @@ class Container(Base):
 
     @step("Stop Container")
     def stop(self):
-        self.execute(f"systemctl stop {self.name}")
+        self.execute(f"sudo systemctl stop {self.name}")
         os.remove(self.container_file)
 
-        self.execute(f"systemctl stop {self.network_service}")
-        self.execute(f"systemctl disable {self.network_service}")
+        self.execute(f"sudo systemctl stop {self.network_service}")
+        self.execute(f"sudo systemctl disable {self.network_service}")
         os.remove(self.network_service_file)
         self.reload_systemd()
 
