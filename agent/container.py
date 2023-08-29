@@ -14,6 +14,7 @@ class Container(Base):
             self.server.systemd_directory,
             f"{self.name}.container",
         )
+        self.network_service = f"overlay-{self.config['network']}.service"
         self.image = self.config.get("image")
         if not (
             os.path.isdir(self.directory) and os.path.exists(self.config_file)
@@ -81,25 +82,27 @@ class Container(Base):
 
     @step("Create Overlay Network")
     def create_overlay_network(self):
-        namespace = self.config["network"]
-        network = self.config["network"]
-        commands = [
-            # Create Bridge
-            f"sudo ip netns add {namespace}",
-            f"sudo ip netns exec {namespace} ip link add dev br0 type bridge",
-            f"sudo ip netns exec {namespace} ip addr add dev br0 10.0.0.0/8",
-            # Attach VxLan to Bridge
-            f"sudo ip link add dev vx-{network} type vxlan id 1 proxy learning l2miss l3miss dstport 4789",
-            f"sudo ip link set vx-{network} netns {namespace}",
-            f"sudo ip netns exec {namespace} ip link set vx-{network} master br0",
-            # Bring up interfaces
-            f"sudo ip netns exec {namespace} ip link set vx-{network} up",
-            f"sudo ip netns exec {namespace} ip link set br0 up",
-        ]
-        results = []
-        for command in commands:
-            results.append(self.execute(command))
-        return results
+        self.create_network_service()
+        self.reload_systemd()
+        self.start_network_service()
+
+    def create_network_service(self):
+        network_service_file = os.path.join(
+            os.path.join(self.server.systemd_directory, self.network_service)
+        )
+        self.server._render_template(
+            "container/network.jinja2",
+            {
+                "namespace": self.config["network"],
+                "network": self.config["network"],
+            },
+            network_service_file,
+        )
+        # Ask systemd to create a symlink to the network service file
+        self.execute(f"sudo systemctl enable {network_service_file}")
+
+    def start_network_service(self):
+        self.execute(f"sudo systemctl start {self.network_service}")
 
     @step("Attach Container to Overlay Network")
     def attach_to_overlay_network(self):

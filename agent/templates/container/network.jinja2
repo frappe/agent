@@ -1,0 +1,32 @@
+[Unit]
+Description=Overlay Network - {{ network }}
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+
+# Cleanup everything before we start
+ExecStartPre=-/usr/bin/env ip netns delete {{ namespace }}
+
+# Setup Namespace
+ExecStart=/usr/bin/env ip netns add {{ namespace }}
+
+# Create Bridge
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link add dev br0 type bridge
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip addr add dev br0 10.0.0.0/8
+
+# Attach VXLAN to Bridge
+ExecStart=/usr/bin/env ip link add dev vx-{{ network }} type vxlan id 1 proxy learning l2miss l3miss dstport 4789
+ExecStart=/usr/bin/env ip link set vx-{{ network }} netns {{ namespace }}
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set vx-{{ network }} master br0
+
+# Bring up VXLAN and Bridge Interfaces
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set vx-{{ network }} up
+ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set br0 up
+
+# Teardown Namespace
+ExecStop=/usr/bin/env ip netns delete {{ namespace }}
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=network-online.target
