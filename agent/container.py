@@ -15,6 +15,9 @@ class Container(Base):
             f"{self.name}.container",
         )
         self.network_service = f"overlay-{self.config['network']}.service"
+        self.network_service_file = os.path.join(
+            os.path.join(self.server.systemd_directory, self.network_service)
+        )
         self.attach_script = os.path.join(self.directory, "attach.sh")
         self.peers_script = os.path.join(self.directory, "peers.sh")
         self.image = self.config.get("image")
@@ -92,9 +95,6 @@ class Container(Base):
         self.start_network_service()
 
     def create_network_service(self):
-        network_service_file = os.path.join(
-            os.path.join(self.server.systemd_directory, self.network_service)
-        )
         self.server._render_template(
             "container/network.jinja2",
             {
@@ -104,10 +104,10 @@ class Container(Base):
                 "subnet_cidr_block": self.config["subnet_cidr_block"],
                 "peers_script": self.peers_script,
             },
-            network_service_file,
+            self.network_service_file,
         )
         # Ask systemd to create a symlink to the network service file
-        self.execute(f"sudo systemctl enable {network_service_file}")
+        self.execute(f"sudo systemctl enable {self.network_service_file}")
 
     def start_network_service(self):
         self.execute(f"sudo systemctl start {self.network_service}")
@@ -174,8 +174,13 @@ class Container(Base):
 
     @step("Stop Container")
     def stop(self):
-        self.execute(f"docker stop {self.name}")
-        return self.execute(f"docker rm {self.name}")
+        self.execute(f"systemctl stop {self.name}")
+        os.remove(self.container_file)
+
+        self.execute(f"systemctl stop {self.network_service}")
+        self.execute(f"systemctl disable {self.network_service}")
+        os.remove(self.network_service_file)
+        self.reload_systemd()
 
     @property
     def job_record(self):
