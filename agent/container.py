@@ -50,8 +50,15 @@ class Container(Base):
         return quadlet_result
 
     def create_mount_directories(self):
+        image = self.config["image"]
         for mount in self.config["mounts"]:
             os.makedirs(mount["source"], exist_ok=True)
+            command = (
+                "sudo podman run --rm --net none "
+                f"-v {mount['source']}:/copymount "
+                f"{image} cp -LR {mount['destination']}/. /copymount"
+            )
+            self.execute(command)
 
     def create_container_file(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
