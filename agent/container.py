@@ -16,6 +16,7 @@ class Container(Base):
         )
         self.network_service = f"overlay-{self.config['network']}.service"
         self.attach_script = os.path.join(self.directory, "attach.sh")
+        self.peers_script = os.path.join(self.directory, "peers.sh")
         self.image = self.config.get("image")
         if not (
             os.path.isdir(self.directory) and os.path.exists(self.config_file)
@@ -85,6 +86,7 @@ class Container(Base):
 
     @step("Create Overlay Network")
     def create_overlay_network(self):
+        self.create_peers_script()
         self.create_network_service()
         self.reload_systemd()
         self.start_network_service()
@@ -100,6 +102,7 @@ class Container(Base):
                 "network": self.config["network"],
                 "vxlan_id": self.config["vxlan_id"],
                 "subnet_cidr_block": self.config["subnet_cidr_block"],
+                "peers_script": self.peers_script,
             },
             network_service_file,
         )
@@ -122,19 +125,17 @@ class Container(Base):
             self.attach_script,
         )
 
-    @step("Add ARP and FDB entries")
-    def add_arp_and_fdb_entries(self):
-        namespace = self.config["network"]
-        network = self.config["network"]
-        results = []
-        for peer in self.config["peers"]:
-            commands = [
-                f"sudo ip netns exec {namespace} ip neighbor add {peer['ip_address']} lladdr {peer['mac_address']} dev vx-{network} nud permanent",
-                f"sudo ip netns exec {namespace} bridge fdb add {peer['mac_address']} dev vx-{network} self dst {peer['node_ip_address']} vni 1 port 4789",
-            ]
-            for command in commands:
-                results.append(self.execute(command))
-        return results
+    def create_peers_script(self):
+        self.server._render_template(
+            "container/peers.jinja2",
+            {
+                "namespace": self.config["network"],
+                "network": self.config["network"],
+                "peers": self.config["peers"],
+                "vxlan_id": self.config["vxlan_id"],
+            },
+            self.peers_script,
+        )
 
     @step("Delete Overlay Network")
     def delete_overlay_network(self):

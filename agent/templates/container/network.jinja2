@@ -24,6 +24,9 @@ ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set vx-{{ network }
 ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set vx-{{ network }} up
 ExecStart=/usr/bin/env ip netns exec {{ namespace }} ip link set br0 up
 
+# Setup ARP and FDB entries
+ExecStart=/bin/bash {{ peers_script }}
+
 # Teardown Namespace
 ExecStop=/usr/bin/env ip netns delete {{ namespace }}
 

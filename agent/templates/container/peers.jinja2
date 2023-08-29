@@ -1,0 +1,6 @@
+#! /bin/bash
+
+{% for peer in peers %}
+ip netns exec {{ namespace }} ip neighbor add {{ peer.ip_address }} lladdr {{ peer.mac_address }} dev vx-{{ network }} nud permanent
+ip netns exec {{ namespace }} bridge fdb add {{ peer.mac_address }} dev vx-{{ network }} self dst {{ peer.node_ip_address }} vni {{ vxlan_id }} port 4789
+{% endfor %}
