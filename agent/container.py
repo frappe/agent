@@ -47,7 +47,6 @@ class Container(Base):
             os.makedirs(mount["source"], exist_ok=True)
 
     def create_container_file(self):
-        os.makedirs(self.server.systemd_directory, exist_ok=True)
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary_unit = os.path.join(
                 temporary_directory, f"{self.name}.container"
