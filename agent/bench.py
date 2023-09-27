@@ -499,6 +499,14 @@ class Bench(Base):
             f"bench restart {'--web' if web_only else ''}"
         )
 
+    @job("Rebuild Bench Assets")
+    def rebuild_job(self):
+        return self.rebuild()
+
+    @step("Rebuild Bench Assets")
+    def rebuild(self, web_only=False):
+        return self.docker_execute("bench build")
+
     @property
     def apps(self):
         with open(self.apps_file, "r") as f:

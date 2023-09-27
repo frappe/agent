@@ -244,6 +244,12 @@ def update_bench_limits(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/rebuild", methods=["POST"])
+def rebuild_bench(bench):
+    job = Server().benches[bench].rebuild_job()
+    return {"job": job}
+
+
 """
 POST /benches/bench-1/sites
 {
