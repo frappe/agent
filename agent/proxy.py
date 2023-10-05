@@ -8,7 +8,6 @@ from collections import defaultdict
 
 from agent.job import job, step
 from agent.server import Server
-from configparser import ConfigParser
 
 
 class Proxy(Server):
