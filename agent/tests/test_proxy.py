@@ -73,7 +73,12 @@ class TestProxy(unittest.TestCase):
             json.dump({self.default_domain: self.domain_1}, r)
 
         self.assertLessEqual(
-            {self.default_domain: {"redirect": self.domain_1}}.items(),
+            {
+                self.default_domain: {
+                    "redirect": self.domain_1,
+                    "codeserver": False,
+                }
+            }.items(),
             proxy.hosts.items(),
         )
 
