@@ -684,10 +684,14 @@ class Bench(Base):
             try:
                 sites[directory] = Site(directory, self)
             except json.decoder.JSONDecodeError as jde:
-                print("Error decoding JSON in", directory)
-                print(jde.doc)
-                print(jde)
-                raise
+                output = (
+                    f"Error parsing JSON in {directory}:\n"
+                    f"{jde.doc}\n"
+                    f"{jde}\n"
+                )
+                self.execute(
+                    f"echo '{output}';exit 1"
+                )  # exit 1 to make sure the job fails and shows output
             except Exception:
                 pass
         return sites
