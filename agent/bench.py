@@ -683,6 +683,11 @@ class Bench(Base):
         for directory in os.listdir(self.sites_directory):
             try:
                 sites[directory] = Site(directory, self)
+            except json.decoder.JSONDecodeError as jde:
+                print("Error decoding JSON in", directory)
+                print(jde.doc)
+                print(jde)
+                raise
             except Exception:
                 pass
         return sites

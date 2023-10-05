@@ -15,10 +15,25 @@ class TestSite(unittest.TestCase):
     def _create_needed_paths(self):
         os.makedirs(self.sites_directory)
         os.makedirs(self.apps_directory)
+        os.makedirs(self.assets_dir)
         with open(self.common_site_config, "w") as c:
             json.dump({}, c)
         with open(self.bench_config, "w") as c:
             json.dump({"docker_image": "fake_img_url"}, c)
+        with open(self.apps_txt, "w") as a:
+            a.write("frappe\n")
+            a.write("erpnext\n")
+
+    def _make_site_config(self, site_name: str, content: str = None):
+        if not content:
+            content = json.dumps(
+                {"db_name": "fake_db_name", "db_password": "fake_db_password"}
+            )
+        site_config = os.path.join(
+            self.sites_directory, site_name, "site_config.json"
+        )
+        with open(site_config, "w") as s:
+            s.write(content)
 
     def setUp(self):
         self.test_dir = "test_dir"
@@ -40,6 +55,8 @@ class TestSite(unittest.TestCase):
             self.sites_directory, "common_site_config.json"
         )
         self.bench_config = os.path.join(self.bench_dir, "config.json")
+        self.apps_txt = os.path.join(self.sites_directory, "apps.txt")
+        self.assets_dir = os.path.join(self.sites_directory, "assets")
 
         self._create_needed_paths()
 
@@ -77,3 +94,32 @@ class TestSite(unittest.TestCase):
         self.assertFalse(
             os.path.exists(os.path.join(self.sites_directory, old_name))
         )
+
+    def test_sites_property_of_bench_throws_error_if_site_config_is_corrupt(
+        self,
+    ):
+        bench = self._get_test_bench()
+        site_name = "corrupt-site.frappe.cloud"
+        self._create_test_site(site_name)
+        self._make_site_config(site_name, content="corrupt{}")
+        with self.assertRaises(json.decoder.JSONDecodeError):
+            bench.sites
+
+    def test_sites_property_of_bench_doesnt_throw_error_for_assets_and_apps_txt(
+        self,
+    ):
+        bench = self._get_test_bench()
+        site_name = "corrupt-site.frappe.cloud"
+        self._create_test_site(site_name)
+        self._make_site_config(site_name)
+        try:
+            bench.sites
+        except json.decoder.JSONDecodeError:
+            self.fail(
+                "sites property of bench threw error for assets and apps.txt"
+            )
+        self.assertEqual(len(bench.sites), 1)
+        try:
+            bench.sites[site_name]
+        except KeyError:
+            self.fail("Site not found in bench.sites")
