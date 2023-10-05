@@ -3,6 +3,7 @@ import os
 import shutil
 import unittest
 from unittest.mock import patch
+from agent.base import AgentException
 
 from agent.site import Site
 from agent.bench import Bench
@@ -102,7 +103,7 @@ class TestSite(unittest.TestCase):
         site_name = "corrupt-site.frappe.cloud"
         self._create_test_site(site_name)
         self._make_site_config(site_name, content="corrupt{}")
-        with self.assertRaises(json.decoder.JSONDecodeError):
+        with self.assertRaises(AgentException):
             bench.sites
 
     def test_sites_property_of_bench_doesnt_throw_error_for_assets_and_apps_txt(
@@ -114,7 +115,7 @@ class TestSite(unittest.TestCase):
         self._make_site_config(site_name)
         try:
             bench.sites
-        except json.decoder.JSONDecodeError:
+        except AgentException:
             self.fail(
                 "sites property of bench threw error for assets and apps.txt"
             )
