@@ -102,7 +102,16 @@ class TestSite(unittest.TestCase):
         bench = self._get_test_bench()
         site_name = "corrupt-site.frappe.cloud"
         self._create_test_site(site_name)
-        self._make_site_config(site_name, content="corrupt{}")
+        self._make_site_config(
+            site_name,
+            content="""
+{
+   "db_name": "fake_db_name",
+   "db_password": "fake_db_password"
+   "some_key": "some_value"
+}
+""",  # missing comma above
+        )
         with self.assertRaises(AgentException):
             bench.sites
 
