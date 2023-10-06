@@ -677,8 +677,10 @@ class Bench(Base):
     def job_record(self):
         return self.server.job_record
 
-    def readable_jde_err(self, jde: json.decoder.JSONDecodeError) -> str:
-        output = f"Error parsing JSON:\n" f"{jde.doc}\n" f"{jde}\n"
+    def readable_jde_err(
+        self, title: str, jde: json.decoder.JSONDecodeError
+    ) -> str:
+        output = f"{title}:\n" f"{jde.doc}\n" f"{jde}\n"
         import re
 
         output = re.sub(r'("db_name":.* ")(\w*)(")', r"\1********\3", output)
@@ -694,8 +696,11 @@ class Bench(Base):
             try:
                 sites[directory] = Site(directory, self)
             except json.decoder.JSONDecodeError as jde:
+                output = self.readable_jde_err(
+                    f"Error parsing JSON in {directory}", jde
+                )
                 self.execute(
-                    f"echo '{self.readable_jde_err(jde)}';exit 1"
+                    f"echo '{output}';exit 1"
                 )  # exit 1 to make sure the job fails and shows output
             except Exception:
                 pass
