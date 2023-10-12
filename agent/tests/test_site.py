@@ -96,7 +96,7 @@ class TestSite(unittest.TestCase):
             os.path.exists(os.path.join(self.sites_directory, old_name))
         )
 
-    def test_sites_property_of_bench_throws_error_if_site_config_is_corrupt(
+    def test_valid_sites_property_of_bench_throws_error_if_site_config_is_corrupt(
         self,
     ):
         bench = self._get_test_bench()
@@ -113,9 +113,9 @@ class TestSite(unittest.TestCase):
 """,  # missing comma above
         )
         with self.assertRaises(AgentException):
-            bench.sites
+            bench.valid_sites
 
-    def test_sites_property_of_bench_doesnt_throw_error_for_assets_and_apps_txt(
+    def test_valid_sites_property_of_bench_doesnt_throw_error_for_assets_and_apps_txt(
         self,
     ):
         bench = self._get_test_bench()
@@ -130,6 +130,6 @@ class TestSite(unittest.TestCase):
             )
         self.assertEqual(len(bench.sites), 1)
         try:
-            bench.sites[site_name]
+            bench.valid_sites[site_name]
         except KeyError:
             self.fail("Site not found in bench.sites")

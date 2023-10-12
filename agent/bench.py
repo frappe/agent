@@ -373,7 +373,7 @@ class Bench(Base):
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password, force):
         site_database, temp_user, temp_password = self.create_mariadb_user(
-            name, mariadb_root_password, self.sites[name].database
+            name, mariadb_root_password, self.valid_sites[name].database
         )
         force_flag = "--force" if force else ""
         try:
@@ -432,7 +432,7 @@ class Bench(Base):
     def generate_nginx_config(self):
         domains = {}
         sites = []
-        for site in self.sites.values():
+        for site in self.valid_sites.values():
             sites.append(site)
             for domain in site.config.get("domains", []):
                 domains[domain] = site.name
@@ -690,7 +690,14 @@ class Bench(Base):
         return output
 
     @property
-    def sites(self) -> Dict[str, Site]:
+    def sites(self):
+        return self._sites()
+
+    @property
+    def valid_sites(self):
+        return self._sites(validate_configs=True)
+
+    def _sites(self, validate_configs=False) -> Dict[str, Site]:
         sites = {}
         for directory in os.listdir(self.sites_directory):
             try:
@@ -700,7 +707,7 @@ class Bench(Base):
                     f"Error parsing JSON in {directory}", jde
                 )
                 self.execute(
-                    f"echo '{output}';exit 1"
+                    f"echo '{output}';exit {int(validate_configs)}",
                 )  # exit 1 to make sure the job fails and shows output
             except Exception:
                 pass
