@@ -373,7 +373,7 @@ class Bench(Base):
     @step("Archive Site")
     def bench_archive_site(self, name, mariadb_root_password, force):
         site_database, temp_user, temp_password = self.create_mariadb_user(
-            name, mariadb_root_password, self.sites[name].database
+            name, mariadb_root_password, self.valid_sites[name].database
         )
         force_flag = "--force" if force else ""
         try:
@@ -432,7 +432,7 @@ class Bench(Base):
     def generate_nginx_config(self):
         domains = {}
         sites = []
-        for site in self.sites.values():
+        for site in self.valid_sites.values():
             sites.append(site)
             for domain in site.config.get("domains", []):
                 domains[domain] = site.name
@@ -677,12 +677,38 @@ class Bench(Base):
     def job_record(self):
         return self.server.job_record
 
+    def readable_jde_err(
+        self, title: str, jde: json.decoder.JSONDecodeError
+    ) -> str:
+        output = f"{title}:\n" f"{jde.doc}\n" f"{jde}\n"
+        import re
+
+        output = re.sub(r'("db_name":.* ")(\w*)(")', r"\1********\3", output)
+        output = re.sub(
+            r'("db_password":.* ")(\w*)(")', r"\1********\3", output
+        )
+        return output
+
     @property
-    def sites(self) -> Dict[str, Site]:
+    def sites(self):
+        return self._sites()
+
+    @property
+    def valid_sites(self):
+        return self._sites(validate_configs=True)
+
+    def _sites(self, validate_configs=False) -> Dict[str, Site]:
         sites = {}
         for directory in os.listdir(self.sites_directory):
             try:
                 sites[directory] = Site(directory, self)
+            except json.decoder.JSONDecodeError as jde:
+                output = self.readable_jde_err(
+                    f"Error parsing JSON in {directory}", jde
+                )
+                self.execute(
+                    f"echo '{output}';exit {int(validate_configs)}",
+                )  # exit 1 to make sure the job fails and shows output
             except Exception:
                 pass
         return sites
