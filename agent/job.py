@@ -11,6 +11,7 @@ from peewee import (
     SqliteDatabase,
     TextField,
     TimeField,
+    AutoField,
 )
 from redis import Redis
 from rq import Queue, get_current_job
@@ -151,6 +152,7 @@ class JobModel(Model):
             (3, "Failure"),
         ]
     )
+    agent_job_id = CharField(null=True)
     data = TextField(null=True, default="{}")
 
     enqueue = DateTimeField(default=datetime.datetime.now)
@@ -174,6 +176,13 @@ class StepModel(Model):
     start = DateTimeField()
     end = DateTimeField(null=True)
     duration = TimeField(null=True)
+
+    class Meta:
+        database = agent_database
+
+class PatchLogModel(Model):
+    name = AutoField()
+    patch = TextField()
 
     class Meta:
         database = agent_database
