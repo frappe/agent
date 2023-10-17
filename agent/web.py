@@ -237,7 +237,7 @@ def restart_bench(bench):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/limit", methods=["POST"])
+@application.route("/benches/<string:bench>/limits", methods=["POST"])
 def update_bench_limits(bench):
     data = request.json
     job = Server().benches[bench].force_update_limits(**data)
