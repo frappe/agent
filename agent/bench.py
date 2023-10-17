@@ -680,7 +680,6 @@ class Bench(Base):
         self.update_memory_limits()
         self.deploy()
 
-    @step("Update Bench Memory Limits")
     def update_memory_limits(self):
         memory_high = self.bench_config.get("memory_high")
         memory_max = self.bench_config.get("memory_max")
@@ -688,6 +687,12 @@ class Bench(Base):
         vcpu = self.bench_config.get("vcpu")
         if not any([memory_high, memory_max, memory_swap, vcpu]):
             return
+        self._update_memory_limits(memory_high, memory_max, memory_swap, vcpu)
+
+    @step("Update Bench Memory Limits")
+    def _update_memory_limits(
+        self, memory_high, memory_max, memory_swap, vcpu
+    ):
         cmd = f"docker update {self.name}"
         if memory_high:
             cmd += f" --memory-reservation={memory_high}M"
