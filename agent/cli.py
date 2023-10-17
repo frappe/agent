@@ -257,3 +257,8 @@ def stop(bench):
         return Server().benches[bench].stop()
     else:
         return Server().stop_all_benches()
+
+@bench.command()
+def run_patches():
+    from agent.patch_handler import run_patches
+    run_patches()

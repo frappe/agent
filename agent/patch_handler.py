@@ -45,7 +45,7 @@ class PatchHandler():
 
 def run_patches():
     directory = os.getcwd()
-    patches_dir = f"{directory}/patches.txt"
+    patches_dir = f"{directory}/repo/agent/patches.txt"
 
     if not _patch_log_exists():
         print("Creating patch log")
