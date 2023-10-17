@@ -61,7 +61,7 @@ def run_patches():
             patch_handler.execute()
 
 def _patch_log_exists():
-    from job import agent_database as database
+    from agent.job import agent_database as database
 
     tables = database.get_tables()
 
@@ -71,7 +71,7 @@ def _patch_log_exists():
     return False
 
 def _create_patch_log():
-    from job import PatchLogModel
+    from agent.job import PatchLogModel
     PatchLogModel.create_table()
 
 
