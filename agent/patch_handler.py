@@ -15,7 +15,7 @@ class PatchHandler():
             return self._executed_patches 
 
     def retrieve_patches(self):
-        from job import PatchLogModel
+        from agent.job import PatchLogModel
 
         patches = PatchLogModel.select()
         return [patch.patch for patch in patches]
