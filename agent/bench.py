@@ -683,9 +683,9 @@ class Bench(Base):
         return self.execute(f"docker start {self.name}")
 
     @job("Force Update Bench Limits")
-    def force_update_limits(self):
+    def force_update_limits(self, memory_high, memory_max, memory_swap, vcpu):
         self._stop()
-        self.update_runtime_limits()
+        self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
         self._start()
 
     def update_runtime_limits(self):
