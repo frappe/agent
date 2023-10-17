@@ -24,6 +24,11 @@ def setup():
 def update():
     Server().update_agent_cli()
 
+@cli.command()
+def run_patches():
+    from agent.patch_handler import run_patches
+    run_patches()
+
 
 @cli.command()
 @click.option("--password", required=True)
@@ -257,8 +262,3 @@ def stop(bench):
         return Server().benches[bench].stop()
     else:
         return Server().stop_all_benches()
-
-@bench.command()
-def run_patches():
-    from agent.patch_handler import run_patches
-    run_patches()
