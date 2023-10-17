@@ -529,7 +529,7 @@ class Bench(Base):
         self.setup_nginx()
         if self.bench_config.get("single_container"):
             self.update_supervisor()
-            self.update_memory_limits()
+            self.update_runtime_limits()
             if (old_config["web_port"] != bench_config["web_port"]) or (
                 old_config["socketio_port"] != bench_config["socketio_port"]
             ):
@@ -674,23 +674,23 @@ class Bench(Base):
         else:
             return self.execute(f"docker stack rm {self.name}")
 
-    @job("Force Update Memory Limits")
-    def force_update_memory_limits(self):
+    @job("Force Update Bench Limits")
+    def force_update_limits(self):
         self.disable_production()
-        self.update_memory_limits()
+        self.update_runtime_limits()
         self.deploy()
 
-    def update_memory_limits(self):
+    def update_runtime_limits(self):
         memory_high = self.bench_config.get("memory_high")
         memory_max = self.bench_config.get("memory_max")
         memory_swap = self.bench_config.get("memory_swap")
         vcpu = self.bench_config.get("vcpu")
         if not any([memory_high, memory_max, memory_swap, vcpu]):
             return
-        self._update_memory_limits(memory_high, memory_max, memory_swap, vcpu)
+        self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
 
     @step("Update Bench Memory Limits")
-    def _update_memory_limits(
+    def _update_runtime_limits(
         self, memory_high, memory_max, memory_swap, vcpu
     ):
         cmd = f"docker update {self.name}"
