@@ -674,11 +674,19 @@ class Bench(Base):
         else:
             return self.execute(f"docker stack rm {self.name}")
 
+    @step("Stop bench")
+    def _stop(self):
+        return self.execute(f"docker stop {self.name}")
+
+    @step("Start bench")
+    def _start(self):
+        return self.execute(f"docker start {self.name}")
+
     @job("Force Update Bench Limits")
     def force_update_limits(self):
-        self.disable_production()
+        self._stop()
         self.update_runtime_limits()
-        self.deploy()
+        self._start()
 
     def update_runtime_limits(self):
         memory_high = self.bench_config.get("memory_high")
