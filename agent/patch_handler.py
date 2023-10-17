@@ -37,7 +37,7 @@ class PatchHandler():
         return getattr(module, attr)
 
     def log_patch(self):
-        from job import PatchLogModel
+        from agent.job import PatchLogModel
 
         patch_log = PatchLogModel()
         patch_log.patch = self.patch

@@ -5,8 +5,11 @@ def execute():
     from peewee import CharField
 
     migrator = SqliteMigrator(database)
+    try:
 
-    migrate(
-        migrator.add_column('JobModel', 'agent_job_id', CharField(null=True))
-    )
+        migrate(
+            migrator.add_column('JobModel', 'agent_job_id', CharField(null=True))
+        )
+    except Exception as e:
+        print(e)
     
