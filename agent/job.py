@@ -72,7 +72,7 @@ class Job(Action):
         self.model.status = "Running"
 
     @save
-    def enqueue(self, name, function, args, kwargs):
+    def enqueue(self, name, function, args, kwargs, agent_job_id=None):
         self.model = JobModel()
         self.model.name = name
         self.model.status = "Pending"
@@ -87,6 +87,7 @@ class Job(Action):
             sort_keys=True,
             indent=4,
         )
+        self.model.agent_job_id = agent_job_id
 
 
 def step(name):
@@ -129,7 +130,8 @@ def job(name, priority="default"):
                 instance.job_record.success(result)
             return result
         else:
-            instance.job_record.enqueue(name, wrapped, args, kwargs)
+            agent_job_id = get_agent_job_id()
+            instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
             queue(priority).enqueue_call(
                 wrapped,
                 args=args,
@@ -141,6 +143,9 @@ def job(name, priority="default"):
 
     return wrapper
 
+def get_agent_job_id():
+    from flask import request
+    return request.headers.get('X-Agent-Job-Id')
 
 class JobModel(Model):
     name = CharField()
