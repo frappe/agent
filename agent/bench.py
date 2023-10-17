@@ -674,11 +674,11 @@ class Bench(Base):
         else:
             return self.execute(f"docker stack rm {self.name}")
 
-    @step("Stop bench")
+    @step("Stop Bench")
     def _stop(self):
         return self.execute(f"docker stop {self.name}")
 
-    @step("Start bench")
+    @step("Start Bench")
     def _start(self):
         return self.execute(f"docker start {self.name}")
 
