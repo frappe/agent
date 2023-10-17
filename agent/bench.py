@@ -529,6 +529,7 @@ class Bench(Base):
         self.setup_nginx()
         if self.bench_config.get("single_container"):
             self.update_supervisor()
+            self.update_runtime_limits()
             if (old_config["web_port"] != bench_config["web_port"]) or (
                 old_config["socketio_port"] != bench_config["socketio_port"]
             ):
@@ -672,6 +673,44 @@ class Bench(Base):
             return self.execute(f"docker rm {self.name}")
         else:
             return self.execute(f"docker stack rm {self.name}")
+
+    @step("Stop Bench")
+    def _stop(self):
+        return self.execute(f"docker stop {self.name}")
+
+    @step("Start Bench")
+    def _start(self):
+        return self.execute(f"docker start {self.name}")
+
+    @job("Force Update Bench Limits")
+    def force_update_limits(self, memory_high, memory_max, memory_swap, vcpu):
+        self._stop()
+        self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
+        self._start()
+
+    def update_runtime_limits(self):
+        memory_high = self.bench_config.get("memory_high")
+        memory_max = self.bench_config.get("memory_max")
+        memory_swap = self.bench_config.get("memory_swap")
+        vcpu = self.bench_config.get("vcpu")
+        if not any([memory_high, memory_max, memory_swap, vcpu]):
+            return
+        self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
+
+    @step("Update Bench Memory Limits")
+    def _update_runtime_limits(
+        self, memory_high, memory_max, memory_swap, vcpu
+    ):
+        cmd = f"docker update {self.name}"
+        if memory_high:
+            cmd += f" --memory-reservation={memory_high}M"
+        if memory_max:
+            cmd += f" --memory={memory_max}M"
+        if memory_swap:
+            cmd += f" --memory-swap={memory_swap}M"
+        if vcpu:
+            cmd += f" --cpus={vcpu}"
+        return self.execute(cmd)
 
     @property
     def job_record(self):

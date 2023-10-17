@@ -209,8 +209,8 @@ def get_ssh_session_logs():
 
 @application.route("/security/retrieve_ssh_session_log/<string:filename>")
 def retrieve_ssh_session_log(filename):
-    return {'log_details': Security().retrieve_ssh_session_log(filename)}
-    
+    return {"log_details": Security().retrieve_ssh_session_log(filename)}
+
 
 @application.route("/benches/<string:bench>/sites/<string:site>/sid")
 def get_site_sid(bench, site):
@@ -234,6 +234,13 @@ def archive_bench(bench):
 def restart_bench(bench):
     data = request.json
     job = Server().benches[bench].restart_job(**data)
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/limits", methods=["POST"])
+def update_bench_limits(bench):
+    data = request.json
+    job = Server().benches[bench].force_update_limits(**data)
     return {"job": job}
 
 
@@ -681,7 +688,9 @@ def proxy_add_upstream_site(upstream):
 )
 def proxy_remove_upstream_site(upstream, site):
     data = request.json
-    job = Proxy().remove_site_from_upstream_job(upstream, site, data.get("skip_reload", False))
+    job = Proxy().remove_site_from_upstream_job(
+        upstream, site, data.get("skip_reload", False)
+    )
     return {"job": job}
 
 
@@ -945,11 +954,7 @@ def stop_code_server(bench):
     "/benches/<string:bench>/codeserver/archive", methods=["POST"]
 )
 def archive_code_server(bench):
-    job = (
-        Server()
-        .benches[bench]
-        .archive_code_server()
-    )
+    job = Server().benches[bench].archive_code_server()
     return {"job": job}
 
 
