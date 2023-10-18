@@ -1,3 +1,7 @@
+map $host $subdomain_map {
+    ~^(?<subdomain>[^.]*).*$ $subdomain.{{ domain }};
+}
+
 {% for name, upstream in upstreams.items() %}
 upstream {{ upstream["hash"] }} {
 	server {{ name }}:80;
