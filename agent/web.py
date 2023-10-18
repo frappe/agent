@@ -834,10 +834,17 @@ def jobs(id=None, ids=None, status=None):
         )
     return jsonify(json.loads(json.dumps(job, default=str)))
 
-@application.route("/agentjob/<int:id>")
-def agent_job(id=None):
-    job = to_dict(JobModel.get(JobModel.agent_job_id == id))
-    return jsonify(json.loads(json.dumps(job, default=str)))
+@application.route("/agent-jobs")
+@application.route("/agent-jobs/<int:id>")
+@application.route("/agent-jobs/<string:ids>")
+def agent_jobs(id=None, ids=None):
+    if id:
+        job = to_dict(JobModel.get(JobModel.agent_job_id == id))
+        return jsonify(json.loads(json.dumps(job, default=str)))
+    elif ids:
+        ids = ids.split(",")
+        job = list(map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids)))
+        return jsonify(json.loads(json.dumps(job, default=str)))
 
 
 @application.route("/update", methods=["POST"])
