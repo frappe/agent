@@ -719,7 +719,7 @@ class Bench(Base):
         if site in self.sites:
             return self.benches[site]
 
-        raise SiteNotExistsException(self.name, site)
+        raise SiteNotExistsException(site, self.name)
 
     @property
     def step_record(self):

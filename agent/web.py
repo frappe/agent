@@ -984,4 +984,4 @@ def resource_not_found(e):
 
 @application.errorhandler(SiteNotExistsException)
 def resource_not_found(e):
-    return jsonify(error=str(e))
+    return jsonify(error=str(e)), 404
