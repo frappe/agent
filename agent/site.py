@@ -659,7 +659,7 @@ print(">>>" + frappe.session.sid + "<<<")
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
                 f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
-                f" -e '{query}'"
+                f" {self.database} -e '{query}'"
             )
 
     def fetch_latest_backup(self, with_files=True):
