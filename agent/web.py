@@ -349,8 +349,7 @@ def rename_site(bench, site):
     "/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"]
 )
 def optimize_tables(bench, site):
-    data = request.json
-    job = Server().benches[bench].optimize_tables_job(site, data["new_name"])
+    job = Server().benches[bench].sites[site].optimize_tables_job()
     return {"job": job}
 
 
