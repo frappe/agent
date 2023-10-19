@@ -452,7 +452,7 @@ class Server(Base):
         if bench in self.benches:
             return self.benches[bench]
 
-        raise BenchNotExistsException(bench)
+        raise BenchNotExistsException(bench).with_traceback()
 
     @property
     def job_record(self):

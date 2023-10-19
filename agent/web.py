@@ -1051,9 +1051,17 @@ def all_exception_handler(error):
     }, 500
 
 @application.errorhandler(BenchNotExistsException)
-def resource_not_found(e):
-    return jsonify(error=str(e)), 404
+def bench_not_found(e):
+    return {
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
+    }, 404
 
 @application.errorhandler(SiteNotExistsException)
-def resource_not_found(e):
-    return jsonify(error=str(e)), 404
+def site_not_found(e):
+    return {
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
+    }, 404
