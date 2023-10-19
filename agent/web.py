@@ -7,6 +7,8 @@ from base64 import b64decode
 from flask import Flask, jsonify, request, abort
 from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from functools import wraps
+
 
 from agent.proxy import Proxy
 from agent.ssh import SSHProxy
@@ -22,6 +24,21 @@ from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 
 application = Flask(__name__)
 
+
+def set_bench_and_site(fn):
+    @wraps
+    def wrapper( *args, wargs):
+        bench = args[0]
+        site = args[1]
+
+        if bench:
+            bench_obj = Server().get_bench(bench)
+
+        if site:
+            bench_obj.get_site(site)
+
+        return fn(*args, **wargs)
+    return wrapper
 
 log = logging.getLogger("werkzeug")
 log.handlers = []
@@ -399,15 +416,16 @@ def fetch_site_analytics(bench, site):
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"]
 )
+@set_bench_and_site
 def backup_site(bench, site):
     data = request.json or {}
     with_files = data.get("with_files")
     offsite = data.get("offsite")
 
-    bench = Server().get_bench(bench)
-    site = bench.get_site(site)
+    # bench = Server().get_bench(bench)
+    # site = bench.get_site(site)
 
-    job = site.backup_job(with_files, offsite)
+    job = Server().benches[bench].sites[site].backup_job(with_files, offsite)
     return {"job": job}
 
 
@@ -976,7 +994,6 @@ def all_exception_handler(error):
             traceback.format_exception(*sys.exc_info())
         ).splitlines()
     }, 500
-
 
 @application.errorhandler(BenchNotExistsException)
 def resource_not_found(e):
