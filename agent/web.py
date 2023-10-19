@@ -4,7 +4,7 @@ import sys
 import traceback
 from base64 import b64decode
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 
@@ -17,6 +17,7 @@ from agent.database import DatabaseServer
 from agent.proxysql import ProxySQL
 from agent.minio import Minio
 from agent.security import Security
+from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 
 
 application = Flask(__name__)
@@ -24,7 +25,6 @@ application = Flask(__name__)
 
 log = logging.getLogger("werkzeug")
 log.handlers = []
-
 
 @application.before_request
 def validate_access_token():
@@ -403,7 +403,11 @@ def backup_site(bench, site):
     data = request.json or {}
     with_files = data.get("with_files")
     offsite = data.get("offsite")
-    job = Server().benches[bench].sites[site].backup_job(with_files, offsite)
+
+    bench = Server().get_bench(bench)
+    site = bench.get_site(site)
+
+    job = site.backup_job(with_files, offsite)
     return {"job": job}
 
 
@@ -972,3 +976,12 @@ def all_exception_handler(error):
             traceback.format_exception(*sys.exc_info())
         ).splitlines()
     }, 500
+
+
+@application.errorhandler(BenchNotExistsException, SiteNotExistsException)
+def resource_not_found(e):
+    return jsonify(error=str(e)), 404
+
+# @application.errorhandler(SiteNotExistsException)
+# def resource_not_found(e):
+#     return jsonify(error=str(e))

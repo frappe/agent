@@ -17,6 +17,8 @@ from agent.base import AgentException, Base
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, get_size
+from agent.exceptions import SiteNotExistsException
+
 
 
 class Bench(Base):
@@ -712,6 +714,12 @@ class Bench(Base):
             except Exception:
                 pass
         return sites
+
+    def get_site(self, site):
+        if site in self.sites:
+            return self.benches[site]
+
+        raise SiteNotExistsException(self.name, site)
 
     @property
     def step_record(self):

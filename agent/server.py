@@ -15,6 +15,7 @@ from agent.bench import Bench
 from agent.job import Job, Step, job, step
 from agent.site import Site
 from agent.patch_handler import run_patches
+from agent.exceptions import BenchNotExistsException
 
 class Server(Base):
     def __init__(self, directory=None):
@@ -446,6 +447,12 @@ class Server(Base):
             except Exception:
                 pass
         return benches
+
+    def get_bench(self, bench):
+        if bench in self.benches:
+            return self.benches[bench]
+
+        raise BenchNotExistsException(bench)
 
     @property
     def job_record(self):
