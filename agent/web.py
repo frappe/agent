@@ -346,6 +346,15 @@ def rename_site(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"]
+)
+def optimize_tables(bench, site):
+    data = request.json
+    job = Server().benches[bench].optimize_tables_job(site, data["new_name"])
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
 )
 def install_app_site(bench, site):

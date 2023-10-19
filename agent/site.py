@@ -648,6 +648,20 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         return {"backups": backup_files, "offsite": uploaded_files}
 
+    @job("Optimize Tables")
+    def optimize_tables_job(self):
+        return self.optimize_tables()
+
+    @step("Optimize Tables")
+    def optimize_tables(self):
+        tables = [row[0] for row in self.get_database_free_tables()]
+        for table in tables:
+            query = f"OPTIMIZE TABLE `{table}`"
+            self.execute(
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f" -e '{query}'"
+            )
+
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates, site_configs = [], [], [], []
         backup_directory = os.path.join(self.directory, "private", "backups")
