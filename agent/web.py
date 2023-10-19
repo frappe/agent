@@ -25,6 +25,7 @@ from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 application = Flask(__name__)
 
 def validate_bench(fn):
+    @wraps(fn)
     def wrapper(*args, **kwargs):
         bench = kwargs.get('bench')
 
@@ -35,6 +36,7 @@ def validate_bench(fn):
     return wrapper
 
 def validate_bench_and_site(fn):
+    @wraps(fn)
     def wrapper(*args, **kwargs):
         site = kwargs.get('site')
         bench = kwargs.get('bench')
