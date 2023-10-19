@@ -50,7 +50,7 @@ map $host $actual_host {
 
 map $upstream_http_access_control_allow_origin $access_control_allow_origin {
 	default $upstream_http_access_control_allow_origin;
-	"" "https://$actual_host";
+	"" "https://$host";
 }
 
 map $upstream_http_access_control_allow_headers $access_control_allow_headers {
@@ -124,12 +124,12 @@ server {
 		proxy_http_version 1.1;
 
 		proxy_cache proxy_cache_zone;
-		proxy_cache_key $scheme$actual_host$request_uri;
+		proxy_cache_key $scheme$host$request_uri;
 		proxy_cache_valid 200 302 2m;
 		proxy_cache_valid 404 1m;
 		proxy_cache_bypass $http_secret_cache_purge;
 
-		proxy_set_header Host $actual_host;
+		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
@@ -145,7 +145,7 @@ server {
 		proxy_http_version 1.1;
 
 		proxy_set_header Upgrade $http_upgrade;
-		proxy_set_header Host $actual_host;
+		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
@@ -164,7 +164,7 @@ server {
 		proxy_buffer_size 128k;
 		proxy_buffers 100 128k;
 
-		proxy_set_header Host $actual_host;
+		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
