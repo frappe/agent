@@ -751,7 +751,8 @@ print(">>>" + frappe.session.sid + "<<<")
     def get_database_free_tables(self):
         try:
             query = (
-                "SELECT `table_name`, `data_free`"
+                "SELECT `table_name`,"
+                " round((`data_free` / 1024 / 1024), 2)"
                 " FROM information_schema.tables"
                 f' WHERE `table_schema` = "{self.database}"'
                 " AND `data_free` > 4 * 1024 * 1024"
