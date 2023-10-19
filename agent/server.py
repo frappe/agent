@@ -282,7 +282,9 @@ class Server(Base):
         try:
             site.build_search_index()
         except Exception:
-            pass  # Don't fail job on failure; v12 does not have build_search_index command
+            # Don't fail job on failure
+            # v12 does not have build_search_index command
+            pass
 
     @job("Recover Failed Site Migrate", priority="high")
     def update_site_recover_migrate_job(

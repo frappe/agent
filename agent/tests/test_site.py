@@ -96,7 +96,7 @@ class TestSite(unittest.TestCase):
             os.path.exists(os.path.join(self.sites_directory, old_name))
         )
 
-    def test_valid_sites_property_of_bench_throws_error_if_site_config_is_corrupt(
+    def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
         self,
     ):
         bench = self._get_test_bench()
@@ -115,7 +115,7 @@ class TestSite(unittest.TestCase):
         with self.assertRaises(AgentException):
             bench.valid_sites
 
-    def test_valid_sites_property_of_bench_doesnt_throw_error_for_assets_and_apps_txt(
+    def test_valid_sites_property_of_bench_doesnt_throw_for_assets_apps_txt(
         self,
     ):
         bench = self._get_test_bench()
