@@ -695,6 +695,8 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return {
             "database": b2mb(self.get_database_size()),
+            "database_free_tables": self.get_database_free_tables(),
+            "database_free": b2mb(self.get_database_free_size()),
             "public": b2mb(get_size(public_directory)),
             "private": b2mb(
                 get_size(private_directory) - backup_directory_size
@@ -727,6 +729,41 @@ print(">>>" + frappe.session.sid + "<<<")
             return int(database_size)
         except Exception:
             return 0
+
+    def get_database_free_size(self):
+        query = (
+            "SELECT SUM(`data_free`)"
+            " FROM information_schema.tables"
+            f' WHERE `table_schema` = "{self.database}"'
+            " GROUP BY `table_schema`"
+        )
+        command = (
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+            f" -e '{query}'"
+        )
+        database_size = self.execute(command).get("output")
+
+        try:
+            return int(database_size)
+        except Exception:
+            return 0
+
+    def get_database_free_tables(self):
+        try:
+            query = (
+                "SELECT `table_name`, `data_free`"
+                " FROM information_schema.tables"
+                f' WHERE `table_schema` = "{self.database}"'
+                " AND `data_free` > 4 * 1024 * 1024"
+            )
+            command = (
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f" -e '{query}'"
+            )
+            output = self.execute(command).get("output")
+            return [line.split("\t") for line in output.splitlines()]
+        except Exception:
+            return []
 
     @property
     def job_record(self):
