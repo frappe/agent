@@ -978,10 +978,10 @@ def all_exception_handler(error):
     }, 500
 
 
-@application.errorhandler(BenchNotExistsException, SiteNotExistsException)
+@application.errorhandler(BenchNotExistsException)
 def resource_not_found(e):
     return jsonify(error=str(e)), 404
 
-# @application.errorhandler(SiteNotExistsException)
-# def resource_not_found(e):
-#     return jsonify(error=str(e))
+@application.errorhandler(SiteNotExistsException)
+def resource_not_found(e):
+    return jsonify(error=str(e))
