@@ -21,6 +21,7 @@ class Base:
         input=None,
         skip_output_log=False,
         executable=None,
+        remove_crs=True,
     ):
         directory = directory or self.directory
         self.log("Command", command)
@@ -41,7 +42,7 @@ class Base:
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
-            output = self.remove_crs(e.output)
+            output = self.remove_crs(e.output) if remove_crs else e.output
             if not skip_output_log:
                 self.log("Output", output)
             data.update(
@@ -54,7 +55,9 @@ class Base:
             raise AgentException(data)
 
         end = datetime.now()
-        output = self.remove_crs(process.stdout)
+        output = (
+            self.remove_crs(process.stdout) if remove_crs else process.stdout
+        )
         if not skip_output_log:
             self.log("Output", output)
         data.update({"duration": end - start, "end": end, "output": output})
