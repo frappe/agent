@@ -42,7 +42,11 @@ class Base:
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
-            output = self.remove_crs(e.output) if remove_crs else e.output
+            output = (
+                self.remove_crs(e.output)
+                if remove_crs
+                else e.output.decode().strip()
+            )
             if not skip_output_log:
                 self.log("Output", output)
             data.update(
@@ -56,7 +60,9 @@ class Base:
 
         end = datetime.now()
         output = (
-            self.remove_crs(process.stdout) if remove_crs else process.stdout
+            self.remove_crs(process.stdout)
+            if remove_crs
+            else process.stdout.decode().strip()
         )
         if not skip_output_log:
             self.log("Output", output)
