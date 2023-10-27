@@ -369,6 +369,24 @@ class Server(Base):
 
     @step("Move Site")
     def move_site(self, site, target):
+        destination = os.path.join(target.sites_directory, site.name)
+        destination_site_config = os.path.join(destination, "site_config.json")
+        if os.path.exists(destination) and not os.path.exists(
+            destination_site_config
+        ):
+            # If there's already a site directory in the destination bench
+            # and it does not have a site_config.json file,
+            # then it is an incomplete site directory.
+            # Move it to the sites/archived directory
+            archived_sites_directory = os.path.join(
+                target.sites_directory, "archived"
+            )
+            os.makedirs(archived_sites_directory, exist_ok=True)
+            archived_site_path = os.path.join(
+                archived_sites_directory,
+                f"{site.name}-{datetime.now().isoformat()}",
+            )
+            shutil.move(destination, archived_site_path)
         shutil.move(site.directory, target.sites_directory)
 
     def execute(self, command, directory=None, skip_output_log=False):
