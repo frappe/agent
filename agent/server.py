@@ -14,7 +14,8 @@ from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.job import Job, Step, job, step
 from agent.site import Site
-
+from agent.patch_handler import run_patches
+from agent.exceptions import BenchNotExistsException
 
 class Server(Base):
     def __init__(self, directory=None):
@@ -467,6 +468,12 @@ class Server(Base):
                 pass
         return benches
 
+    def get_bench(self, bench):
+        if bench in self.benches:
+            return self.benches[bench]
+
+        raise BenchNotExistsException(bench).with_traceback()
+
     @property
     def job_record(self):
         if self.job is None:
@@ -505,6 +512,7 @@ class Server(Base):
             self.execute(f"sudo supervisorctl restart {worker_name}")
 
         self.execute("sudo supervisorctl restart agent:web")
+        run_patches()
 
     def update_agent_cli(self):
         directory = os.path.join(self.directory, "repo")
@@ -521,6 +529,7 @@ class Server(Base):
         self.setup_supervisor()
 
         self.setup_nginx()
+        run_patches()
 
     def get_agent_version(self):
         directory = os.path.join(self.directory, "repo")

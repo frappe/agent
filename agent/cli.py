@@ -24,6 +24,11 @@ def setup():
 def update():
     Server().update_agent_cli()
 
+@cli.command()
+def run_patches():
+    from agent.patch_handler import run_patches
+    run_patches()
+
 
 @cli.command()
 @click.option("--password", required=True)
@@ -102,11 +107,10 @@ def standalone(domain=None):
 
 @setup.command()
 def database():
-    from agent.job import JobModel, StepModel
+    from agent.job import JobModel, StepModel, PatchLogModel
     from agent.job import agent_database as database
 
-    database.create_tables([JobModel, StepModel])
-
+    database.create_tables([JobModel, StepModel, PatchLogModel])
 
 @setup.command()
 def site_analytics():
