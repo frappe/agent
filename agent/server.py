@@ -17,6 +17,7 @@ from agent.site import Site
 from agent.patch_handler import run_patches
 from agent.exceptions import BenchNotExistsException
 
+
 class Server(Base):
     def __init__(self, directory=None):
         self.directory = directory or os.getcwd()
@@ -469,10 +470,10 @@ class Server(Base):
         return benches
 
     def get_bench(self, bench):
-        if bench in self.benches:
+        try:
             return self.benches[bench]
-
-        raise BenchNotExistsException(bench).with_traceback()
+        except KeyError:
+            raise BenchNotExistsException(bench).with_traceback()
 
     @property
     def job_record(self):

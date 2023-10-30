@@ -20,7 +20,6 @@ from agent.utils import download_file, get_size
 from agent.exceptions import SiteNotExistsException
 
 
-
 class Bench(Base):
     def __init__(self, name, server):
         self.name = name
@@ -764,10 +763,10 @@ class Bench(Base):
         return sites
 
     def get_site(self, site):
-        if site in self.sites:
-            return self.benches[site]
-
-        raise SiteNotExistsException(site, self.name)
+        try:
+            return self.sites[site]
+        except KeyError:
+            raise SiteNotExistsException(site, self.name)
 
     @property
     def step_record(self):
