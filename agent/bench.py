@@ -764,7 +764,7 @@ class Bench(Base):
 
     def get_site(self, site):
         try:
-            return self.sites[site]
+            return self.valid_sites[site]
         except KeyError:
             raise SiteNotExistsException(site, self.name)
 
