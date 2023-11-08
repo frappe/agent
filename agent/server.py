@@ -702,6 +702,9 @@ class Server(Base):
             {
                 "proxy_ip": self.config.get("proxy_ip"),
                 "tls_protocols": self.config.get("tls_protocols"),
+                "nginx_vts_module_enabled": self.config.get(
+                    "nginx_vts_module_enabled", True
+                ),
             },
             nginx_config,
         )
@@ -720,6 +723,9 @@ class Server(Base):
                 "trace": self.config.get("trace", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
+                "nginx_vts_module_enabled": self.config.get(
+                    "nginx_vts_module_enabled", True
+                ),
                 "pages_directory": os.path.join(
                     self.directory, "repo", "agent", "pages"
                 ),
