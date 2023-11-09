@@ -473,7 +473,7 @@ class Server(Base):
         try:
             return self.benches[bench]
         except KeyError:
-            raise BenchNotExistsException(bench).with_traceback()
+            raise BenchNotExistsException(bench)
 
     @property
     def job_record(self):
