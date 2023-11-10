@@ -4,7 +4,7 @@ import sys
 import traceback
 from base64 import b64decode
 
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from functools import wraps
@@ -24,32 +24,38 @@ from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 
 application = Flask(__name__)
 
+
 def validate_bench(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        bench = kwargs.get('bench')
+        bench = kwargs.get("bench")
 
         if bench:
             Server().get_bench(bench)
 
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 def validate_bench_and_site(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        site = kwargs.get('site')
-        bench = kwargs.get('bench')
+        site = kwargs.get("site")
+        bench = kwargs.get("bench")
 
         if bench:
             bench_obj = Server().get_bench(bench)
             bench_obj.get_site(site)
 
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 log = logging.getLogger("werkzeug")
 log.handlers = []
+
 
 @application.before_request
 def validate_access_token():
@@ -602,7 +608,7 @@ def update_site_recover(bench, site):
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/archive", methods=["POST"]
 )
-@validate_bench_and_site
+@validate_bench
 def archive_site(bench, site):
     data = request.json
     job = (
@@ -927,6 +933,7 @@ def jobs(id=None, ids=None, status=None):
         )
     return jsonify(json.loads(json.dumps(job, default=str)))
 
+
 @application.route("/agent-jobs")
 @application.route("/agent-jobs/<int:id>")
 @application.route("/agent-jobs/<string:ids>")
@@ -936,7 +943,9 @@ def agent_jobs(id=None, ids=None):
         return jsonify(json.loads(json.dumps(job, default=str)))
     elif ids:
         ids = ids.split(",")
-        job = list(map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids)))
+        job = list(
+            map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids))
+        )
         return jsonify(json.loads(json.dumps(job, default=str)))
 
 
@@ -1069,6 +1078,7 @@ def all_exception_handler(error):
         ).splitlines()
     }, 500
 
+
 @application.errorhandler(BenchNotExistsException)
 def bench_not_found(e):
     return {
@@ -1076,6 +1086,7 @@ def bench_not_found(e):
             traceback.format_exception(*sys.exc_info())
         ).splitlines()
     }, 404
+
 
 @application.errorhandler(SiteNotExistsException)
 def site_not_found(e):
