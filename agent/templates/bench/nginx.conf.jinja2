@@ -76,6 +76,7 @@ server {
 		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 		proxy_set_header X-Forwarded-Proto https;
 		proxy_set_header X-Frappe-Site-Name $site_name_{{ bench_name_slug }};
+		proxy_set_header X-Frappe-Request-Id $request_id;
 		proxy_set_header Host $host;
 		proxy_set_header X-Use-X-Accel-Redirect True;
 		proxy_read_timeout {{ http_timeout }};
