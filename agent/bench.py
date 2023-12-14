@@ -21,7 +21,7 @@ from agent.exceptions import SiteNotExistsException
 
 
 class Bench(Base):
-    def __init__(self, name, server, mount_points=None):
+    def __init__(self, name, server, mounts=None):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
@@ -35,7 +35,7 @@ class Bench(Base):
         )
         self.host = self.config.get("db_host", "localhost")
         self.docker_image = self.bench_config.get("docker_image")
-        self.mount_points = mount_points
+        self.mounts = mounts
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.sites_directory)
@@ -653,16 +653,16 @@ class Bench(Base):
             if not os.path.exists(host_path):
                     os.mkdir(host_path)
 
-        for mp in self.mount_points:
+        for mp in self.mounts:
             host_path = mp.source
             destination_path = mp.destination
 
             if not mp.is_absolute_path:
                 '''
-                    self.directory = /home/frappe/benches/bench-1231/ (Host)
+                    self.server.benches_directory = /home/frappe/benches (Host)
                     bench_directory = "/home/frappe/frappe-bench" (container)
                 '''
-                host_path = os.path.join(self.directory, mp.source)
+                host_path = os.path.join(self.server.benches_directory, mp.source)
                 _create_mount_points(host_path)
 
                 destination_path = os.path.join(bench_directory, mp.destination)
@@ -685,7 +685,7 @@ class Bench(Base):
             ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
 
             bench_directory = "/home/frappe/frappe-bench"
-            custom_mount = self.prepare_mount_points_on_host(bench_directory)
+            custom_mounts = self.prepare_mount_points_on_host(bench_directory)
 
             command = (
                 "docker run -d --init -u frappe "
@@ -697,7 +697,7 @@ class Bench(Base):
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
-                f"{ custom_mount }"
+                f"{ custom_mounts }"
                 f"--name {self.name} {self.bench_config['docker_image']}"
             )
         else:
