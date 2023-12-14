@@ -662,10 +662,10 @@ class Bench(Base):
                     self.server.benches_directory = /home/frappe/benches (Host)
                     bench_directory = "/home/frappe/frappe-bench" (container)
                 '''
-                host_path = os.path.join(self.server.benches_directory, mp.source)
+                host_path = os.path.join(self.server.benches_directory, mp['source'])
                 _create_mount_points(host_path)
 
-                destination_path = os.path.join(bench_directory, mp.destination)
+                destination_path = os.path.join(bench_directory, mp['destination'])
 
             custom_mount += f'-v {host_path}:{destination_path}'
         
