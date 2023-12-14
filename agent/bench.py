@@ -667,7 +667,7 @@ class Bench(Base):
 
                 _create_mount_points(host_path)
 
-            custom_mount += f'-v {host_path}:{destination_path}'
+            custom_mount += f' -v {host_path}:{destination_path} '
         
         return custom_mount
 
@@ -697,7 +697,7 @@ class Bench(Base):
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
-                f"{ custom_mounts }"
+                f"{ custom_mounts } "
                 f"--name {self.name} {self.bench_config['docker_image']}"
             )
         else:
