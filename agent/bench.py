@@ -649,23 +649,23 @@ class Bench(Base):
     def prepare_mount_points_on_host(self, bench_directory):
         custom_mount = ''
 
-        def _create_mount_points(path):
+        def _create_mount_points(host_path):
             if not os.path.exists(host_path):
                     os.mkdir(host_path)
 
         for mp in self.mounts:
-            host_path = mp.source
-            destination_path = mp.destination
+            host_path = mp['source']
+            destination_path = mp['destination']
 
-            if not mp.is_absolute_path:
+            if not mp['is_absolute_path']:
                 '''
                     self.server.benches_directory = /home/frappe/benches (Host)
                     bench_directory = "/home/frappe/frappe-bench" (container)
                 '''
                 host_path = os.path.join(self.server.benches_directory, mp['source'])
-                _create_mount_points(host_path)
-
                 destination_path = os.path.join(bench_directory, mp['destination'])
+
+                _create_mount_points(host_path)
 
             custom_mount += f'-v {host_path}:{destination_path}'
         
