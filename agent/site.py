@@ -749,7 +749,7 @@ print(">>>" + frappe.session.sid + "<<<")
         if not columns:
             columns = []
 
-        command = f"describe-database-table --doctype {doctype} "
+        command = f"describe-database-table --doctype '{doctype}' "
         for column in columns:
             command += f"--column {column}"
         try:
@@ -757,6 +757,16 @@ print(">>>" + frappe.session.sid + "<<<")
             return json.loads(output)
         except Exception:
             return {}
+
+    def add_database_index(self, doctype, columns=None):
+        if not columns:
+            return
+
+        command = f"add-database-index --doctype '{doctype}' "
+        for column in columns:
+            command += f"--column {column}"
+
+        self.bench_execute(command)
 
     def get_database_free_size(self):
         query = (
