@@ -751,7 +751,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         command = f"describe-database-table --doctype '{doctype}' "
         for column in columns:
-            command += f"--column {column}"
+            command += f"--column {column} "
         try:
             output = self.bench_execute(command)["output"]
             return json.loads(output)
@@ -764,7 +764,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         command = f"add-database-index --doctype '{doctype}' "
         for column in columns:
-            command += f"--column {column}"
+            command += f"--column {column} "
 
         self.bench_execute(command)
 
