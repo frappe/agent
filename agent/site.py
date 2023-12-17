@@ -753,7 +753,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for column in columns:
             command += f"--column {column}"
         try:
-            output = self.bench_execute(command)
+            output = self.bench_execute(command)["output"]
             return json.loads(output)
         except Exception:
             return {}
