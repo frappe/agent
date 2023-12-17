@@ -745,6 +745,19 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return 0
 
+    def describe_database_table(self, doctype, columns=None):
+        if not columns:
+            columns = []
+
+        command = f"describe-database-table --doctype {doctype} "
+        for column in columns:
+            command += f"--column {column}"
+        try:
+            output = self.bench_execute(command)
+            return json.loads(output)
+        except Exception:
+            return {}
+
     def get_database_free_size(self):
         query = (
             "SELECT SUM(`data_free`)"

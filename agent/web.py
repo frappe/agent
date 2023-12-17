@@ -664,6 +664,15 @@ def site_remove_domain(bench, site, domain):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/describe-database-table", methods=["POST"]
+)
+@validate_bench_and_site
+def describe_database_table(bench, site):
+    data = request.json
+    return {"data": Server().benches[bench].sites[site].describe_database_table(data["doctype"], data.get("columns"))}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/credentials",
     methods=["POST"],
 )
