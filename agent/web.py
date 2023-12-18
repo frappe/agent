@@ -885,6 +885,11 @@ def get_database_deadlocks():
     data = request.json
     return jsonify(DatabaseServer().get_deadlocks(**data))
 
+@application.route("/database/column-stats", methods=["POST"])
+def fetch_column_stats():
+    data = request.json
+    return jsonify(DatabaseServer().fetch_column_stats(**data))
+
 
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
