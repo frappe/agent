@@ -141,7 +141,7 @@ class DatabaseServer(Server):
         )
 
     @staticmethod
-    def sql(db, query, params):
+    def sql(db, query, params=()):
         """Similar to frappe.db.sql, get the results as dict."""
 
         cursor = db.execute_sql(query, params)
