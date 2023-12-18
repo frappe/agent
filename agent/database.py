@@ -164,20 +164,23 @@ class DatabaseServer(Server):
             port=3306,
         )
 
-        self.sql(mariadb, f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL")
+        try:
+            self.sql(mariadb, f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL")
 
-        results = self.sql(
-            mariadb,
-            """
-            SELECT column_name, nulls_ratio, avg_length, avg_frequency
-            from mysql.column_stats
-            WHERE db_name = %s
-                and table_name = %s """,
-            (schema, table),
-        )
+            results = self.sql(
+                mariadb,
+                """
+                SELECT column_name, nulls_ratio, avg_length, avg_frequency
+                from mysql.column_stats
+                WHERE db_name = %s
+                    and table_name = %s """,
+                (schema, table),
+            )
 
-        for row in results:
-            for column in ['nulls_ratio', 'avg_length', 'avg_frequency']:
-                row[column]  = float(row[column])
+            for row in results:
+                for column in ["nulls_ratio", "avg_length", "avg_frequency"]:
+                    row[column] = float(row[column]) if row[column] else None
+        except Exception as e:
+            print(e)
 
         return results
