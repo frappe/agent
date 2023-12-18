@@ -75,7 +75,6 @@ class DatabaseServer(Server):
         return sorted(files, key=lambda x: x["name"])
 
     def processes(self, private_ip, mariadb_root_password):
-        processes = []
         try:
             mariadb = MySQLDatabase(
                 "mysql",
@@ -84,15 +83,12 @@ class DatabaseServer(Server):
                 host=private_ip,
                 port=3306,
             )
-            cursor = mariadb.execute_sql("SHOW FULL PROCESSLIST")
-            rows = cursor.fetchall()
-            columns = [d[0] for d in cursor.description]
-            processes = list(map(lambda x: dict(zip(columns, x)), rows))
+            return self.sql(mariadb, "SHOW FULL PROCESSLIST")
         except Exception:
             import traceback
 
             traceback.print_exc()
-        return processes
+        return []
 
     def kill_processes(
         self, private_ip, mariadb_root_password, kill_threshold
@@ -131,7 +127,8 @@ class DatabaseServer(Server):
             port=3306,
         )
 
-        cursor = mariadb.execute_sql(
+        return self.sql(
+            mariadb,
             f"""
             select *
             from deadlock
@@ -142,6 +139,12 @@ class DatabaseServer(Server):
             limit {int(max_lines)}""",
             (database, start_datetime, stop_datetime),
         )
+
+    @staticmethod
+    def sql(db, query, params):
+        """Similar to frappe.db.sql, get the results as dict."""
+
+        cursor = db.execute_sql(query, params)
         rows = cursor.fetchall()
         columns = [d[0] for d in cursor.description]
         return list(map(lambda x: dict(zip(columns, x)), rows))
