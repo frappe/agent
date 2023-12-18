@@ -148,3 +148,36 @@ class DatabaseServer(Server):
         rows = cursor.fetchall()
         columns = [d[0] for d in cursor.description]
         return list(map(lambda x: dict(zip(columns, x)), rows))
+
+    def fetch_column_stats(self, schema, table, private_ip, mariadb_root_password):
+        """Get various stats about columns in a table.
+
+        Refer:
+            - https://mariadb.com/kb/en/engine-independent-table-statistics/
+            - https://mariadb.com/kb/en/mysqlcolumn_stats-table/
+        """
+        mariadb = MySQLDatabase(
+            "mysql",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        self.sql(mariadb, f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL")
+
+        results = self.sql(
+            mariadb,
+            """
+            SELECT column_name, nulls_ratio, avg_length, avg_frequency
+            from mysql.column_stats
+            WHERE db_name = %s
+                and table_name = %s """,
+            (schema, table),
+        )
+
+        for row in results:
+            for column in ['nulls_ratio', 'avg_length', 'avg_frequency']:
+                row[column]  = float(row[column])
+
+        return results
