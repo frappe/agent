@@ -170,7 +170,7 @@ class DatabaseServer(Server):
             results = self.sql(
                 mariadb,
                 """
-                SELECT column_name, nulls_ratio, avg_length, avg_frequency
+                SELECT column_name, nulls_ratio, avg_length, avg_frequency, decode_histogram(hist_type,histogram) as histogram
                 from mysql.column_stats
                 WHERE db_name = %s
                     and table_name = %s """,
