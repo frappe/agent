@@ -891,6 +891,12 @@ def fetch_column_stats():
     return jsonify(DatabaseServer().fetch_column_stats(**data))
 
 
+@application.route("/database/explain", methods=["POST"])
+def explain():
+    data = request.json
+    return jsonify(DatabaseServer().explain_query(**data))
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json

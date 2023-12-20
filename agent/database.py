@@ -184,3 +184,17 @@ class DatabaseServer(Server):
             print(e)
 
         return results
+
+    def explain_query(self, schema, query, private_ip, mariadb_root_password):
+        mariadb = MySQLDatabase(
+            schema,
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        try:
+            return self.sql(mariadb, f"EXPLAIN {query}")
+        except Exception as e:
+            print(e)
