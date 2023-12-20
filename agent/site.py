@@ -793,7 +793,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " round((`data_free` / 1024 / 1024), 2)"
                 " FROM information_schema.tables"
                 f' WHERE `table_schema` = "{self.database}"'
-                " AND ((`data_free / (`data_length` + `index_length`)) > 0.2"
+                " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
             command = (
