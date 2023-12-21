@@ -881,6 +881,16 @@ def get_binary_log(log):
     )
 
 
+@application.route("/database/stalks")
+def get_stalks():
+    return jsonify(DatabaseServer().get_stalks())
+
+
+@application.route("/database/stalks/<string:stalk>")
+def get_stalk(stalk):
+    return jsonify(DatabaseServer().get_stalk(stalk))
+
+
 @application.route("/database/deadlocks", methods=["POST"])
 def get_database_deadlocks():
     data = request.json

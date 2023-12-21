@@ -1,7 +1,7 @@
 import os
 from agent.server import Server
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
 
@@ -13,6 +13,7 @@ class DatabaseServer(Server):
         self.name = self.config["name"]
 
         self.mariadb_directory = "/var/lib/mysql"
+        self.pt_stalk_directory = "/var/lib/pt-stalk"
 
     def search_binary_log(
         self,
@@ -206,3 +207,36 @@ class DatabaseServer(Server):
             return self.sql(mariadb, f"EXPLAIN {query}")
         except Exception as e:
             print(e)
+
+    def get_stalk(self, name):
+        diagnostics = []
+        for file in Path(self.pt_stalk_directory).iterdir():
+            if re.match(name, file.name):
+                diagnostics.append(
+                    {
+                        "type": file.name.replace(name, "").strip("-"),
+                        "output": open(
+                            os.path.join(self.pt_stalk_directory, file.name)
+                        ).read(),
+                    }
+                )
+        return sorted(diagnostics, key=lambda x: x["type"])
+
+    def get_stalks(self):
+        stalk_pattern = r"(\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2})-output"
+        stalks = []
+        for file in Path(self.pt_stalk_directory).iterdir():
+            matched = re.match(stalk_pattern, file.name)
+            if matched:
+                stalk = matched.group(1)
+                stalks.append(
+                    {
+                        "name": stalk,
+                        "timestamp": datetime.strptime(
+                            stalk, "%Y_%m_%d_%H_%M_%S"
+                        )
+                        .replace(tzinfo=timezone.utc)
+                        .isoformat(),
+                    }
+                )
+        return sorted(stalks, key=lambda x: x["name"])
