@@ -131,7 +131,9 @@ def job(name, priority="default"):
             return result
         else:
             agent_job_id = get_agent_job_id()
-            instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
+            instance.job_record.enqueue(
+                name, wrapped, args, kwargs, agent_job_id
+            )
             queue(priority).enqueue_call(
                 wrapped,
                 args=args,
@@ -143,9 +145,12 @@ def job(name, priority="default"):
 
     return wrapper
 
+
 def get_agent_job_id():
     from flask import request
-    return request.headers.get('X-Agent-Job-Id')
+
+    return request.headers.get("X-Agent-Job-Id")
+
 
 class JobModel(Model):
     name = CharField()
@@ -184,6 +189,7 @@ class StepModel(Model):
 
     class Meta:
         database = agent_database
+
 
 class PatchLogModel(Model):
     name = AutoField()

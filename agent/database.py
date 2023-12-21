@@ -149,7 +149,9 @@ class DatabaseServer(Server):
         columns = [d[0] for d in cursor.description]
         return list(map(lambda x: dict(zip(columns, x)), rows))
 
-    def fetch_column_stats(self, schema, table, private_ip, mariadb_root_password):
+    def fetch_column_stats(
+        self, schema, table, private_ip, mariadb_root_password
+    ):
         """Get various stats about columns in a table.
 
         Refer:
@@ -165,7 +167,10 @@ class DatabaseServer(Server):
         )
 
         try:
-            self.sql(mariadb, f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL")
+            self.sql(
+                mariadb,
+                f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL",
+            )
 
             results = self.sql(
                 mariadb,

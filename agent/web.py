@@ -679,7 +679,8 @@ def describe_database_table(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/add-database-index", methods=["POST"]
+    "/benches/<string:bench>/sites/<string:site>/add-database-index",
+    methods=["POST"],
 )
 @validate_bench_and_site
 def add_database_index(bench, site):
@@ -884,6 +885,7 @@ def get_binary_log(log):
 def get_database_deadlocks():
     data = request.json
     return jsonify(DatabaseServer().get_deadlocks(**data))
+
 
 @application.route("/database/column-stats", methods=["POST"])
 def fetch_column_stats():
