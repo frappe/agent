@@ -194,6 +194,9 @@ class DatabaseServer(Server):
             port=3306,
         )
 
+        if not query.lower().startswith(("select", "update", "delete")):
+            return []
+
         try:
             return self.sql(mariadb, f"EXPLAIN {query}")
         except Exception as e:
