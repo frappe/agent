@@ -646,10 +646,10 @@ class Bench(Base):
         shutil.rmtree(code_server_path)
         self.docker_execute("supervisorctl stop code-server:")
     
-    def prepare_mount_points_on_host(self, bench_directory):
+    def prepare_mounts_on_host(self, bench_directory):
         custom_mount = ''
 
-        def _create_mount_points(host_path):
+        def _create_mounts(host_path):
             if not os.path.exists(host_path):
                     os.mkdir(host_path)
 
@@ -665,7 +665,7 @@ class Bench(Base):
                 host_path = os.path.join(self.server.benches_directory, mp['source'])
                 destination_path = os.path.join(bench_directory, mp['destination'])
 
-                _create_mount_points(host_path)
+                _create_mounts(host_path)
 
             custom_mount += f' -v {host_path}:{destination_path} '
         
@@ -685,7 +685,7 @@ class Bench(Base):
             ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
 
             bench_directory = "/home/frappe/frappe-bench"
-            custom_mounts = self.prepare_mount_points_on_host(bench_directory)
+            mounts = self.prepare_mounts_on_host(bench_directory)
 
             command = (
                 "docker run -d --init -u frappe "
@@ -697,7 +697,7 @@ class Bench(Base):
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
-                f"{ custom_mounts } "
+                f"{ mounts } "
                 f"--name {self.name} {self.bench_config['docker_image']}"
             )
         else:
