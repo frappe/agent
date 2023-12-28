@@ -87,7 +87,7 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry, mounts):
+    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
         bench = Bench(name, self, mounts=mounts)

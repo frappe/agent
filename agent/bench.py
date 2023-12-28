@@ -647,11 +647,14 @@ class Bench(Base):
         self.docker_execute("supervisorctl stop code-server:")
     
     def prepare_mounts_on_host(self, bench_directory):
-        custom_mount = ''
+        mounts_cmd = ''
+
+        if not self.mounts:
+            return mounts_cmd
 
         def _create_mounts(host_path):
             if not os.path.exists(host_path):
-                    os.mkdir(host_path)
+                os.mkdir(host_path)
 
         for mp in self.mounts:
             host_path = mp['source']
@@ -667,9 +670,9 @@ class Bench(Base):
 
                 _create_mounts(host_path)
 
-            custom_mount += f' -v {host_path}:{destination_path} '
+            mounts_cmd += f' -v {host_path}:{destination_path} '
         
-        return custom_mount
+        return mounts_cmd
 
     def start(self):
         if self.bench_config.get("single_container"):
