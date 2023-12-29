@@ -21,7 +21,7 @@ from agent.exceptions import SiteNotExistsException
 
 
 class Bench(Base):
-    def __init__(self, name, server):
+    def __init__(self, name, server, mounts=None):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
@@ -35,6 +35,7 @@ class Bench(Base):
         )
         self.host = self.config.get("db_host", "localhost")
         self.docker_image = self.bench_config.get("docker_image")
+        self.mounts = mounts
         if not (
             os.path.isdir(self.directory)
             and os.path.exists(self.sites_directory)
@@ -644,6 +645,34 @@ class Bench(Base):
         code_server_path = os.path.join(self.directory, "codeserver")
         shutil.rmtree(code_server_path)
         self.docker_execute("supervisorctl stop code-server:")
+    
+    def prepare_mounts_on_host(self, bench_directory):
+        mounts_cmd = ''
+
+        if not self.mounts:
+            return mounts_cmd
+
+        def _create_mounts(host_path):
+            if not os.path.exists(host_path):
+                os.mkdir(host_path)
+
+        for mp in self.mounts:
+            host_path = mp['source']
+            destination_path = mp['destination']
+
+            if not mp['is_absolute_path']:
+                '''
+                    self.server.benches_directory = /home/frappe/benches (Host)
+                    bench_directory = "/home/frappe/frappe-bench" (container)
+                '''
+                host_path = os.path.join(self.server.benches_directory, mp['source'])
+                destination_path = os.path.join(bench_directory, mp['destination'])
+
+                _create_mounts(host_path)
+
+            mounts_cmd += f' -v {host_path}:{destination_path} '
+        
+        return mounts_cmd
 
     def start(self):
         if self.bench_config.get("single_container"):
@@ -659,6 +688,8 @@ class Bench(Base):
             ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
 
             bench_directory = "/home/frappe/frappe-bench"
+            mounts = self.prepare_mounts_on_host(bench_directory)
+
             command = (
                 "docker run -d --init -u frappe "
                 f"--restart always --hostname {self.name} "
@@ -669,6 +700,7 @@ class Bench(Base):
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
+                f"{ mounts } "
                 f"--name {self.name} {self.bench_config['docker_image']}"
             )
         else:

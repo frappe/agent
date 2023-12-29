@@ -87,10 +87,10 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry):
+    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
-        bench = Bench(name, self)
+        bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
