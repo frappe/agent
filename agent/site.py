@@ -326,11 +326,13 @@ class Site(Base):
             json.dump(config, f, indent=1, sort_keys=True)
 
     @step("Create User")
-    def create_user(self, email, first_name, last_name):
-        return self.bench_execute(
-            f"add-system-manager {email} "
-            f"--first-name {first_name} --last-name {last_name}"
+    def create_user(self, email, first_name, last_name, password=None):
+        command = (
+            f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         )
+        if password:
+            command += f" --password {password}"
+        return self.bench_execute(command)
 
     @job("Update Site Configuration", priority="high")
     def update_config_job(self, value, remove):

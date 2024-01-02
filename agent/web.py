@@ -398,7 +398,7 @@ def reinstall_site(bench, site):
 @validate_bench_and_site
 def rename_site(bench, site):
     data = request.json
-    job = Server().benches[bench].rename_site_job(site, data["new_name"])
+    job = Server().benches[bench].rename_site_job(site, data["new_name"], data.get("create_user"))
     return {"job": job}
 
 
@@ -441,6 +441,21 @@ def setup_erpnext(bench, site):
         .benches[bench]
         .sites[site]
         .setup_erpnext(data["user"], data["config"])
+    )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/setup-new-site", methods=["POST"]
+)
+@validate_bench_and_site
+def setup_new_site(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .setup_new_site(data)
     )
     return {"job": job}
 
