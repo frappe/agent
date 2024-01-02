@@ -255,10 +255,12 @@ def retrieve_ssh_session_log(filename):
     return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/sid")
+@application.route("/benches/<string:bench>/sites/<string:site>/sid", methods=["POST"])
 @validate_bench_and_site
 def get_site_sid(bench, site):
-    return {"sid": Server().benches[bench].sites[site].sid()}
+    data = request.json
+    user = data.get("user")
+    return {"sid": Server().benches[bench].sites[site].sid(user)}
 
 
 @application.route("/benches", methods=["POST"])
