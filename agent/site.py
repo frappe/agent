@@ -588,17 +588,14 @@ class Site(Base):
         return json.load(open(self.analytics_file))
 
     def sid(self, user="Administrator"):
-        code = f"""import frappe
-from frappe.app import init_request
-try:
-    from frappe.utils import set_request
-except ImportError:
-    from frappe.tests import set_request
-set_request()
-frappe.app.init_request(frappe.local.request)
-frappe.local.login_manager.login_as("{user}")
-print(">>>" + frappe.session.sid + "<<<")
+        code = f"""from frappe.auth import CookieManager, LoginManager
 
+user = '{user}'
+frappe.utils.set_request(path="/")
+frappe.local.cookie_manager = CookieManager()
+frappe.local.login_manager = LoginManager()
+frappe.local.login_manager.login_as(user)
+print(">>>" + frappe.session.sid + "<<<")
 """
 
         output = self.bench_execute("console", input=code)["output"]
