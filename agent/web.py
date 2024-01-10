@@ -447,21 +447,6 @@ def setup_erpnext(bench, site):
     return {"job": job}
 
 
-@application.route(
-    "/benches/<string:bench>/sites/<string:site>/setup-new-site", methods=["POST"]
-)
-@validate_bench_and_site
-def setup_new_site(bench, site):
-    data = request.json
-    job = (
-        Server()
-        .benches[bench]
-        .sites[site]
-        .setup_new_site(data)
-    )
-    return {"job": job}
-
-
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 @validate_bench
 def fetch_monitor_data(bench):
