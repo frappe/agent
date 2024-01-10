@@ -589,9 +589,13 @@ class Site(Base):
 
     def sid(self, user="Administrator"):
         code = f"""from frappe.auth import CookieManager, LoginManager
+try:
+    from frappe.utils import set_request
+except ImportError:
+    from frappe.tests import set_request
 
 user = '{user}'
-frappe.utils.set_request(path="/")
+set_request(path="/")
 frappe.local.cookie_manager = CookieManager()
 frappe.local.login_manager = LoginManager()
 frappe.local.login_manager.login_as(user)
