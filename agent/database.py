@@ -252,6 +252,7 @@ class DatabaseServer(Server):
         directory = tempfile.mkdtemp(
             prefix="mariabackup-", suffix=f"-{schema}", dir="/tmp"
         )
+        os.chmod(directory, 0o777)
         self.mariabackup_backup(schema, password, directory)
         self.mariabackup_prepare(schema, password, directory)
         self.create_table_list(schema, password, directory)
@@ -260,7 +261,7 @@ class DatabaseServer(Server):
     @step("Backup with Mariabackup")
     def mariabackup_backup(self, schema, password, directory):
         return self.execute(
-            f"mariabackup --backup --databases='{schema}' "
+            f"sudo -u mysql mariabackup --backup --databases='{schema}' "
             f"--target-dir={directory} "
             f"--user=root --password={password}"
         )
@@ -268,7 +269,7 @@ class DatabaseServer(Server):
     @step("Prepare with Mariabackup")
     def mariabackup_prepare(self, schema, password, directory):
         return self.execute(
-            f"mariabackup --prepare --export --target-dir={directory}"
+            f"sudo -u mysql mariabackup --prepare --export --target-dir={directory}"
         )
 
     @step("Create Table List")
