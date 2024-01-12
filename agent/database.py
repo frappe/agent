@@ -3,7 +3,9 @@ from agent.server import Server
 from pathlib import Path
 from datetime import datetime, timezone
 import re
+import tempfile
 from peewee import MySQLDatabase
+from agent.job import job, step
 
 
 class DatabaseServer(Server):
@@ -14,6 +16,9 @@ class DatabaseServer(Server):
 
         self.mariadb_directory = "/var/lib/mysql"
         self.pt_stalk_directory = "/var/lib/pt-stalk"
+
+        self.job = None
+        self.step = None
 
     def search_binary_log(
         self,
@@ -240,3 +245,42 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
+
+    @job("Backup MariaDB Schema", priority="low")
+    def backup_mariadb_schema(self, schema, mariadb_root_password):
+        password = mariadb_root_password
+        directory = tempfile.mkdtemp(
+            prefix="mariabackup-", suffix=f"-{schema}", dir="/tmp"
+        )
+        self.mariabackup_backup(schema, password, directory)
+        self.mariabackup_prepare(schema, password, directory)
+        self.create_table_list(schema, password, directory)
+        self.create_ddl(schema, password, directory)
+
+    @step("Backup with Mariabackup")
+    def mariabackup_backup(self, schema, password, directory):
+        return self.execute(
+            f"mariabackup --backup --databases='{schema}' "
+            f"--target-dir={directory} "
+            f"--user=root --password={password}"
+        )
+
+    @step("Prepare with Mariabackup")
+    def mariabackup_prepare(self, schema, password, directory):
+        return self.execute(
+            f"mariabackup --prepare --export --target-dir={directory}"
+        )
+
+    @step("Create Table List")
+    def create_table_list(self, schema, password, directory):
+        return self.execute(
+            f"mysql --user=root --password={password} "
+            f"-N -e 'SHOW TABLES' {schema} > {directory}/tables.txt"
+        )
+
+    @step("Create DDL File")
+    def create_ddl(self, schema, password, directory):
+        return self.execute(
+            f"mysqldump --user=root --password={password} "
+            f"--no-data {schema} > {directory}/create.sql"
+        )

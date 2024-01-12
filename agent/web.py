@@ -909,6 +909,13 @@ def explain():
     return jsonify(DatabaseServer().explain_query(**data))
 
 
+@application.route("/database/backup/<string:schema>", methods=["POST"])
+def physical_backup(schema):
+    data = request.json
+    job = DatabaseServer().backup_mariadb_schema(schema, **data)
+    return {"job": job}
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json
