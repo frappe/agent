@@ -259,7 +259,7 @@ def retrieve_ssh_session_log(filename):
 @validate_bench_and_site
 def get_site_sid(bench, site):
     data = request.json or {}
-    user = data.get("user", "Administrator")
+    user = data.get("user") or "Administrator"
     print(request.method)
     print(data)
     print(user)
