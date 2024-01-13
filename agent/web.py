@@ -259,6 +259,8 @@ def retrieve_ssh_session_log(filename):
 @validate_bench_and_site
 def get_site_sid(bench, site):
     data = request.json
+    print(request.method)
+    print(data)
     user = data.get("user")
     return {"sid": Server().benches[bench].sites[site].sid(user=user)}
 
