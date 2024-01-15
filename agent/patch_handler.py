@@ -1,7 +1,8 @@
-import os 
+import os
 import importlib
 
-class PatchHandler():
+
+class PatchHandler:
     def __init__(self, patch=None, path=None):
         self.patch = patch
         self.path = path
@@ -12,7 +13,7 @@ class PatchHandler():
         if not self._executed_patches:
             self._executed_patches = set(self.retrieve_patches())
             # self._executed_patches = set()
-            return self._executed_patches 
+            return self._executed_patches
 
     def retrieve_patches(self):
         from agent.job import PatchLogModel
@@ -30,8 +31,8 @@ class PatchHandler():
                 raise e
             else:
                 self.log_patch()
-    
-    def get_method(self, attr='execute'):
+
+    def get_method(self, attr="execute"):
         _patch = self.patch.split(maxsplit=1)[0]
         module = importlib.import_module(_patch)
         return getattr(module, attr)
@@ -42,6 +43,7 @@ class PatchHandler():
         patch_log = PatchLogModel()
         patch_log.patch = self.patch
         patch_log.save()
+
 
 def run_patches():
     directory = os.getcwd()
@@ -60,6 +62,7 @@ def run_patches():
             patch_handler = PatchHandler(patch=patch, path=patch_path)
             patch_handler.execute()
 
+
 def _patch_log_exists():
     from agent.job import agent_database as database
 
@@ -70,8 +73,8 @@ def _patch_log_exists():
 
     return False
 
+
 def _create_patch_log():
     from agent.job import PatchLogModel
+
     PatchLogModel.create_table()
-
-

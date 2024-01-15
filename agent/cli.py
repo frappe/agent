@@ -24,9 +24,11 @@ def setup():
 def update():
     Server().update_agent_cli()
 
+
 @cli.command()
 def run_patches():
     from agent.patch_handler import run_patches
+
     run_patches()
 
 
@@ -111,6 +113,7 @@ def database():
     from agent.job import agent_database as database
 
     database.create_tables([JobModel, StepModel, PatchLogModel])
+
 
 @setup.command()
 def site_analytics():
