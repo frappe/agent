@@ -8,7 +8,7 @@ from typing import Dict, TYPE_CHECKING
 
 import requests
 
-from agent.base import Base
+from agent.base import AgentException, Base
 from agent.job import job, step
 from agent.utils import b2mb, get_size
 
@@ -89,7 +89,12 @@ class Site(Base):
 
     @step("Install App on Site")
     def install_app(self, app):
-        return self.bench_execute(f"install-app {app} --force")
+        try:
+            return self.bench_execute(f"install-app {app} --force")
+        except AgentException:
+            return self.bench_execute(
+                f"install-app {app}"
+            )  # not available in v13
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
