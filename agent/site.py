@@ -86,7 +86,7 @@ class Site(Base):
 
     @step("Install App on Site")
     def install_app(self, app):
-        return self.bench_execute(f"install-app {app}")
+        return self.bench_execute(f"install-app {app} --force")
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
