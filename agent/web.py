@@ -255,10 +255,12 @@ def retrieve_ssh_session_log(filename):
     return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/sid")
+@application.route("/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"])
 @validate_bench_and_site
 def get_site_sid(bench, site):
-    return {"sid": Server().benches[bench].sites[site].sid()}
+    data = request.json or {}
+    user = data.get("user") or "Administrator"
+    return {"sid": Server().benches[bench].sites[site].sid(user=user)}
 
 
 @application.route("/benches", methods=["POST"])
@@ -398,7 +400,7 @@ def reinstall_site(bench, site):
 @validate_bench_and_site
 def rename_site(bench, site):
     data = request.json
-    job = Server().benches[bench].rename_site_job(site, data["new_name"])
+    job = Server().benches[bench].rename_site_job(site, data["new_name"], data.get("create_user"))
     return {"job": job}
 
 

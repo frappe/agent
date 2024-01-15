@@ -171,7 +171,7 @@ class Bench(Base):
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @job("Rename Site", priority="high")
-    def rename_site_job(self, site: str, new_name: str):
+    def rename_site_job(self, site: str, new_name: str, create_user: dict=None):
         try:
             site = Site(site, self)
         except OSError:
@@ -188,6 +188,13 @@ class Bench(Base):
         self.server.reload_nginx()
         site.disable_maintenance_mode()
         site.enable_scheduler()
+        if create_user and create_user.get("email"):
+            site.create_user(
+                create_user.get("email"),
+                create_user.get("first_name"),
+                create_user.get("last_name"),
+                create_user.get("password"),
+            )
 
     def get_database_name(self, site):
         site_directory = os.path.join(self.sites_directory, "sites", site)

@@ -326,11 +326,13 @@ class Site(Base):
             json.dump(config, f, indent=1, sort_keys=True)
 
     @step("Create User")
-    def create_user(self, email, first_name, last_name):
-        return self.bench_execute(
-            f"add-system-manager {email} "
-            f"--first-name {first_name} --last-name {last_name}"
+    def create_user(self, email, first_name, last_name, password=None):
+        command = (
+            f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         )
+        if password:
+            command += f" --password {password}"
+        return self.bench_execute(command)
 
     @job("Update Site Configuration", priority="high")
     def update_config_job(self, value, remove):
@@ -586,17 +588,18 @@ class Site(Base):
         return json.load(open(self.analytics_file))
 
     def sid(self, user="Administrator"):
-        code = f"""import frappe
-from frappe.app import init_request
+        code = f"""from frappe.auth import CookieManager, LoginManager
 try:
     from frappe.utils import set_request
 except ImportError:
     from frappe.tests import set_request
-set_request()
-frappe.app.init_request(frappe.local.request)
-frappe.local.login_manager.login_as("{user}")
-print(">>>" + frappe.session.sid + "<<<")
 
+user = '{user}'
+set_request(path="/")
+frappe.local.cookie_manager = CookieManager()
+frappe.local.login_manager = LoginManager()
+frappe.local.login_manager.login_as(user)
+print(">>>" + frappe.session.sid + "<<<")
 """
 
         output = self.bench_execute("console", input=code)["output"]
