@@ -4,7 +4,7 @@ import re
 import shutil
 import time
 from datetime import datetime
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 
 import requests
 
@@ -12,9 +12,12 @@ from agent.base import Base
 from agent.job import job, step
 from agent.utils import b2mb, get_size
 
+if TYPE_CHECKING:
+    from agent.bench import Bench
+
 
 class Site(Base):
-    def __init__(self, name, bench):
+    def __init__(self, name: str, bench: "Bench"):
         self.name = name
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)
