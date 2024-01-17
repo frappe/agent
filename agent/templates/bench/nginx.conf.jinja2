@@ -153,7 +153,7 @@ server {
 			{{ domain }}
 		{% endfor -%}
 		;
-		
+
 	location ^~ /.well-known/acme-challenge/ {
 		return 301 http://ssl.{{ domain }}$request_uri;
 	}
@@ -183,6 +183,7 @@ server {
 
 	location /assets {
 		try_files $uri =404;
+		add_header Cache-Control "max-age=31536000";
 	}
 
 	location ~ ^/protected/(.*) {
