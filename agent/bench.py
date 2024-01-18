@@ -582,6 +582,7 @@ class Bench(Base):
                 "merge_default_and_short_rq_queues": self.bench_config.get(
                     "merge_default_and_short_rq_queues", False
                 ),
+                "use_rq_workerpool": self.bench_config.get("use_rq_workerpool", False),
                 "environment_variables": self.bench_config.get(
                     "environment_variables"
                 ),
@@ -652,7 +653,7 @@ class Bench(Base):
         code_server_path = os.path.join(self.directory, "codeserver")
         shutil.rmtree(code_server_path)
         self.docker_execute("supervisorctl stop code-server:")
-    
+
     def prepare_mounts_on_host(self, bench_directory):
         mounts_cmd = ''
 
@@ -678,7 +679,7 @@ class Bench(Base):
                 _create_mounts(host_path)
 
             mounts_cmd += f' -v {host_path}:{destination_path} '
-        
+
         return mounts_cmd
 
     def start(self):
