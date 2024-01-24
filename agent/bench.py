@@ -212,6 +212,7 @@ class Bench(Base):
             f"CREATE OR REPLACE DATABASE {user}",
             f"GRANT ALL ON {user}.* TO '{user}'@'%'",
             f"GRANT RELOAD, CREATE USER ON *.* TO '{user}'@'%'",
+            f"GRANT SELECT ON mysql.user TO '{user}'@'%';"
             f"GRANT ALL ON {database}.* TO '{user}'@'%' WITH GRANT OPTION",
             "FLUSH PRIVILEGES",
         ]
