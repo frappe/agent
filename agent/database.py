@@ -252,52 +252,29 @@ class DatabaseServer(Server):
         )
 
         reports_sql = {
-            "total_allocated_memory": """
-            select total_allocated/(1024*1024) as total_allocated_memory 
-            from sys.`x$memory_global_total`;""",
-
-            "top_memory_by_event": """
-            select 
-            event_name as event_type,
-            current_count as count,
-            high_count as max_count,
-            current_alloc/(1024*1024)  as memory,
-            current_avg_alloc/(1024*1024)  as avg_memory,
-            high_alloc/(1024*1024)  as max_memory,
-            high_avg_alloc/(1024*1024)  as max_avg_memory
-            from sys.`x$memory_global_by_current_bytes`;""",
-
-            "top_memory_by_user": """
-            select 
-            user,
-            current_count_used as count,
-            current_allocated/(1024*1024)  as memory,
-            current_avg_alloc/(1024*1024)  as avg_memory,
-            current_max_alloc/(1024*1024)  as max_memory,
-            total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_user_by_current_bytes`;""",
-
-            "top_memory_by_host": """
-            select 
-            host,
-            current_count_used as count,
-            current_allocated/(1024*1024)  as memory,
-            current_avg_alloc/(1024*1024)  as avg_memory,
-            current_max_alloc/(1024*1024)  as max_memory,
-            total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_host_by_current_bytes`;""",
-
-            "top_memory_by_thread": """
-            select
-            thread_id,
-            user,
-            current_count_used as count,
-            current_allocated/(1024*1024)  as memory,
-            current_avg_alloc/(1024*1024)  as avg_memory,
-            current_max_alloc/(1024*1024)  as max_memory,
-            total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_thread_by_current_bytes`;"""
-
+            "total_allocated_memory": "select total_allocated from sys.`x$memory_global_total`",
+            "top_memory_by_event": "select * from sys.`x$memory_global_by_current_bytes`",
+            "top_memory_by_user": "select * from sys.`x$memory_by_user_by_current_bytes`",
+            "top_memory_by_host": "select * from sys.`x$memory_by_host_by_current_bytes`",
+            "top_memory_by_thread": "select * from sys.`x$memory_by_thread_by_current_bytes`",
+            "top_io_by_file_activity_report": "select * from sys.`x$io_global_by_file_by_bytes`",
+            "top_io_by_file_by_time": "select * from sys.`x$io_global_by_file_by_latency`",
+            "top_io_by_event_category": "select * from sys.`x$io_global_by_wait_by_bytes`",
+            "top_io_in_time_by_event_category": "select * from sys.`x$io_global_by_wait_by_latency`",
+            "top_io_by_user_or_thread": "select * from sys.`x$io_by_thread_by_latency`",
+            "schema_index_statistics": "select * from sys.`x$schema_index_statistics`",
+            "schema_table_statistics": "select * from sys.`x$schema_table_statistics`",
+            "schema_table_statistics_with_buffer": "select * from sys.`x$schema_table_statistics_with_buffer`",
+            "schema_tables_with_full_table_scans": "select * from sys.`schema_tables_with_full_table_scans`",
+            "schema_unused_indexes": "select * from sys.`schema_unused_indexes`",
+            "global_waits_by_time": "select * from sys.`x$waits_global_by_latency`",
+            "waits_by_user_by_time": "select * from sys.`x$waits_by_user_by_latency`",
+            "wait_classes_by_time": "select * from sys.`x$wait_classes_global_by_latency`",
+            "waits_classes_by_avg_time": "select * from sys.`x$wait_classes_global_by_avg_latency`",
+            "innodb_buffer_stats_by_schema": "select * from sys.`x$innodb_buffer_stats_by_schema`",
+            "innodb_buffer_stats_by_table": "select * from sys.`x$innodb_buffer_stats_by_table`",
+            "user_resource_use_overview": "select * from sys.`x$user_summary`",
+            "user_resource_use_io_statistics": "select * from sys.`x$user_summary_by_file_io_type`",
         }
 
         data = {}
