@@ -336,5 +336,7 @@ class DatabaseServer(Server):
                 for column in value:
                     if isinstance(value[column], Decimal):
                         value[column] = float(value[column])
+            elif isinstance(value, Decimal):
+                data[key] = float(value)
 
         return data
