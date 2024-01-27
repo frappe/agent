@@ -1,3 +1,4 @@
+from decimal import Decimal
 import os
 from agent.server import Server
 from pathlib import Path
@@ -316,10 +317,24 @@ class DatabaseServer(Server):
             """,
         )
 
-        return {
+        data =  {
             "total_allocated_memory": total_allocated_memory,
             "top_memory_by_event": top_memory_by_event,
             "top_memory_by_user": top_memory_by_user,
             "top_memory_by_host": top_memory_by_host,
             "top_memory_by_thread": top_memory_by_thread,
         }
+
+        # convert Decimal to float
+        for key, value in data.items():
+            if isinstance(value, list):
+                for row in value:
+                    for column in row:
+                        if isinstance(row[column], Decimal):
+                            row[column] = float(row[column])
+            elif isinstance(value, dict):
+                for column in value:
+                    if isinstance(value[column], Decimal):
+                        value[column] = float(value[column])
+
+        return data
