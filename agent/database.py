@@ -251,17 +251,12 @@ class DatabaseServer(Server):
             port=3306,
         )
 
-        total_allocated_memory = self.sql(
-            mariadb,
-            """
+        reports_sql = {
+            "total_allocated_memory": """
             select total_allocated/(1024*1024) as total_allocated_memory 
-            from sys.`x$memory_global_total`;
-            """,
-        )[0]["total_allocated_memory"]
+            from sys.`x$memory_global_total`;""",
 
-        top_memory_by_event = self.sql(
-            mariadb,
-            """
+            "top_memory_by_event": """
             select 
             event_name as event_type,
             current_count as count,
@@ -270,13 +265,9 @@ class DatabaseServer(Server):
             current_avg_alloc/(1024*1024)  as avg_memory,
             high_alloc/(1024*1024)  as max_memory,
             high_avg_alloc/(1024*1024)  as max_avg_memory
-            from sys.`x$memory_global_by_current_bytes`;
-            """,
-        )
+            from sys.`x$memory_global_by_current_bytes`;""",
 
-        top_memory_by_user = self.sql(
-            mariadb,
-            """
+            "top_memory_by_user": """
             select 
             user,
             current_count_used as count,
@@ -284,13 +275,9 @@ class DatabaseServer(Server):
             current_avg_alloc/(1024*1024)  as avg_memory,
             current_max_alloc/(1024*1024)  as max_memory,
             total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_user_by_current_bytes`;
-            """,
-        )
+            from sys.`x$memory_by_user_by_current_bytes`;""",
 
-        top_memory_by_host = self.sql(
-            mariadb,
-            """
+            "top_memory_by_host": """
             select 
             host,
             current_count_used as count,
@@ -298,13 +285,9 @@ class DatabaseServer(Server):
             current_avg_alloc/(1024*1024)  as avg_memory,
             current_max_alloc/(1024*1024)  as max_memory,
             total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_host_by_current_bytes`;
-            """,
-        )
+            from sys.`x$memory_by_host_by_current_bytes`;""",
 
-        top_memory_by_thread = self.sql(
-            mariadb,
-            """
+            "top_memory_by_thread": """
             select
             thread_id,
             user,
@@ -313,17 +296,15 @@ class DatabaseServer(Server):
             current_avg_alloc/(1024*1024)  as avg_memory,
             current_max_alloc/(1024*1024)  as max_memory,
             total_allocated/(1024*1024)  as total_memory
-            from sys.`x$memory_by_thread_by_current_bytes`;
-            """,
-        )
+            from sys.`x$memory_by_thread_by_current_bytes`;"""
 
-        data =  {
-            "total_allocated_memory": total_allocated_memory,
-            "top_memory_by_event": top_memory_by_event,
-            "top_memory_by_user": top_memory_by_user,
-            "top_memory_by_host": top_memory_by_host,
-            "top_memory_by_thread": top_memory_by_thread,
         }
+
+        data = {}
+        for key, sql in reports_sql.items():
+            data[key] = self.sql(mariadb, sql)
+            if key == "total_allocated_memory":
+                data[key] = data[key][0]["total_allocated_memory"]
 
         # convert Decimal to float
         for key, value in data.items():
