@@ -242,7 +242,8 @@ class DatabaseServer(Server):
                 )
         return sorted(stalks, key=lambda x: x["name"])
 
-    def get_performance_report(self, private_ip, mariadb_root_password):
+    def get_performance_report(self, private_ip, mariadb_root_password, reports=[]):
+        # `reports` is a list of reports to fetch. If empty, fetch all reports.
         mariadb = MySQLDatabase(
             "mysql",
             user="root",
@@ -279,9 +280,10 @@ class DatabaseServer(Server):
 
         data = {}
         for key, sql in reports_sql.items():
-            data[key] = self.sql(mariadb, sql)
-            if key == "total_allocated_memory":
-                data[key] = data[key][0]["total_allocated"]
+            if len(reports) == 0 or key in reports:
+                data[key] = self.sql(mariadb, sql)
+                if key == "total_allocated_memory":
+                    data[key] = data[key][0]["total_allocated"]
 
         # convert Decimal to float
         for key, value in data.items():
