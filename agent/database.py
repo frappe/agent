@@ -240,3 +240,86 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
+
+    def get_performance_report(self, private_ip, mariadb_root_password):
+        mariadb = MySQLDatabase(
+            "mysql",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        total_allocated_memory = self.sql(
+            mariadb,
+            """
+            select total_allocated/(1024*1024) as total_allocated_memory 
+            from sys.`x$memory_global_total`;
+            """,
+        )[0]["total_allocated_memory"]
+
+        top_memory_by_event = self.sql(
+            mariadb,
+            """
+            select 
+            event_name as event_type,
+            current_count as count,
+            high_count as max_count,
+            current_alloc/(1024*1024)  as memory,
+            current_avg_alloc/(1024*1024)  as avg_memory,
+            high_alloc/(1024*1024)  as max_memory,
+            high_avg_alloc/(1024*1024)  as max_avg_memory
+            from sys.`x$memory_global_by_current_bytes`;
+            """,
+        )
+
+        top_memory_by_user = self.sql(
+            mariadb,
+            """
+            select 
+            user,
+            current_count_used as count,
+            current_allocated/(1024*1024)  as memory,
+            current_avg_alloc/(1024*1024)  as avg_memory,
+            current_max_alloc/(1024*1024)  as max_memory,
+            total_allocated/(1024*1024)  as total_memory
+            from sys.`x$memory_by_user_by_current_bytes`;
+            """,
+        )
+
+        top_memory_by_host = self.sql(
+            mariadb,
+            """
+            select 
+            host,
+            current_count_used as count,
+            current_allocated/(1024*1024)  as memory,
+            current_avg_alloc/(1024*1024)  as avg_memory,
+            current_max_alloc/(1024*1024)  as max_memory,
+            total_allocated/(1024*1024)  as total_memory
+            from sys.`x$memory_by_host_by_current_bytes`;
+            """,
+        )
+
+        top_memory_by_thread = self.sql(
+            mariadb,
+            """
+            select
+            thread_id,
+            user,
+            current_count_used as count,
+            current_allocated/(1024*1024)  as memory,
+            current_avg_alloc/(1024*1024)  as avg_memory,
+            current_max_alloc/(1024*1024)  as max_memory,
+            total_allocated/(1024*1024)  as total_memory
+            from sys.`x$memory_by_thread_by_current_bytes`;
+            """,
+        )
+
+        return {
+            "total_allocated_memory": total_allocated_memory,
+            "top_memory_by_event": top_memory_by_event,
+            "top_memory_by_user": top_memory_by_user,
+            "top_memory_by_host": top_memory_by_host,
+            "top_memory_by_thread": top_memory_by_thread,
+        }
