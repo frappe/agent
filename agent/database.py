@@ -281,7 +281,7 @@ class DatabaseServer(Server):
         for key, sql in reports_sql.items():
             data[key] = self.sql(mariadb, sql)
             if key == "total_allocated_memory":
-                data[key] = data[key][0]["total_allocated_memory"]
+                data[key] = data[key][0]["total_allocated"]
 
         # convert Decimal to float
         for key, value in data.items():
