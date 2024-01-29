@@ -263,6 +263,12 @@ class DatabaseServer(Server):
             "top_io_by_event_category": "select * from sys.`x$io_global_by_wait_by_bytes`",
             "top_io_in_time_by_event_category": "select * from sys.`x$io_global_by_wait_by_latency`",
             "top_io_by_user_or_thread": "select * from sys.`x$io_by_thread_by_latency`",
+            "statement_analysis": "select * from sys.`x$statement_analysis`",
+            "statements_in_highest_5_percentile": "select * from sys.`x$statements_with_runtimes_in_95th_percentile`",
+            "statements_using_temp_tables": "select * from sys.`statements_with_temp_tables`",
+            "statements_with_sorting": "select * from sys.`statements_with_sorting`",
+            "statements_with_full_table_scans": "select * from sys.`statements_with_full_table_scans`",
+            "statements_with_errors_or_warnings": "select * from sys.`statements_with_errors_or_warnings`",
             "schema_index_statistics": "select * from sys.`x$schema_index_statistics`",
             "schema_table_statistics": "select * from sys.`x$schema_table_statistics`",
             "schema_table_statistics_with_buffer": "select * from sys.`x$schema_table_statistics_with_buffer`",
@@ -280,7 +286,7 @@ class DatabaseServer(Server):
 
         data = {}
         for key, sql in reports_sql.items():
-            if len(reports) == 0 or key in reports:
+            if key in reports:
                 data[key] = self.sql(mariadb, sql)
                 if key == "total_allocated_memory":
                     data[key] = data[key][0]["total_allocated"]
