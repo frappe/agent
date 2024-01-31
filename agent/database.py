@@ -282,6 +282,7 @@ class DatabaseServer(Server):
             "innodb_buffer_stats_by_table": "select * from sys.`x$innodb_buffer_stats_by_table`",
             "user_resource_use_overview": "select * from sys.`x$user_summary`",
             "user_resource_use_io_statistics": "select * from sys.`x$user_summary_by_file_io_type`",
+            "user_resource_use_statement_statistics": "select * from sys.`x$user_summary_by_statement_type`",
         }
 
         data = {}
