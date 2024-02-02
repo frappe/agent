@@ -271,7 +271,6 @@ def new_bench():
 
 
 @application.route("/benches/<string:bench>/archive", methods=["POST"])
-@validate_bench
 def archive_bench(bench):
     job = Server().archive_bench(bench)
     return {"job": job}
