@@ -4,6 +4,7 @@ import subprocess
 import traceback
 from datetime import datetime
 from functools import partial
+from agent.job import connection
 
 
 class Base:
@@ -99,14 +100,45 @@ class Base:
                     if lines:
                         lines[-1] = line
                     line = ""
+                    self.publish_output(lines)
                 elif char == "\n":
                     lines.append(line)
                     line = ""
+                    self.publish_output(lines)
                 else:
                     line += char
             if line:
                 lines.append(line)
+            self.publish_output(lines)
         return "\n".join(lines)
+
+    def publish_output(self, lines):
+        output = "\n".join(lines)
+        self.data.update({"output": output})
+        self.update_redis()
+
+    def update_redis(self):
+        if not self.redis_key:
+            return
+        value = json.dumps(self.data, default=str)
+
+        if "output" in self.data:
+            self.redis.lset(self.redis_key, -1, value)
+        else:
+            self.redis.rpush(self.redis_key, value)
+
+    @property
+    def redis_key(self):
+        if self.job_record and getattr(self.job_record, "model", None):
+            key = f"agent:job:{self.job_record.model.id}"
+            if self.step_record and getattr(self.step_record, "model", None):
+                return f"{key}:step:{self.step_record.model.id}"
+            return key
+        return None
+
+    @property
+    def redis(self):
+        return connection()
 
     @property
     def config(self):
@@ -122,6 +154,7 @@ class Base:
         if self.skip_output_log:
             data.update({"output": ""})
         print(json.dumps(data, default=str))
+        self.update_redis()
 
     @property
     def logs(self):
