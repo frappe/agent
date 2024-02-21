@@ -32,7 +32,7 @@ class Base:
             "command": command,
             "directory": directory,
             "start": start,
-            "status": "running",
+            "status": "Running",
         }
         self.log()
         try:
@@ -41,12 +41,14 @@ class Base:
             output = e.output
             self.data.update(
                 {
-                    "status": "failure",
+                    "status": "Failure",
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
             raise AgentException(self.data)
+        else:
+            self.data.update({"status": "Success"})
         finally:
             end = datetime.now()
             self.data.update(
@@ -54,7 +56,6 @@ class Base:
                     "duration": end - start,
                     "end": end,
                     "output": output,
-                    "status": "success",
                 }
             )
             self.log()
