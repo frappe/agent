@@ -489,6 +489,10 @@ class Server(Base):
             self.step = Step()
         return self.step
 
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
+
     def update_agent_web(self, url=None):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
