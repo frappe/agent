@@ -104,6 +104,8 @@ class Base:
                     line = ""
                 else:
                     line += char
+            if line:
+                lines.append(line)
         return "\n".join(lines)
 
     @property
