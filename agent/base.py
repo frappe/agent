@@ -22,7 +22,6 @@ class Base:
         input=None,
         skip_output_log=False,
         executable=None,
-        remove_crs=True,
     ):
         directory = directory or self.directory
         self.log("Command", command)
@@ -34,11 +33,7 @@ class Base:
         except subprocess.CalledProcessError as e:
             end = datetime.now()
             data.update({"duration": end - start, "end": end})
-            output = (
-                self.remove_crs(e.output)
-                if remove_crs
-                else e.output.decode().strip()
-            )
+            output = e.output
             if not skip_output_log:
                 self.log("Output", output)
             data.update(
@@ -51,9 +46,6 @@ class Base:
             raise AgentException(data)
 
         end = datetime.now()
-        output = (
-            self.remove_crs(output) if remove_crs else output.decode().strip()
-        )
         if not skip_output_log:
             self.log("Output", output)
         data.update({"duration": end - start, "end": end, "output": output})
@@ -114,10 +106,6 @@ class Base:
     def setconfig(self, value, indent=1):
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
-
-    def remove_crs(self, input):
-        output = subprocess.check_output(["col", "-b"], input=input)
-        return output.decode().strip()
 
     def log(self, *args):
         print(*args)
