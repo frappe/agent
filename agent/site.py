@@ -820,3 +820,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def step_record(self):
         return self.bench.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.bench.server.step_record = value

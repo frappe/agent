@@ -106,6 +106,8 @@ def step(name):
             raise e
         else:
             instance.step_record.success(result)
+        finally:
+            instance.step_record = None
         return result
 
     return wrapper
