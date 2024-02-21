@@ -126,6 +126,7 @@ class Base:
             self.redis.lset(self.redis_key, -1, value)
         else:
             self.redis.rpush(self.redis_key, value)
+        self.redis.expire(self.redis_key, 60 * 60 * 6)
 
     @property
     def redis_key(self):
