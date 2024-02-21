@@ -12,7 +12,7 @@ from functools import wraps
 
 from agent.proxy import Proxy
 from agent.ssh import SSHProxy
-from agent.job import JobModel
+from agent.job import JobModel, connection
 from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
@@ -255,7 +255,9 @@ def retrieve_ssh_session_log(filename):
     return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"]
+)
 @validate_bench_and_site
 def get_site_sid(bench, site):
     data = request.json or {}
@@ -399,7 +401,11 @@ def reinstall_site(bench, site):
 @validate_bench_and_site
 def rename_site(bench, site):
     data = request.json
-    job = Server().benches[bench].rename_site_job(site, data["new_name"], data.get("create_user"))
+    job = (
+        Server()
+        .benches[bench]
+        .rename_site_job(site, data["new_name"], data.get("create_user"))
+    )
     return {"job": job}
 
 
@@ -957,11 +963,25 @@ def proxysql_remove_user(username):
 
 
 def to_dict(model):
+    redis = connection()
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         job["data"] = json.loads(job["data"]) or {}
+        job_key = f"agent:job:{job['id']}"
+        job["commands"] = [
+            json.loads(command) for command in redis.lrange(job_key, 0, -1)
+        ]
         for step in job["steps"]:
             step["data"] = json.loads(step["data"]) or {}
+            step_key = f"{job_key}:step:{step['id']}"
+            step["commands"] = [
+                json.loads(command)
+                for command in redis.lrange(
+                    step_key,
+                    0,
+                    -1,
+                )
+            ]
     else:
         job = list(map(model_to_dict, model))
     return job
