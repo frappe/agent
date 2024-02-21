@@ -11,6 +11,7 @@ class Base:
         self.directory = None
         self.config_file = None
         self.name = None
+        self.data = {}
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -24,32 +25,39 @@ class Base:
         executable=None,
     ):
         directory = directory or self.directory
-        self.log("Command", command)
-        self.log("Directory", directory)
         start = datetime.now()
-        data = {"command": command, "directory": directory, "start": start}
+        self.skip_output_log = skip_output_log
+        self.data = {
+            "command": command,
+            "directory": directory,
+            "start": start,
+            "status": "running",
+        }
+        self.log()
         try:
             output = self.run_subprocess(command, directory, input, executable)
         except subprocess.CalledProcessError as e:
-            end = datetime.now()
-            data.update({"duration": end - start, "end": end})
             output = e.output
-            if not skip_output_log:
-                self.log("Output", output)
-            data.update(
+            self.data.update(
                 {
-                    "output": output,
+                    "status": "failure",
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
-            raise AgentException(data)
-
-        end = datetime.now()
-        if not skip_output_log:
-            self.log("Output", output)
-        data.update({"duration": end - start, "end": end, "output": output})
-        return data
+            raise AgentException(self.data)
+        finally:
+            end = datetime.now()
+            self.data.update(
+                {
+                    "duration": end - start,
+                    "end": end,
+                    "output": output,
+                    "status": "success",
+                }
+            )
+            self.log()
+        return self.data
 
     def run_subprocess(self, command, directory, input, executable):
         # Start a child process and start reading output immediately
@@ -107,8 +115,11 @@ class Base:
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
 
-    def log(self, *args):
-        print(*args)
+    def log(self):
+        data = self.data.copy()
+        if self.skip_output_log:
+            data.update({"output": ""})
+        print(data)
 
     @property
     def logs(self):
