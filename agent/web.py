@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import sys
 import traceback
+import uuid
 from base64 import b64decode
 
 from flask import Flask, jsonify, request
@@ -9,7 +11,7 @@ from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from functools import wraps
 
-
+from agent.builder import get_image_build_context_directory, ImageBuilder
 from agent.proxy import Proxy
 from agent.ssh import SSHProxy
 from agent.job import JobModel
@@ -132,6 +134,27 @@ POST /benches
 def ping():
     return {"message": "pong"}
 
+
+@application.route("/builder/upload", methods=["POST"])
+def upload_build_context_for_image_builder():
+    if "file" not in request.files:
+        return {"message": "No file part"}, 400
+    file = request.files["file"]
+    if file.filename == "":
+        return {"message": "No selected file"}, 400
+    if not file.filename.endswith(".tar"):
+        return {"message": "Invalid file type"}, 400
+    filename = f"{uuid.uuid4()}.tar"
+    if not os.path.exists(get_image_build_context_directory()):
+        os.makedirs(get_image_build_context_directory())
+    file.save(os.path.join(get_image_build_context_directory(), filename))
+    return {"filename": filename}
+
+@application.route("/builder/build", methods=["POST"])
+def build_image():
+    data = request.json
+    job = ImageBuilder(**data).build_and_push_image()
+    return {"job": job}
 
 @application.route("/server")
 def get_server():

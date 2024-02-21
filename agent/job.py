@@ -50,6 +50,10 @@ class Action:
         self.end()
 
     @save
+    def update_data(self, data):
+        self.model.data = json.dumps(data, default=str)
+
+    @save
     def end(self):
         self.model.end = datetime.datetime.now()
         self.model.duration = self.model.end - self.model.start
@@ -111,13 +115,19 @@ def step(name):
     return wrapper
 
 
-def job(name, priority="default"):
+def job(name, priority="default", is_yielding_output=False):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         if get_current_job(connection=connection()):
             instance.job_record.start()
             try:
-                result = wrapped(*args, **kwargs)
+                result = None
+                if is_yielding_output:
+                    for output in wrapped(*args, **kwargs):
+                        result = output
+                        instance.job_record.update_data(result)
+                else:
+                    result = wrapped(*args, **kwargs)
             except AgentException as e:
                 instance.job_record.failure(e.data)
                 raise e
