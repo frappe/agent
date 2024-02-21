@@ -171,7 +171,9 @@ class Bench(Base):
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @job("Rename Site", priority="high")
-    def rename_site_job(self, site: str, new_name: str, create_user: dict=None):
+    def rename_site_job(
+        self, site: str, new_name: str, create_user: dict = None
+    ):
         try:
             site = Site(site, self)
         except OSError:
@@ -582,12 +584,18 @@ class Bench(Base):
                 "merge_default_and_short_rq_queues": self.bench_config.get(
                     "merge_default_and_short_rq_queues", False
                 ),
-                "use_rq_workerpool": self.bench_config.get("use_rq_workerpool", False),
+                "use_rq_workerpool": self.bench_config.get(
+                    "use_rq_workerpool", False
+                ),
                 "environment_variables": self.bench_config.get(
                     "environment_variables"
                 ),
-                "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
-                "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False)
+                "gunicorn_threads_per_worker": self.bench_config.get(
+                    "gunicorn_threads_per_worker"
+                ),
+                "is_code_server_enabled": self.bench_config.get(
+                    "is_code_server_enabled", False
+                ),
             },
             supervisor_config,
         )
@@ -655,7 +663,7 @@ class Bench(Base):
         self.docker_execute("supervisorctl stop code-server:")
 
     def prepare_mounts_on_host(self, bench_directory):
-        mounts_cmd = ''
+        mounts_cmd = ""
 
         if not self.mounts:
             return mounts_cmd
@@ -665,20 +673,24 @@ class Bench(Base):
                 os.mkdir(host_path)
 
         for mp in self.mounts:
-            host_path = mp['source']
-            destination_path = mp['destination']
+            host_path = mp["source"]
+            destination_path = mp["destination"]
 
-            if not mp['is_absolute_path']:
-                '''
-                    self.server.benches_directory = /home/frappe/benches (Host)
-                    bench_directory = "/home/frappe/frappe-bench" (container)
-                '''
-                host_path = os.path.join(self.server.benches_directory, mp['source'])
-                destination_path = os.path.join(bench_directory, mp['destination'])
+            if not mp["is_absolute_path"]:
+                """
+                self.server.benches_directory = /home/frappe/benches (Host)
+                bench_directory = "/home/frappe/frappe-bench" (container)
+                """
+                host_path = os.path.join(
+                    self.server.benches_directory, mp["source"]
+                )
+                destination_path = os.path.join(
+                    bench_directory, mp["destination"]
+                )
 
                 _create_mounts(host_path)
 
-            mounts_cmd += f' -v {host_path}:{destination_path} '
+            mounts_cmd += f" -v {host_path}:{destination_path} "
 
         return mounts_cmd
 
@@ -813,6 +825,10 @@ class Bench(Base):
     @property
     def step_record(self):
         return self.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.server.step_record = value
 
     def get_usage(self):
         return {

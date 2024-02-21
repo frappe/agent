@@ -3,6 +3,8 @@ import os
 import subprocess
 import traceback
 from datetime import datetime
+from functools import partial
+from agent.job import connection
 
 
 class Base:
@@ -10,6 +12,7 @@ class Base:
         self.directory = None
         self.config_file = None
         self.name = None
+        self.data = {}
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -21,53 +24,123 @@ class Base:
         input=None,
         skip_output_log=False,
         executable=None,
-        remove_crs=True,
     ):
         directory = directory or self.directory
-        self.log("Command", command)
-        self.log("Directory", directory)
         start = datetime.now()
-        data = {"command": command, "directory": directory, "start": start}
+        self.skip_output_log = skip_output_log
+        self.data = {
+            "command": command,
+            "directory": directory,
+            "start": start,
+            "status": "Running",
+        }
+        self.log()
         try:
-            process = subprocess.run(
-                command,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=directory,
-                shell=True,
-                input=input.encode() if input else None,
-                executable=executable,
-            )
+            output = self.run_subprocess(command, directory, input, executable)
         except subprocess.CalledProcessError as e:
-            end = datetime.now()
-            data.update({"duration": end - start, "end": end})
-            output = (
-                self.remove_crs(e.output)
-                if remove_crs
-                else e.output.decode().strip()
-            )
-            if not skip_output_log:
-                self.log("Output", output)
-            data.update(
+            output = e.output
+            self.data.update(
                 {
-                    "output": output,
+                    "status": "Failure",
                     "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
-            raise AgentException(data)
+            raise AgentException(self.data)
+        else:
+            self.data.update({"status": "Success"})
+        finally:
+            end = datetime.now()
+            self.data.update(
+                {
+                    "duration": end - start,
+                    "end": end,
+                    "output": output,
+                }
+            )
+            self.log()
+        return self.data
 
-        end = datetime.now()
-        output = (
-            self.remove_crs(process.stdout)
-            if remove_crs
-            else process.stdout.decode().strip()
-        )
-        if not skip_output_log:
-            self.log("Output", output)
-        data.update({"duration": end - start, "end": end, "output": output})
-        return data
+    def run_subprocess(self, command, directory, input, executable):
+        # Start a child process and start reading output immediately
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE if input else None,
+            cwd=directory,
+            shell=True,
+            executable=executable,
+        ) as process:
+            if input:
+                process._stdin_write(input.encode())
+
+            output = self.parse_output(process)
+            retcode = process.poll()
+            # This is equivalent of check=True
+            # Raise an exception if the process returns a non-zero return code
+            if retcode:
+                raise subprocess.CalledProcessError(
+                    retcode, command, output=output
+                )
+        return output
+
+    def parse_output(self, process):
+        lines = []
+        # This is equivalent of remove_crs
+        # Make sure output matches what'll be shown in the terminal
+        # This won't work for top, htop etc, but good enough to handle progress bars
+        if process.stdout:
+            line = ""
+            for char in iter(partial(process.stdout.read, 1), ""):
+                char = char.decode()
+                if char == "" and process.poll() is not None:
+                    break
+                elif char == "\r":
+                    # Overwrite last line
+                    if lines:
+                        lines[-1] = line
+                    line = ""
+                    self.publish_output(lines)
+                elif char == "\n":
+                    lines.append(line)
+                    line = ""
+                    self.publish_output(lines)
+                else:
+                    line += char
+            if line:
+                lines.append(line)
+            self.publish_output(lines)
+        return "\n".join(lines)
+
+    def publish_output(self, lines):
+        output = "\n".join(lines)
+        self.data.update({"output": output})
+        self.update_redis()
+
+    def update_redis(self):
+        if not self.redis_key:
+            return
+        value = json.dumps(self.data, default=str)
+
+        if "output" in self.data:
+            self.redis.lset(self.redis_key, -1, value)
+        else:
+            self.redis.rpush(self.redis_key, value)
+        self.redis.expire(self.redis_key, 60 * 60 * 6)
+
+    @property
+    def redis_key(self):
+        if self.job_record and getattr(self.job_record, "model", None):
+            key = f"agent:job:{self.job_record.model.id}"
+            if self.step_record and getattr(self.step_record, "model", None):
+                return f"{key}:step:{self.step_record.model.id}"
+            return key
+        return None
+
+    @property
+    def redis(self):
+        return connection()
 
     @property
     def config(self):
@@ -78,12 +151,12 @@ class Base:
         with open(self.config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
 
-    def remove_crs(self, input):
-        output = subprocess.check_output(["col", "-b"], input=input)
-        return output.decode().strip()
-
-    def log(self, *args):
-        print(*args)
+    def log(self):
+        data = self.data.copy()
+        if self.skip_output_log:
+            data.update({"output": ""})
+        print(json.dumps(data, default=str))
+        self.update_redis()
 
     @property
     def logs(self):
