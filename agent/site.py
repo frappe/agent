@@ -335,9 +335,7 @@ class Site(Base):
 
     @step("Create User")
     def create_user(self, email, first_name, last_name, password=None):
-        command = (
-            f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
-        )
+        command = f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         if password:
             command += f" --password {password}"
         return self.bench_execute(command)
