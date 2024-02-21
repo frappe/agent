@@ -16,7 +16,7 @@ from agent.job import job, Job
 
 class ImageBuilder(Base):
 	def __init__(self, filename: str, image_repository: str, image_tag: str, no_cache: bool, registry: dict,
-	             build_steps: dict) -> None:
+	             build_steps: dict, **kwargs) -> None:
 		super().__init__()
 		self.directory = os.getcwd()
 		self.config_file = os.path.join(self.directory, "config.json")
