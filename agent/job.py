@@ -93,14 +93,20 @@ class Job(Action):
         self.model.agent_job_id = agent_job_id
 
 
-def step(name):
+def step(name, is_yielding_output=False):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         from agent.base import AgentException
 
         instance.step_record.start(name, instance.job_record.model.id)
         try:
-            result = wrapped(*args, **kwargs)
+            result = None
+            if is_yielding_output:
+                for output in wrapped(*args, **kwargs):
+                    result = output
+                    instance.step_record.update_data(result)
+            else:
+                result = wrapped(*args, **kwargs)
         except AgentException as e:
             instance.step_record.failure(e.data)
             raise e

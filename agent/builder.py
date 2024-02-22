@@ -11,7 +11,7 @@ import docker
 import dockerfile
 
 from agent.base import AgentException, Base
-from agent.job import job, Job
+from agent.job import job, Job, Step, step
 
 
 class ImageBuilder(Base):
@@ -21,6 +21,7 @@ class ImageBuilder(Base):
 		self.directory = os.getcwd()
 		self.config_file = os.path.join(self.directory, "config.json")
 		self.job = None
+		self.step = None
 		self.filename = filename
 		self.image_repository = image_repository
 		self.image_tag = image_tag
@@ -37,6 +38,12 @@ class ImageBuilder(Base):
 			self.job = Job()
 		return self.job
 
+	@property
+	def step_record(self):
+		if self.step is None:
+			self.step = Step()
+		return self.step
+
 	def _validate_registry(self):
 		if not self.registry.get("url"):
 			raise AgentException("registry.url is required")
@@ -45,8 +52,12 @@ class ImageBuilder(Base):
 		if not self.registry.get("password"):
 			raise AgentException("registry.password is required")
 
-	@job("Build And Push Image", priority="high", is_yielding_output=True)
+	@job("Docker Image Build", priority="high")
 	def build_and_push_image(self):
+		self._build_and_push_image()
+
+	@step("Docker Image Build", is_yielding_output=True)
+	def _build_and_push_image(self):
 		for o in self._build_image():
 			yield o
 		for o in self._push_docker_image():
