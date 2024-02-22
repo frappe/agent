@@ -29,7 +29,7 @@ class ImageBuilder(Base):
 		self.registry = registry
 		self.build_steps = build_steps
 		self.build_output = ""
-		self.docker_image_id = None
+		self.docker_image_id = ""
 		self._validate_registry_details()
 
 	@property
@@ -232,6 +232,7 @@ class ImageBuilder(Base):
 		return {
 			"build_output": self.build_output,
 			"build_steps": self.build_steps,
+			"docker_image_id": self.docker_image_id,
 		}
 
 	def _run(self, command, environment=None, directory=None, input_filepath=None):
