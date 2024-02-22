@@ -30,7 +30,7 @@ class ImageBuilder(Base):
 		self.build_steps = build_steps
 		self.build_output = ""
 		self.docker_image_id = None
-		self._validate_registry()
+		self._validate_registry_details()
 
 	@property
 	def job_record(self):
@@ -44,7 +44,11 @@ class ImageBuilder(Base):
 			self.step = Step()
 		return self.step
 
-	def _validate_registry(self):
+	@step_record.setter
+	def step_record(self, value):
+		self.step = value
+
+	def _validate_registry_details(self):
 		if not self.registry.get("url"):
 			raise AgentException("registry.url is required")
 		if not self.registry.get("username"):
