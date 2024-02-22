@@ -93,7 +93,7 @@ class Base:
         if process.stdout:
             line = ""
             for char in iter(partial(process.stdout.read, 1), ""):
-                char = char.decode()
+                char = char.decode(errors="replace"))
                 if char == "" and process.poll() is not None:
                     break
                 elif char == "\r":
