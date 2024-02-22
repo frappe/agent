@@ -142,9 +142,9 @@ def upload_build_context_for_image_builder():
     build_context_file = request.files["build_context_file"]
     if build_context_file.filename == "":
         return {"message": "No selected file"}, 400
-    if not build_context_file.filename.endswith(".tar"):
+    if not build_context_file.filename.endswith(".tar.gz"):
         return {"message": "Invalid file type"}, 400
-    filename = f"{uuid.uuid4()}.tar"
+    filename = f"{uuid.uuid4()}.tar.gz"
     if not os.path.exists(get_image_build_context_directory()):
         os.makedirs(get_image_build_context_directory())
     build_context_file.save(os.path.join(get_image_build_context_directory(), filename))
