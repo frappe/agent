@@ -83,7 +83,10 @@ class ImageBuilder(Base):
 			{"DOCKER_BUILDKIT": "1", "BUILDKIT_PROGRESS": "plain", "PROGRESS_NO_TRUNC": "1"}
 		)
 		filepath = os.path.join(get_image_build_context_directory(), self.filename)
-		command = f"{command} -t {self._get_image_name()} --no-cache -"
+		command = f"{command} -t {self._get_image_name()}"
+		if self.no_cache:
+			command = f"{command} --no-cache"
+		command = f"{command} - "
 		result = self._run(
 			command,
 			environment,
