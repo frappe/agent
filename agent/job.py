@@ -49,10 +49,6 @@ class Action:
         self.end()
 
     @save
-    def update_data(self, data):
-        self.model.data = json.dumps(data, default=str)
-
-    @save
     def end(self):
         self.model.end = datetime.datetime.now()
         self.model.duration = self.model.end - self.model.start
@@ -93,20 +89,14 @@ class Job(Action):
         self.model.agent_job_id = agent_job_id
 
 
-def step(name, is_yielding_output=False):
+def step(name):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         from agent.base import AgentException
 
         instance.step_record.start(name, instance.job_record.model.id)
         try:
-            result = None
-            if is_yielding_output:
-                for output in wrapped(*args, **kwargs):
-                    result = output
-                    instance.step_record.update_data(result)
-            else:
-                result = wrapped(*args, **kwargs)
+            result = wrapped(*args, **kwargs)
         except AgentException as e:
             instance.step_record.failure(e.data)
             raise e
@@ -124,7 +114,7 @@ def step(name, is_yielding_output=False):
     return wrapper
 
 
-def job(name, priority="default", is_yielding_output=False):
+def job(name, priority="default"):
     @wrapt.decorator
     def wrapper(wrapped, instance, args, kwargs):
         from agent.base import AgentException
@@ -132,13 +122,7 @@ def job(name, priority="default", is_yielding_output=False):
         if get_current_job(connection=connection()):
             instance.job_record.start()
             try:
-                result = None
-                if is_yielding_output:
-                    for output in wrapped(*args, **kwargs):
-                        result = output
-                        instance.job_record.update_data(result)
-                else:
-                    result = wrapped(*args, **kwargs)
+                result = wrapped(*args, **kwargs)
             except AgentException as e:
                 instance.job_record.failure(e.data)
                 raise e
