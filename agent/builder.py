@@ -269,11 +269,7 @@ class ImageBuilder(Base):
 		return {}
 
 def get_image_build_context_directory():
-	return os.path.join(os.getcwd(), "build_context")
-
-def store_image_build_context(tarfile) -> str:
-	filename = f"{uuid.uuid4()}.tar.gz"
-	path = os.path.join(get_image_build_context_directory(), filename)
-	with open(path, "wb") as f:
-		f.write(tarfile)
-	return filename
+	path = os.path.join(os.getcwd(), "build_context")
+	if not os.path.exists(path):
+		os.makedirs(path)
+	return path
