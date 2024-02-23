@@ -169,7 +169,7 @@ class ImageBuilder(Base):
 				# Publish Progress
 				if (datetime.datetime.now() - last_update).total_seconds() > 1:
 					self.build_output = "".join(lines)
-					self.publish_output([self._generate_output(string_output=True)])
+					self.publish_progress()
 					last_update = datetime.datetime.now()
 			except Exception:
 				import traceback
@@ -177,13 +177,13 @@ class ImageBuilder(Base):
 				traceback.print_exc()
 
 		self.build_output = "".join(lines)
-		self.publish_output([self._generate_output(string_output=True)])
+		self.publish_progress()
 
 	def _push_docker_image(self):
 		step = self._find(self.build_steps, lambda x: x["stage_slug"] == "upload")
 		step["status"] = "Running"
 		start_time = datetime.datetime.now()
-		self.publish_output([self._generate_output(string_output=True)])
+		self.publish_progress()
 
 		try:
 			environment = os.environ.copy()
@@ -213,31 +213,31 @@ class ImageBuilder(Base):
 
 				if (datetime.datetime.now() - last_update).total_seconds() > 1:
 					step["output"] = "\n".join(ll["output"] for ll in output)
-					self.publish_output([self._generate_output(string_output=True)])
+					self.publish_progress()
 					last_update = datetime.datetime.now()
 
 			end_time = datetime.datetime.now()
 			step["output"] = "\n".join(ll["output"] for ll in output)
 			step["duration"] = round((end_time - start_time).total_seconds(), 1)
 			step["status"] = "Success"
-			self.publish_output([self._generate_output(string_output=True)])
+			self.publish_progress()
 		except Exception:
 			step.status = "Failure"
-			self.publish_output([self._generate_output(string_output=True)])
+			self.publish_progress()
 			raise
+
+	def publish_progress(self):
+		self.publish_output([json.dumps(self._generate_output(), default=str)])
 
 	def _get_image_name(self):
 		return f"{self.image_repository}:{self.image_tag}"
 
-	def _generate_output(self, string_output=False):
-		output = {
+	def _generate_output(self):
+		return {
 			"build_output": self.build_output,
 			"build_steps": self.build_steps,
 			"docker_image_id": self.docker_image_id,
 		}
-		if string_output:
-			return json.dumps(output, default=str)
-		return output
 
 	def _run(self, command, environment=None, directory=None, input_filepath=None):
 		input_file = None
