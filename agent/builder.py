@@ -64,6 +64,7 @@ class ImageBuilder(Base):
 	def _build_and_push_image(self):
 		self._build_image()
 		self._push_docker_image()
+		return self.data
 
 	def _build_image(self):
 		import platform
