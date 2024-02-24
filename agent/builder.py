@@ -64,6 +64,7 @@ class ImageBuilder(Base):
 	def _build_and_push_image(self):
 		self._build_image()
 		self._push_docker_image()
+		self._remove_build_context()
 		return self.data
 
 	def _build_image(self):
@@ -81,7 +82,6 @@ class ImageBuilder(Base):
 		environment.update(
 			{"DOCKER_BUILDKIT": "1", "BUILDKIT_PROGRESS": "plain", "PROGRESS_NO_TRUNC": "1"}
 		)
-		filepath = os.path.join(get_image_build_context_directory(), self.filename)
 		command = f"{command} -t {self._get_image_name()}"
 		if self.no_cache:
 			command = f"{command} --no-cache"
@@ -89,7 +89,7 @@ class ImageBuilder(Base):
 		result = self._run(
 			command,
 			environment,
-			input_filepath=filepath
+			input_filepath=self._build_context_file
 		)
 		return self._parse_docker_build_result(result)
 
@@ -271,6 +271,14 @@ class ImageBuilder(Base):
 			if predicate(item):
 				return item
 		return {}
+
+	@property
+	def _build_context_file(self):
+		return os.path.join(get_image_build_context_directory(), self.filename)
+
+	def _remove_build_context(self):
+		if os.path.exists(self._build_context_file):
+			os.remove(self._build_context_file)
 
 def get_image_build_context_directory():
 	path = os.path.join(os.getcwd(), "build_context")
