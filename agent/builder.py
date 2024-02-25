@@ -56,7 +56,7 @@ class ImageBuilder(Base):
 		if not self.registry.get("password"):
 			raise AgentException("registry.password is required")
 
-	@job("Docker Image Build", priority="high")
+	@job("Docker Image Build")
 	def build_and_push_image(self):
 		self._build_and_push_image()
 
