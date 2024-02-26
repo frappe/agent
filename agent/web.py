@@ -19,6 +19,7 @@ from agent.database import DatabaseServer
 from agent.proxysql import ProxySQL
 from agent.minio import Minio
 from agent.security import Security
+from agent.hypervisor import Hypervisor
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 
 
@@ -1147,6 +1148,12 @@ def archive_code_server(bench):
 def hypervisor_create_cluster():
     data = request.json
     job = Hypervisor().create_cluster(**data)
+    return {"job": job}
+
+
+@application.route("/hypervisor/clusters/<string:cluster>", methods=["DELETE"])
+def hypervisor_delete_cluster(cluster):
+    job = Hypervisor().delete_cluster(cluster)
     return {"job": job}
 
 

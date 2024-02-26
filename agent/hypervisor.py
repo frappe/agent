@@ -1,4 +1,5 @@
 import os
+import shutil
 from agent.job import job, step
 from agent.server import Server
 from agent.base import Base
@@ -29,6 +30,18 @@ class Hypervisor(Server):
         cluster.generate_vagrantfile()
         return cluster.show_vagrant_status()
 
+    @job("Delete Cluster")
+    def delete_cluster(self, cluster):
+        cluster = Cluster(cluster, self)
+        cluster.stop_all_machines()
+        cluster.destroy_all_machines()
+        shutil.rmtree(cluster.directory)
+        return self.show_vagrant_global_status()
+
+    @step("Show Vagrant Global Status")
+    def show_vagrant_global_status(self):
+        self.vagrant_execute("global-status")
+
 
 class Cluster(Base):
     def __init__(self, name, hypervisor, mounts=None):
@@ -51,6 +64,14 @@ class Cluster(Base):
     @step("Show Vagrant Status")
     def show_vagrant_status(self):
         self.vagrant_execute("status")
+
+    @step("Stop All Machines")
+    def stop_all_machines(self):
+        self.vagrant_execute("halt -f")
+
+    @step("Destroy All Machines")
+    def destroy_all_machines(self):
+        self.vagrant_execute("destroy -f --no-parallel")
 
     @property
     def job_record(self):
