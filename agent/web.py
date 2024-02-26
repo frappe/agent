@@ -1143,6 +1143,13 @@ def archive_code_server(bench):
     return {"job": job}
 
 
+@application.route("/hypervisor/clusters", methods=["POST"])
+def hypervisor_create_cluster():
+    data = request.json
+    job = Hypervisor().create_cluster(**data)
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
