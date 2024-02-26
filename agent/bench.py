@@ -1,23 +1,23 @@
 import hashlib
-import os
 import json
+import os
 import shutil
-from typing import Dict
-import requests
 import string
 import tempfile
 import traceback
-
-from random import choices
-from glob import glob
 from datetime import datetime, timedelta
+from glob import glob
+from random import choices
+from typing import Dict
+
+import requests
 
 from agent.app import App
 from agent.base import AgentException, Base
+from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, get_size
-from agent.exceptions import SiteNotExistsException
 
 
 class Bench(Base):
@@ -846,3 +846,32 @@ class Bench(Base):
     def set_bench_config(self, value, indent=1):
         with open(self.bench_config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
+
+    @job("Patch App")
+    def patch_app(
+        self,
+        app: str,
+        patch: str,
+        filename: str,
+        build_assets: bool,
+        revert: bool,
+    ):
+        self.git_apply(app, patch, filename, revert)
+        self.build_assets(app, build_assets)
+        print("Patch App", app, filename, build_assets, revert, patch)
+        
+    
+    @step("Git Apply")
+    def git_apply(self, app: str, patch: str, filename: str, revert: bool):
+        # TODO: Save patch file in an patches/$app/$filename folder somewhere (if not preset)
+        # TODO: Call git apply with -R if revert
+        pass
+    
+
+    @step("Build Assets")
+    def build_assets(self, app: str, build_assets: bool):
+        # Guard clause in function to register Step.
+        if not build_assets:
+            return
+        
+        # TODO: Run build assets

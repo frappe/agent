@@ -3,24 +3,22 @@ import logging
 import sys
 import traceback
 from base64 import b64decode
-
-from flask import Flask, jsonify, request
-from playhouse.shortcuts import model_to_dict
-from passlib.hash import pbkdf2_sha256 as pbkdf2
 from functools import wraps
 
+from flask import Flask, jsonify, request
+from passlib.hash import pbkdf2_sha256 as pbkdf2
+from playhouse.shortcuts import model_to_dict
 
-from agent.proxy import Proxy
-from agent.ssh import SSHProxy
-from agent.job import JobModel, connection
-from agent.server import Server
-from agent.monitor import Monitor
 from agent.database import DatabaseServer
-from agent.proxysql import ProxySQL
-from agent.minio import Minio
-from agent.security import Security
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
-
+from agent.job import JobModel, connection
+from agent.minio import Minio
+from agent.monitor import Monitor
+from agent.proxy import Proxy
+from agent.proxysql import ProxySQL
+from agent.security import Security
+from agent.server import Server
+from agent.ssh import SSHProxy
 
 application = Flask(__name__)
 
@@ -1140,6 +1138,24 @@ def stop_code_server(bench):
 @validate_bench
 def archive_code_server(bench):
     job = Server().benches[bench].archive_code_server()
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/patch/<string:app>", methods=["POST"])
+@validate_bench
+def patch_app(bench, app):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .patch_app(
+            app,
+            data["patch"],
+            data["filename"],
+            data["build_assets"],
+            data["revert"],
+        )
+    )
     return {"job": job}
 
 
