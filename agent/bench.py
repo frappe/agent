@@ -857,32 +857,41 @@ class Bench(Base):
         build_assets: bool,
         revert: bool,
     ):
-        patch_path = self.prepare_app_patch(app, patch, filename)
-        self.git_apply(app, revert, patch_path)
+        patch_container_path = self.prepare_app_patch(app, patch, filename)
+        self.git_apply(app, revert, patch_container_path)
         if build_assets:
             self.rebuild()
+        self.restart()
         
         
     def prepare_app_patch(self, app: str, patch: str, filename: str) -> Path:
-        relative_path = f"~/.cache/bench/{self.name}/patches/{app}"
-        abs_path = Path(os.path.expanduser(relative_path))
-        abs_path.mkdir(parents=True, exist_ok=True)
+        """
+        Function returns path inside the container, the sites is
+        mounted in the container at a different path from that of
+        the bench outside it.
+        """
+        relative = ["sites", "patches", app]
+        patch_dir = Path(os.path.join(self.directory, *relative))
+        patch_dir.mkdir(parents=True, exist_ok=True)
 
-        patch_path = abs_path / filename
+        patch_path = patch_dir / filename
         if patch_path.is_file():
             return patch_path
 
         with patch_path.open("w") as f:
             f.write(patch)
         
-        return patch_path
+        
+        bench_container_dir = "/home/frappe/frappe-bench"
+        return Path(os.path.join(bench_container_dir, *relative, filename))
     
 
     @step("Git Apply")
-    def git_apply(self, app: str, revert: bool, patch_path: Path):
-        command = "git apply"
+    def git_apply(self, app: str, revert: bool, patch_container_path: Path):
+        app_path = os.path.join("apps", app)
+        command = f"cd {app_path} && git apply"
         if revert:
             command += " --reverse"
             
-        command += f" {patch_path}"
-        App(app, self).execute(command)
+        command += f" {patch_container_path}"
+        self.docker_execute(command)
