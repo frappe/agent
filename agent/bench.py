@@ -872,7 +872,7 @@ class Bench(Base):
         self.restart()
         
         
-    def prepare_app_patch(self, app: str, patch: str, filename: str) -> Path:
+    def prepare_app_patch(self, app: str, patch: str, filename: str) -> str:
         """
         Function returns path inside the container, the sites is
         mounted in the container at a different path from that of
@@ -890,11 +890,11 @@ class Bench(Base):
             f.write(patch)
         
         bench_container_dir = "/home/frappe/frappe-bench"
-        return Path(os.path.join(bench_container_dir, *relative, filename))
+        return os.path.join(bench_container_dir, *relative, filename)
     
 
     @step("Git Apply")
-    def git_apply(self, app: str, revert: bool, patch_container_path: Path):
+    def git_apply(self, app: str, revert: bool, patch_container_path: str):
         command = "git apply "
         if revert:
             command += "--reverse "
