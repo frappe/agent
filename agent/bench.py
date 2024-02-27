@@ -885,4 +885,4 @@ class Bench(Base):
             command += " --reverse"
             
         command += f" {patch_path}"
-        App(app, self.name).execute(command)
+        App(app, self).execute(command)
