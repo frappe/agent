@@ -136,11 +136,15 @@ class Bench(Base):
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
-    def docker_execute(self, command, input=None):
+    def docker_execute(self, command, input=None, subdir=None):
         interactive = "-i" if input else ""
+        workdir = "/home/frappe/frappe-bench"
+        if subdir:
+            workdir = os.path.join(workdir, subdir)
+
         if self.bench_config.get("single_container"):
             command = (
-                "docker exec -w /home/frappe/frappe-bench "
+                f"docker exec -w {workdir} "
                 f"{interactive} {self.name} {command}"
             )
         else:
@@ -150,7 +154,7 @@ class Bench(Base):
                 f"{service}"
             )["output"].split()[0]
             command = (
-                "docker exec -w /home/frappe/frappe-bench "
+                f"docker exec -w {workdir} "
                 f"{interactive} {service}.1.{task} {command}"
             )
         return self.execute(command, input=input)
@@ -885,17 +889,16 @@ class Bench(Base):
         with patch_path.open("w") as f:
             f.write(patch)
         
-        
         bench_container_dir = "/home/frappe/frappe-bench"
         return Path(os.path.join(bench_container_dir, *relative, filename))
     
 
     @step("Git Apply")
     def git_apply(self, app: str, revert: bool, patch_container_path: Path):
-        app_path = os.path.join("apps", app)
-        command = f"cd {app_path} && git apply"
+        command = "git apply "
         if revert:
-            command += " --reverse"
-            
-        command += f" {patch_container_path}"
-        self.docker_execute(command)
+            command += "--reverse "
+        command += patch_container_path
+
+        app_path = os.path.join("apps", app)
+        self.docker_execute(command, subdir=app_path)
