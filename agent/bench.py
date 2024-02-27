@@ -18,7 +18,7 @@ from agent.base import AgentException, Base
 from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, get_size, run_dummy_step
+from agent.utils import download_file, get_size
 
 
 class Bench(Base):
@@ -867,7 +867,7 @@ class Bench(Base):
         if build_assets:
             self.rebuild()
         else:
-            run_dummy_step("Rebuild Bench Assets")
+            self.run_dummy_step("Rebuild Bench Assets")
 
         self.restart()
         
@@ -882,15 +882,17 @@ class Bench(Base):
         patch_dir = Path(os.path.join(self.directory, *relative))
         patch_dir.mkdir(parents=True, exist_ok=True)
 
+        bench_container_dir = "/home/frappe/frappe-bench"
+        patch_container_dir = os.path.join(bench_container_dir, *relative, filename)
+
         patch_path = patch_dir / filename
         if patch_path.is_file():
-            return patch_path
+            return patch_container_dir
 
         with patch_path.open("w") as f:
             f.write(patch)
         
-        bench_container_dir = "/home/frappe/frappe-bench"
-        return os.path.join(bench_container_dir, *relative, filename)
+        return patch_container_dir
     
 
     @step("Git Apply")
@@ -902,3 +904,14 @@ class Bench(Base):
 
         app_path = os.path.join("apps", app)
         self.docker_execute(command, subdir=app_path)
+
+    def run_dummy_step(self, name: str):
+        """
+        To be used for logging purposes when
+        a step is optional and so not being 
+        actually run
+        """
+        step(name)(self.dummy)()
+        
+    def dummy(self):
+        pass

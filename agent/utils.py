@@ -49,19 +49,3 @@ def cint(x):
 def b2mb(x):
     """Return B value in MiB"""
     return ceil(cint(x) / (1024**2))
-
-
-def run_dummy_step(name):
-    """
-    To be used for logging purposes when
-    a step is optional and so not being 
-    actually run
-    """
-    from agent.job import step
-
-    @step(name)
-    def dummy():
-        pass
-    
-    return dummy()
-    
