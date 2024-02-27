@@ -18,7 +18,7 @@ from agent.base import AgentException, Base
 from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, get_size
+from agent.utils import download_file, get_size, run_dummy_step
 
 
 class Bench(Base):
@@ -859,8 +859,12 @@ class Bench(Base):
     ):
         patch_container_path = self.prepare_app_patch(app, patch, filename)
         self.git_apply(app, revert, patch_container_path)
+
         if build_assets:
             self.rebuild()
+        else:
+            run_dummy_step("Rebuild Bench Assets")
+
         self.restart()
         
         
