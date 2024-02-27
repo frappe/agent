@@ -7,6 +7,7 @@ import tempfile
 import traceback
 from datetime import datetime, timedelta
 from glob import glob
+from pathlib import Path
 from random import choices
 from typing import Dict
 
@@ -856,22 +857,32 @@ class Bench(Base):
         build_assets: bool,
         revert: bool,
     ):
-        self.git_apply(app, patch, filename, revert)
-        self.build_assets(app, build_assets)
-        print("Patch App", app, filename, build_assets, revert, patch)
+        patch_path = self.prepare_app_patch(app, patch, filename)
+        self.git_apply(app, revert, patch_path)
+        if build_assets:
+            self.rebuild()
         
-    
-    @step("Git Apply")
-    def git_apply(self, app: str, patch: str, filename: str, revert: bool):
-        # TODO: Save patch file in an patches/$app/$filename folder somewhere (if not preset)
-        # TODO: Call git apply with -R if revert
-        pass
+        
+    def prepare_app_patch(self, app: str, patch: str, filename: str) -> Path:
+        relative_path = f"~/.cache/bench/{self.name}/patches/{app}"
+        abs_path = Path(os.path.expanduser(relative_path))
+        abs_path.mkdir(parents=True, exist_ok=True)
+
+        patch_path = abs_path / filename
+        if patch_path.is_file():
+            return patch_path
+
+        with patch_path.open("w") as f:
+            f.write(patch)
+        
+        return patch_path
     
 
-    @step("Build Assets")
-    def build_assets(self, app: str, build_assets: bool):
-        # Guard clause in function to register Step.
-        if not build_assets:
-            return
-        
-        # TODO: Run build assets
+    @step("Git Apply")
+    def git_apply(self, app: str, revert: bool, patch_path: Path):
+        command = "git apply"
+        if revert:
+            command += " --reverse"
+            
+        command += f" {patch_path}"
+        App(app, self.name).execute(command)
