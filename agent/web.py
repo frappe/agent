@@ -1171,6 +1171,15 @@ def hypervisor_get_cluster(cluster):
     return Hypervisor().clusters[cluster].dump()
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines", methods=["POST"]
+)
+def hypervisor_create_machine(cluster):
+    data = request.json
+    job = Hypervisor().clusters[cluster].create_machine(**data)
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

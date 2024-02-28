@@ -35,6 +35,11 @@ class Hypervisor(Server):
         if os.path.exists(cluster.directory):
             raise Exception("Cluster already exists")
         os.makedirs(cluster.directory)
+        cluster.setconfig(
+            {
+                "machines": {},
+            }
+        )
         cluster.generate_vagrantfile()
         return cluster.show_vagrant_status()
 
@@ -78,7 +83,9 @@ class Cluster(Base):
 
     @step("Generate Vagrantfile")
     def generate_vagrantfile(self):
-        config = {}
+        config = {
+            "machines": self.config["machines"].values(),
+        }
         self.hypervisor._render_template(
             "vagrant/Vagrantfile.jinja2", config, self.vagrant_file
         )
@@ -96,6 +103,29 @@ class Cluster(Base):
     def destroy_all_machines(self):
         self.vagrant_execute("destroy -f --no-parallel")
 
+    @job("Create Machine")
+    def create_machine(self, name, image, size, network, disks, user_data):
+        self.create_machine_config(
+            name, image, size, network, disks, user_data
+        )
+        self.generate_vagrantfile()
+        return self.show_vagrant_status()
+
+    @step("Create Machine Config")
+    def create_machine_config(
+        self, name, image, size, network, disks, user_data
+    ):
+        config = self.config
+        config["machines"][name] = {
+            "name": name,
+            "image": image,
+            "size": size,
+            "network": network,
+            "disks": disks,
+            "user_data": user_data,
+        }
+        self.setconfig(config)
+
     @property
     def job_record(self):
         return self.hypervisor.job_record
@@ -107,3 +137,22 @@ class Cluster(Base):
     @step_record.setter
     def step_record(self, value):
         self.hypervisor.step_record = value
+
+
+class Machine(Base):
+    def __init__(self, name, cluster):
+        self.name = name
+        self.cluster = cluster
+
+
+    @property
+    def job_record(self):
+        return self.cluster.hypervisor.job_record
+
+    @property
+    def step_record(self):
+        return self.cluster.hypervisor.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.cluster.hypervisor.step_record = value
