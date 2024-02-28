@@ -19,6 +19,9 @@ Vagrant.configure("2") do |config|
             libvirt.cpus = {{ machine.size.cpus }}
             libvirt.memory = {{ machine.size.memory }}
             libvirt.machine_virtual_size = {{ machine.disks[0].size }}
+            {% for disk in machine.disks[1:] %}
+                libvirt.storage :file, :size => "{{ disk }}G", :type => "raw", :device => "{{ disk.device }}"
+            {% endfor %}
         end
     end
     {% endfor %}
