@@ -1180,6 +1180,14 @@ def hypervisor_create_machine(cluster):
     return {"job": job}
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>",
+    methods=["GET"],
+)
+def hypervisor_get_machine(cluster, machine):
+    return Hypervisor().clusters[cluster].machines[machine].dump()
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
