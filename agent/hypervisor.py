@@ -82,6 +82,7 @@ class Cluster(Base):
         self.hypervisor._render_template(
             "vagrant/Vagrantfile.jinja2", config, self.vagrant_file
         )
+        self.vagrant_execute("validate")
 
     @step("Show Vagrant Status")
     def show_vagrant_status(self):
