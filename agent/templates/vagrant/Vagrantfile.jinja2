@@ -4,6 +4,14 @@ Vagrant.configure("2") do |config|
     # Disable default synced folder
     config.vm.synced_folder ".", "/vagrant", disabled: true
 
+    config.vm.provider :libvirt do |libvirt|
+        libvirt.qemu_use_session = false
+        libvirt.driver = "kvm"
+        # VMs with little disk space may fail to boot
+        libvirt.machine_virtual_size = 16
+
+        libvirt.cpu_mode = "host-passthrough"
+    end
     {% for machine in machines %}
     config.vm.define "{{ machine.name }}" do |machine|
         machine.vm.hostname = "{{ machine.name }}"
