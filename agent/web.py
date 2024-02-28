@@ -1188,6 +1188,15 @@ def hypervisor_get_machine(cluster, machine):
     return Hypervisor().clusters[cluster].machines[machine].dump()
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>",
+    methods=["DELETE"],
+)
+def hypervisor_delete_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].delete_machine(machine)
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

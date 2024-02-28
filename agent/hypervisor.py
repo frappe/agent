@@ -133,6 +133,18 @@ class Cluster(Base):
         }
         self.setconfig(config)
 
+    @job("Delete Machine")
+    def delete_machine(self, name):
+        self.delete_machine_config(name)
+        self.generate_vagrantfile()
+        return self.show_vagrant_status()
+
+    @step("Delete Machine Config")
+    def delete_machine_config(self, name):
+        config = self.config
+        config["machines"].pop(name)
+        self.setconfig(config)
+
     @property
     def machines(self):
         return {
