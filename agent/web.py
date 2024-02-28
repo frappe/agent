@@ -7,6 +7,7 @@ from base64 import b64decode
 from flask import Flask, jsonify, request
 from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import DoesNotExist
 from functools import wraps
 
 
@@ -995,7 +996,10 @@ def to_dict(model):
 def jobs(id=None, ids=None, status=None):
     choices = [x[1] for x in JobModel._meta.fields["status"].choices]
     if id:
-        job = to_dict(JobModel.get(JobModel.id == id))
+        try:
+            job = to_dict(JobModel.get(JobModel.id == id))
+        except DoesNotExist:
+            return {"message": f"Job {id} not found"}, 404
     elif ids:
         ids = ids.split(",")
         job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
