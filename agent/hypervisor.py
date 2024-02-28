@@ -48,6 +48,7 @@ class Cluster(Base):
         self.name = name
         self.hypervisor = hypervisor
         self.directory = os.path.join(self.hypervisor.vagrant_directory, name)
+        self.config_file = os.path.join(self.directory, "config.json")
         self.vagrant_file = os.path.join(self.directory, "Vagrantfile")
 
     def vagrant_execute(self, command, directory=None):
