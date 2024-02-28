@@ -1206,6 +1206,33 @@ def hypervisor_start_machine(cluster, machine):
     return {"job": job}
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/stop",
+    methods=["POST"],
+)
+def hypervisor_stop_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].stop_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/terminate",
+    methods=["POST"],
+)
+def hypervisor_terminate_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].terminate_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/reboot",
+    methods=["POST"],
+)
+def hypervisor_reboot_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].reboot_job()
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

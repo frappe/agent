@@ -187,6 +187,30 @@ class Machine(Base):
     def start(self):
         return self.vagrant_execute("up")
 
+    @job("Stop Machine")
+    def stop_job(self):
+        return self.stop()
+
+    @step("Stop Machine")
+    def stop(self):
+        return self.vagrant_execute("halt -f")
+
+    @job("Reboot Machine")
+    def reboot_job(self):
+        return self.reboot()
+
+    @step("Reboot Machine")
+    def reboot(self):
+        return self.vagrant_execute("reload -f")
+
+    @job("Terminate Machine")
+    def terminate_job(self):
+        return self.terminate()
+
+    @step("Terminate Machine")
+    def terminate(self):
+        return self.vagrant_execute("destroy -f")
+
     @property
     def job_record(self):
         return self.cluster.hypervisor.job_record
