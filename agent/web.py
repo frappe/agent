@@ -1197,6 +1197,15 @@ def hypervisor_delete_machine(cluster, machine):
     return {"job": job}
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/start",
+    methods=["POST"],
+)
+def hypervisor_start_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].start_job()
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

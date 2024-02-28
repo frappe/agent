@@ -170,11 +170,22 @@ class Machine(Base):
         self.name = name
         self.cluster = cluster
 
+    def vagrant_execute(self, command):
+        command = f"vagrant {command} {self.name}"
+        return self.execute(command, directory=self.cluster.directory)
+
     def dump(self):
         return {
             "name": self.name,
         }
 
+    @job("Start Machine")
+    def start_job(self):
+        return self.start()
+
+    @step("Start Machine")
+    def start(self):
+        return self.vagrant_execute("up")
 
     @property
     def job_record(self):
