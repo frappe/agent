@@ -116,6 +116,9 @@ class Cluster(Base):
         self.vagrant_file = os.path.join(self.directory, "Vagrantfile")
 
     def dump(self):
+        self._parse_vagrant_status(
+            self.vagrant_execute("--machine-readable status")["output"]
+        )
         return {
             "name": self.name,
             "machines": {
@@ -125,6 +128,9 @@ class Cluster(Base):
                 }
                 for name, machine in self.config["machines"].items()
             },
+            "status": self._parse_vagrant_status(
+                self.vagrant_execute("--machine-readable status")["output"]
+            ),
         }
 
     def vagrant_execute(self, command, directory=None):
@@ -209,6 +215,20 @@ class Cluster(Base):
     def step_record(self, value):
         self.hypervisor.step_record = value
 
+    def _parse_vagrant_status(self, output):
+        parsed = self.hypervisor._parse_vagrant_machine_readable(output)
+        statuses = []
+        for target, rows in groupby(parsed, itemgetter("target")):
+            status = {row["type"]: row["data"] for row in rows}
+            statuses.append(
+                {
+                    "name": target,
+                    "state": status.get("state"),
+                    "provider": status.get("provider-name"),
+                }
+            )
+        return statuses
+
 
 class Machine(Base):
     def __init__(self, name, cluster):
@@ -222,6 +242,11 @@ class Machine(Base):
     def dump(self):
         return {
             "name": self.name,
+            "status": self.cluster._parse_vagrant_status(
+                self.vagrant_execute(f"--machine-readable status {self.name}")[
+                    "output"
+                ]
+            ),
         }
 
     @job("Start Machine")
