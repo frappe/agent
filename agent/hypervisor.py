@@ -75,6 +75,13 @@ class Cluster(Base):
     def dump(self):
         return {
             "name": self.name,
+            "machines": {
+                name: {
+                    "machine": Machine(name, self).dump(),
+                    "config": machine,
+                }
+                for name, machine in self.config["machines"].items()
+            },
         }
 
     def vagrant_execute(self, command, directory=None):
@@ -127,6 +134,13 @@ class Cluster(Base):
         self.setconfig(config)
 
     @property
+    def machines(self):
+        return {
+            machine: Machine(machine, self)
+            for machine in self.config.get("machines", [])
+        }
+
+    @property
     def job_record(self):
         return self.hypervisor.job_record
 
@@ -143,6 +157,11 @@ class Machine(Base):
     def __init__(self, name, cluster):
         self.name = name
         self.cluster = cluster
+
+    def dump(self):
+        return {
+            "name": self.name,
+        }
 
 
     @property
