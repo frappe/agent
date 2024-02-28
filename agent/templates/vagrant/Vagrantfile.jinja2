@@ -23,6 +23,8 @@ Vagrant.configure("2") do |config|
                 libvirt.storage :file, :size => "{{ disk }}G", :type => "raw", :device => "{{ disk.device }}"
             {% endfor %}
         end
+        machine.vm.network "private_network", ip: "{{ machine.network.public_ip }}", netmask: "255.255.0.0"
+        machine.vm.network "private_network", ip: "{{ machine.network.private_ip }}", netmask: "255.255.0.0"
     end
     {% endfor %}
 end
