@@ -1,8 +1,20 @@
 import os
 import shutil
+from csv import DictReader
+from itertools import groupby
+from operator import itemgetter
+
 from agent.job import job, step
 from agent.server import Server
 from agent.base import Base
+
+IGNORE_VAGRANT_TYPES = [
+    "action",
+    "box-info",
+    "Description",
+    "metadata",
+    "ui",
+]
 
 
 class Hypervisor(Server):
@@ -21,6 +33,11 @@ class Hypervisor(Server):
             "clusters": {
                 name: cluster.dump() for name, cluster in self.clusters.items()
             },
+            "global-status": self._parse_vagrant_global_status(
+                self.vagrant_execute("--machine-readable global-status")[
+                    "output"
+                ]
+            ),
         }
 
     def vagrant_execute(self, command, directory=None):
@@ -62,6 +79,32 @@ class Hypervisor(Server):
             if os.path.isdir(os.path.join(self.vagrant_directory, directory)):
                 clusters[directory] = Cluster(directory, self)
         return clusters
+
+    def _parse_vagrant_machine_readable(self, output):
+        parsed = DictReader(
+            output.splitlines(),
+            fieldnames=["timestamp", "target", "type", "data"],
+        )
+        parsed = list(
+            filter(lambda row: row["type"] not in IGNORE_VAGRANT_TYPES, parsed)
+        )
+        return parsed
+
+    def _parse_vagrant_global_status(self, output):
+        statuses = []
+        status = {}
+        for row in self._parse_vagrant_machine_readable(output):
+            KIND_MAP = {
+                "machine-id": "name",
+                "state": "state",
+                "machine-home": "home",
+                "provider-name": "provider",
+            }
+            status[KIND_MAP[row["type"]]] = row["data"]
+            if len(status) == 4:
+                statuses.append(status)
+                status = {}
+        return statuses
 
 
 class Cluster(Base):
