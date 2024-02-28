@@ -1166,6 +1166,11 @@ def hypervisor_get():
     return Hypervisor().dump()
 
 
+@application.route("/hypervisor/clusters/<string:cluster>", methods=["GET"])
+def hypervisor_get_cluster(cluster):
+    return Hypervisor().clusters[cluster].dump()
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
