@@ -135,6 +135,8 @@ class Cluster(Base):
 
     @job("Delete Machine")
     def delete_machine(self, name):
+        machine = Machine(name, self)
+        machine.terminate()
         self.delete_machine_config(name)
         self.generate_vagrantfile()
         return self.show_vagrant_status()
