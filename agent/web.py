@@ -1161,6 +1161,11 @@ def hypervisor_delete_cluster(cluster):
     return {"job": job}
 
 
+@application.route("/hypervisor", methods=["GET"])
+def hypervisor_get():
+    return Hypervisor().dump()
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

@@ -15,6 +15,14 @@ class Hypervisor(Server):
         self.job = None
         self.step = None
 
+    def dump(self):
+        return {
+            "name": self.name,
+            "clusters": {
+                name: cluster.dump() for name, cluster in self.clusters.items()
+            },
+        }
+
     def vagrant_execute(self, command, directory=None):
         command = f"vagrant {command}"
         return self.execute(
@@ -42,6 +50,14 @@ class Hypervisor(Server):
     def show_vagrant_global_status(self):
         self.vagrant_execute("global-status")
 
+    @property
+    def clusters(self):
+        clusters = {}
+        for directory in os.listdir(self.vagrant_directory):
+            if os.path.isdir(os.path.join(self.vagrant_directory, directory)):
+                clusters[directory] = Cluster(directory, self)
+        return clusters
+
 
 class Cluster(Base):
     def __init__(self, name, hypervisor, mounts=None):
@@ -50,6 +66,11 @@ class Cluster(Base):
         self.directory = os.path.join(self.hypervisor.vagrant_directory, name)
         self.config_file = os.path.join(self.directory, "config.json")
         self.vagrant_file = os.path.join(self.directory, "Vagrantfile")
+
+    def dump(self):
+        return {
+            "name": self.name,
+        }
 
     def vagrant_execute(self, command, directory=None):
         command = f"vagrant {command}"
