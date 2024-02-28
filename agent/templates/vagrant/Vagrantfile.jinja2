@@ -1,4 +1,6 @@
 Vagrant.configure("2") do |config|
+    config.vm.box = "backbone"
+
     {% for machine in machines %}
     config.vm.define "{{ machine.name }}" do |machine|
         machine.vm.hostname = "{{ machine.name }}"
