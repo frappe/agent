@@ -1233,6 +1233,16 @@ def hypervisor_reboot_machine(cluster, machine):
     return {"job": job}
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/resize",
+    methods=["POST"],
+)
+def hypervisor_resize_machine(cluster, machine):
+    data = request.json
+    job = Hypervisor().clusters[cluster].machines[machine].resize_job(data)
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

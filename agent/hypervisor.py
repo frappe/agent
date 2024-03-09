@@ -196,6 +196,12 @@ class Cluster(Base):
         config["machines"].pop(name)
         self.setconfig(config)
 
+    @step("Update Machine Config")
+    def update_machine_config(self, name, new_config):
+        config = self.config
+        config["machines"][name].update(new_config)
+        self.setconfig(config)
+
     @property
     def machines(self):
         return {
@@ -271,6 +277,16 @@ class Machine(Base):
 
     @step("Reboot Machine")
     def reboot(self):
+        return self.vagrant_execute("reload -f")
+
+    @job("Resize Machine")
+    def resize_job(self, size):
+        self.cluster.update_machine_config(self.name, {"size": size})
+        self.cluster.generate_vagrantfile()
+        return self.reload()
+
+    @step("Reload Machine")
+    def reload(self):
         return self.vagrant_execute("reload -f")
 
     @job("Terminate Machine")
