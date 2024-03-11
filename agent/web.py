@@ -5,11 +5,11 @@ import sys
 import traceback
 import uuid
 from base64 import b64decode
+from functools import wraps
 
 from flask import Flask, jsonify, request
-from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
-from functools import wraps
+from playhouse.shortcuts import model_to_dict
 
 from agent.builder import get_image_build_context_directory, ImageBuilder
 from agent.proxy import Proxy
@@ -18,11 +18,10 @@ from agent.job import JobModel, connection
 from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
-from agent.proxysql import ProxySQL
-from agent.minio import Minio
-from agent.security import Security
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
-
+from agent.minio import Minio
+from agent.proxysql import ProxySQL
+from agent.security import Security
 
 application = Flask(__name__)
 
@@ -1157,6 +1156,24 @@ def stop_code_server(bench):
 @validate_bench
 def archive_code_server(bench):
     job = Server().benches[bench].archive_code_server()
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/patch/<string:app>", methods=["POST"])
+@validate_bench
+def patch_app(bench, app):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .patch_app(
+            app,
+            data["patch"],
+            data["filename"],
+            data["build_assets"],
+            data["revert"],
+        )
+    )
     return {"job": job}
 
 
