@@ -27,7 +27,7 @@ Vagrant.configure("2") do |config|
             libvirt.memory = {{ machine.size.memory }}
             libvirt.machine_virtual_size = {{ machine.disks[0].size }}
             {% for disk in machine.disks[1:] %}
-                libvirt.storage :file, :size => "{{ disk.size }}G", :type => "raw", :device => "{{ disk.device }}"
+                libvirt.storage :file, :size => "{{ disk.size }}G", :type => "raw"{% if disk.device %}, :device => "{{ disk.device }}"{% endif %}
             {% endfor %}
         end
         machine.vm.network "private_network", ip: "{{ machine.network.public_ip }}", netmask: "255.255.0.0"
