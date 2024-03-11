@@ -1277,6 +1277,21 @@ def hypervisor_resize_machine(cluster, machine):
     return {"job": job}
 
 
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/disks/<int:index>/resize",
+    methods=["POST"],
+)
+def hypervisor_resize_disk(cluster, machine, index):
+    data = request.json
+    job = (
+        Hypervisor()
+        .clusters[cluster]
+        .machines[machine]
+        .resize_disk_job(index, data["size"])
+    )
+    return {"job": job}
+
+
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {

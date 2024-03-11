@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 from csv import DictReader
@@ -252,9 +253,12 @@ class Machine(Base):
         self.name = name
         self.cluster = cluster
 
+    def execute(self, command):
+        return super().execute(command, directory=self.cluster.directory)
+
     def vagrant_execute(self, command):
         command = f"vagrant {command} {self.name}"
-        return self.execute(command, directory=self.cluster.directory)
+        return self.execute(command)
 
     def dump(self):
         return {
@@ -307,6 +311,36 @@ class Machine(Base):
     @step("Terminate Machine")
     def terminate(self):
         return self.vagrant_execute("destroy -f")
+
+    @job("Resize Disk")
+    def resize_disk_job(self, index, size):
+        disks = self.cluster.config["machines"][self.name]["disks"]
+        disks[index]["size"] = size
+        self.cluster.update_machine_config(self.name, {"disks": disks})
+        self.cluster.generate_vagrantfile()
+        return self.resize_disk(index, size)
+
+    @step("Resize Disk")
+    def resize_disk(self, index, size):
+        payload = {
+            "execute": "query-block",
+        }
+        disks = json.loads(
+            self.execute(
+                f"virsh qemu-monitor-command {self.name} '{json.dumps(payload)}'"
+            )["output"]
+        )
+        node = disks["return"][index]["inserted"]["node-name"]
+        payload = {
+            "execute": "block_resize",
+            "arguments": {
+                "node-name": node,
+                "size": size * (10**9),
+            },
+        }
+        return self.execute(
+            f"virsh qemu-monitor-command {self.name} '{json.dumps(payload)}'"
+        )
 
     @property
     def job_record(self):
