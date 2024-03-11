@@ -8,6 +8,7 @@ import string
 import tempfile
 import traceback
 
+from filelock import FileLock
 from random import choices
 from glob import glob
 from datetime import datetime, timedelta
@@ -171,7 +172,9 @@ class Bench(Base):
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @job("Rename Site", priority="high")
-    def rename_site_job(self, site: str, new_name: str, create_user: dict=None):
+    def rename_site_job(
+        self, site: str, new_name: str, create_user: dict = None
+    ):
         try:
             site = Site(site, self)
         except OSError:
@@ -484,9 +487,11 @@ class Bench(Base):
             "code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
-        self.server._render_template(
-            "bench/nginx.conf.jinja2", config, nginx_config
-        )
+
+        with FileLock(nginx_config + ".lock"):
+            self.server._render_template(
+                "bench/nginx.conf.jinja2", config, nginx_config
+            )
 
     @step("Bench Disable Production")
     def disable_production(self):
@@ -585,8 +590,12 @@ class Bench(Base):
                 "environment_variables": self.bench_config.get(
                     "environment_variables"
                 ),
-                "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
-                "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False)
+                "gunicorn_threads_per_worker": self.bench_config.get(
+                    "gunicorn_threads_per_worker"
+                ),
+                "is_code_server_enabled": self.bench_config.get(
+                    "is_code_server_enabled", False
+                ),
             },
             supervisor_config,
         )
@@ -652,9 +661,9 @@ class Bench(Base):
         code_server_path = os.path.join(self.directory, "codeserver")
         shutil.rmtree(code_server_path)
         self.docker_execute("supervisorctl stop code-server:")
-    
+
     def prepare_mounts_on_host(self, bench_directory):
-        mounts_cmd = ''
+        mounts_cmd = ""
 
         if not self.mounts:
             return mounts_cmd
@@ -664,21 +673,25 @@ class Bench(Base):
                 os.mkdir(host_path)
 
         for mp in self.mounts:
-            host_path = mp['source']
-            destination_path = mp['destination']
+            host_path = mp["source"]
+            destination_path = mp["destination"]
 
-            if not mp['is_absolute_path']:
-                '''
-                    self.server.benches_directory = /home/frappe/benches (Host)
-                    bench_directory = "/home/frappe/frappe-bench" (container)
-                '''
-                host_path = os.path.join(self.server.benches_directory, mp['source'])
-                destination_path = os.path.join(bench_directory, mp['destination'])
+            if not mp["is_absolute_path"]:
+                """
+                self.server.benches_directory = /home/frappe/benches (Host)
+                bench_directory = "/home/frappe/frappe-bench" (container)
+                """
+                host_path = os.path.join(
+                    self.server.benches_directory, mp["source"]
+                )
+                destination_path = os.path.join(
+                    bench_directory, mp["destination"]
+                )
 
                 _create_mounts(host_path)
 
-            mounts_cmd += f' -v {host_path}:{destination_path} '
-        
+            mounts_cmd += f" -v {host_path}:{destination_path} "
+
         return mounts_cmd
 
     def start(self):
