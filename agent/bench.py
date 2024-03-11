@@ -587,6 +587,9 @@ class Bench(Base):
                 "merge_default_and_short_rq_queues": self.bench_config.get(
                     "merge_default_and_short_rq_queues", False
                 ),
+                "use_rq_workerpool": self.bench_config.get(
+                    "use_rq_workerpool", False
+                ),
                 "environment_variables": self.bench_config.get(
                     "environment_variables"
                 ),
@@ -825,6 +828,10 @@ class Bench(Base):
     @property
     def step_record(self):
         return self.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.server.step_record = value
 
     def get_usage(self):
         return {

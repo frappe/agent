@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import sys
 import traceback
+import uuid
 from base64 import b64decode
 
 from flask import Flask, jsonify, request
@@ -9,10 +11,10 @@ from playhouse.shortcuts import model_to_dict
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from functools import wraps
 
-
+from agent.builder import get_image_build_context_directory, ImageBuilder
 from agent.proxy import Proxy
 from agent.ssh import SSHProxy
-from agent.job import JobModel
+from agent.job import JobModel, connection
 from agent.server import Server
 from agent.monitor import Monitor
 from agent.database import DatabaseServer
@@ -132,6 +134,21 @@ POST /benches
 def ping():
     return {"message": "pong"}
 
+
+@application.route("/builder/upload", methods=["POST"])
+def upload_build_context_for_image_builder():
+    if "build_context_file" not in request.files:
+        return {"message": "No file part"}, 400
+    build_context_file = request.files["build_context_file"]
+    filename = f"{uuid.uuid4()}.tar.gz"
+    build_context_file.save(os.path.join(get_image_build_context_directory(), filename))
+    return {"filename": filename}
+
+@application.route("/builder/build", methods=["POST"])
+def build_image():
+    data = request.json
+    job = ImageBuilder(**data).build_and_push_image()
+    return {"job": job}
 
 @application.route("/server")
 def get_server():
@@ -255,7 +272,9 @@ def retrieve_ssh_session_log(filename):
     return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"]
+)
 @validate_bench_and_site
 def get_site_sid(bench, site):
     data = request.json or {}
@@ -271,7 +290,6 @@ def new_bench():
 
 
 @application.route("/benches/<string:bench>/archive", methods=["POST"])
-@validate_bench
 def archive_bench(bench):
     job = Server().archive_bench(bench)
     return {"job": job}
@@ -400,7 +418,11 @@ def reinstall_site(bench, site):
 @validate_bench_and_site
 def rename_site(bench, site):
     data = request.json
-    job = Server().benches[bench].rename_site_job(site, data["new_name"], data.get("create_user"))
+    job = (
+        Server()
+        .benches[bench]
+        .rename_site_job(site, data["new_name"], data.get("create_user"))
+    )
     return {"job": job}
 
 
@@ -958,11 +980,25 @@ def proxysql_remove_user(username):
 
 
 def to_dict(model):
+    redis = connection()
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         job["data"] = json.loads(job["data"]) or {}
+        job_key = f"agent:job:{job['id']}"
+        job["commands"] = [
+            json.loads(command) for command in redis.lrange(job_key, 0, -1)
+        ]
         for step in job["steps"]:
             step["data"] = json.loads(step["data"]) or {}
+            step_key = f"{job_key}:step:{step['id']}"
+            step["commands"] = [
+                json.loads(command)
+                for command in redis.lrange(
+                    step_key,
+                    0,
+                    -1,
+                )
+            ]
     else:
         job = list(map(model_to_dict, model))
     return job

@@ -91,10 +91,12 @@ class Site(Base):
     def install_app(self, app):
         try:
             return self.bench_execute(f"install-app {app} --force")
-        except AgentException:
-            return self.bench_execute(
-                f"install-app {app}"
-            )  # not available in v13
+        except AgentException as e:
+            if "Error: no such option: --force" in e.data["output"]:
+                return self.bench_execute(
+                    f"install-app {app}"
+                )  # not available in < v14
+            raise
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
@@ -335,9 +337,7 @@ class Site(Base):
 
     @step("Create User")
     def create_user(self, email, first_name, last_name, password=None):
-        command = (
-            f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
-        )
+        command = f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         if password:
             command += f" --password {password}"
         return self.bench_execute(command)
@@ -636,8 +636,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def tables(self):
         return self.execute(
             "mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-h {self.host} -u {self.user} -p{self.password} {self.database}",
-            remove_crs=False,
+            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -823,3 +822,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def step_record(self):
         return self.bench.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.bench.server.step_record = value
