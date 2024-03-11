@@ -165,7 +165,9 @@ class Cluster(Base):
             name, image, size, network, disks, user_data
         )
         self.generate_vagrantfile()
-        return self.show_vagrant_status()
+        self.show_vagrant_status()
+        machine = Machine(name, self)
+        return machine.start()
 
     @step("Create Machine Config")
     def create_machine_config(
