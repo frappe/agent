@@ -204,6 +204,15 @@ class Cluster(Base):
         config["machines"][name].update(new_config)
         self.setconfig(config)
 
+    @job("Reload Cluster")
+    def reload_job(self):
+        self.generate_vagrantfile()
+        return self.reload()
+
+    @step("Reload Cluster")
+    def reload(self):
+        return self.vagrant_execute("reload -f")
+
     @property
     def machines(self):
         return {

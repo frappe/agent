@@ -1172,6 +1172,14 @@ def hypervisor_get_cluster(cluster):
 
 
 @application.route(
+    "/hypervisor/clusters/<string:cluster>/reload", methods=["POST"]
+)
+def hypervisor_reload_cluster(cluster):
+    job = Hypervisor().clusters[cluster].reload_job()
+    return {"job": job}
+
+
+@application.route(
     "/hypervisor/clusters/<string:cluster>/machines", methods=["POST"]
 )
 def hypervisor_create_machine(cluster):
