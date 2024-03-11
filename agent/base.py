@@ -155,6 +155,11 @@ class Base:
         if self.skip_output_log:
             data.update({"output": ""})
         print(json.dumps(data, default=str))
+        if not os.environ.get("SUPERVISOR_ENABLED"):
+            if data.get("output"):
+                print(data.get("output"))
+            if data.get("traceback"):
+                print(data.get("traceback"))
         self.update_redis()
 
     @property
