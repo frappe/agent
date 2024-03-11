@@ -5,6 +5,10 @@ import shutil
 import string
 import tempfile
 import traceback
+
+from filelock import FileLock
+from random import choices
+from glob import glob
 from datetime import datetime, timedelta
 from glob import glob
 from pathlib import Path
@@ -491,9 +495,11 @@ class Bench(Base):
             "code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
-        self.server._render_template(
-            "bench/nginx.conf.jinja2", config, nginx_config
-        )
+
+        with FileLock(nginx_config + ".lock"):
+            self.server._render_template(
+                "bench/nginx.conf.jinja2", config, nginx_config
+            )
 
     @step("Bench Disable Production")
     def disable_production(self):
