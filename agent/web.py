@@ -1179,6 +1179,32 @@ def hypervisor_reload_cluster(cluster):
     return {"job": job}
 
 
+"""
+POST /machines
+{
+    "name": "bench-1",
+    "image": "backbone",
+    "size": {
+        "memory": 2048,
+        "cpus": 2,
+    }
+    "disk": [
+        {
+            "size": 20,
+        },
+        {
+            "size": 5,
+        }
+    ]
+    "network": {
+        "public_ip_address": "10.0.0.1,
+        "private_ip_address": "10.1.0.1,
+    }
+    "user_data": "<base64_encoded_string>"
+}
+"""
+
+
 @application.route(
     "/hypervisor/clusters/<string:cluster>/machines", methods=["POST"]
 )
