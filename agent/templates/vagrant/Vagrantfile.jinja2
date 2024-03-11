@@ -4,9 +4,16 @@ Vagrant.configure("2") do |config|
     # Disable default synced folder
     config.vm.synced_folder ".", "/vagrant", disabled: true
 
+    # This let's us access all guests with their names from host and other guests
+    # config.hostmanager.enabled = true
+    # config.hostmanager.manage_host = true
+    # config.hostmanager.manage_guest = true
+
     config.vm.provider :libvirt do |libvirt|
         libvirt.qemu_use_session = false
         libvirt.driver = "kvm"
+        libvirt.default_prefix = ""
+
         # VMs with little disk space may fail to boot
         libvirt.machine_virtual_size = 16
 
@@ -20,7 +27,7 @@ Vagrant.configure("2") do |config|
             libvirt.memory = {{ machine.size.memory }}
             libvirt.machine_virtual_size = {{ machine.disks[0].size }}
             {% for disk in machine.disks[1:] %}
-                libvirt.storage :file, :size => "{{ disk }}G", :type => "raw", :device => "{{ disk.device }}"
+                libvirt.storage :file, :size => "{{ disk.size }}G", :type => "raw", :device => "{{ disk.device }}"
             {% endfor %}
         end
         machine.vm.network "private_network", ip: "{{ machine.network.public_ip }}", netmask: "255.255.0.0"
