@@ -446,7 +446,8 @@ class Bench(Base):
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
-        self.generate_nginx_config()
+        with FileLock(os.path.join(self.directory, "nginx.config.lock")):
+            self.generate_nginx_config()
         self.server._reload_nginx()
 
     def generate_nginx_config(self):
@@ -496,10 +497,9 @@ class Bench(Base):
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
-        with FileLock(nginx_config + ".lock"):
-            self.server._render_template(
-                "bench/nginx.conf.jinja2", config, nginx_config
-            )
+        self.server._render_template(
+            "bench/nginx.conf.jinja2", config, nginx_config
+        )
 
     @step("Bench Disable Production")
     def disable_production(self):
