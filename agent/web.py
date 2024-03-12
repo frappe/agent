@@ -10,6 +10,7 @@ from functools import wraps
 from flask import Flask, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
+from peewee import DoesNotExist
 
 from agent.builder import get_image_build_context_directory, ImageBuilder
 from agent.proxy import Proxy
@@ -22,6 +23,8 @@ from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 from agent.minio import Minio
 from agent.proxysql import ProxySQL
 from agent.security import Security
+from agent.hypervisor import Hypervisor
+
 
 application = Flask(__name__)
 
@@ -140,14 +143,18 @@ def upload_build_context_for_image_builder():
         return {"message": "No file part"}, 400
     build_context_file = request.files["build_context_file"]
     filename = f"{uuid.uuid4()}.tar.gz"
-    build_context_file.save(os.path.join(get_image_build_context_directory(), filename))
+    build_context_file.save(
+        os.path.join(get_image_build_context_directory(), filename)
+    )
     return {"filename": filename}
+
 
 @application.route("/builder/build", methods=["POST"])
 def build_image():
     data = request.json
     job = ImageBuilder(**data).build_and_push_image()
     return {"job": job}
+
 
 @application.route("/server")
 def get_server():
@@ -1010,7 +1017,10 @@ def to_dict(model):
 def jobs(id=None, ids=None, status=None):
     choices = [x[1] for x in JobModel._meta.fields["status"].choices]
     if id:
-        job = to_dict(JobModel.get(JobModel.id == id))
+        try:
+            job = to_dict(JobModel.get(JobModel.id == id))
+        except DoesNotExist:
+            return {"message": f"Job {id} not found"}, 404
     elif ids:
         ids = ids.split(",")
         job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
@@ -1159,7 +1169,153 @@ def archive_code_server(bench):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/patch/<string:app>", methods=["POST"])
+@application.route("/hypervisor/clusters", methods=["POST"])
+def hypervisor_create_cluster():
+    data = request.json
+    job = Hypervisor().create_cluster(**data)
+    return {"job": job}
+
+
+@application.route("/hypervisor/clusters/<string:cluster>", methods=["DELETE"])
+def hypervisor_delete_cluster(cluster):
+    job = Hypervisor().delete_cluster(cluster)
+    return {"job": job}
+
+
+@application.route("/hypervisor", methods=["GET"])
+def hypervisor_get():
+    return Hypervisor().dump()
+
+
+@application.route("/hypervisor/clusters/<string:cluster>", methods=["GET"])
+def hypervisor_get_cluster(cluster):
+    return Hypervisor().clusters[cluster].dump()
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/reload", methods=["POST"]
+)
+def hypervisor_reload_cluster(cluster):
+    job = Hypervisor().clusters[cluster].reload_job()
+    return {"job": job}
+
+
+"""
+POST /machines
+{
+    "name": "bench-1",
+    "image": "backbone",
+    "size": {
+        "memory": 2048,
+        "cpus": 2,
+    }
+    "disk": [
+        {
+            "size": 20,
+        },
+        {
+            "size": 5,
+        }
+    ]
+    "network": {
+        "public_ip_address": "10.0.0.1,
+        "private_ip_address": "10.1.0.1,
+    }
+    "user_data": "<base64_encoded_string>"
+}
+"""
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines", methods=["POST"]
+)
+def hypervisor_create_machine(cluster):
+    data = request.json
+    job = Hypervisor().clusters[cluster].create_machine(**data)
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>",
+    methods=["GET"],
+)
+def hypervisor_get_machine(cluster, machine):
+    return Hypervisor().clusters[cluster].machines[machine].dump()
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>",
+    methods=["DELETE"],
+)
+def hypervisor_delete_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].delete_machine(machine)
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/start",
+    methods=["POST"],
+)
+def hypervisor_start_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].start_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/stop",
+    methods=["POST"],
+)
+def hypervisor_stop_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].stop_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/terminate",
+    methods=["POST"],
+)
+def hypervisor_terminate_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].terminate_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/reboot",
+    methods=["POST"],
+)
+def hypervisor_reboot_machine(cluster, machine):
+    job = Hypervisor().clusters[cluster].machines[machine].reboot_job()
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/resize",
+    methods=["POST"],
+)
+def hypervisor_resize_machine(cluster, machine):
+    data = request.json
+    job = Hypervisor().clusters[cluster].machines[machine].resize_job(data)
+    return {"job": job}
+
+
+@application.route(
+    "/hypervisor/clusters/<string:cluster>/machines/<string:machine>/disks/<int:index>/resize",
+    methods=["POST"],
+)
+def hypervisor_resize_disk(cluster, machine, index):
+    data = request.json
+    job = (
+        Hypervisor()
+        .clusters[cluster]
+        .machines[machine]
+        .resize_disk_job(index, data["size"])
+    )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/patch/<string:app>", methods=["POST"]
+)
 @validate_bench
 def patch_app(bench, app):
     data = request.json

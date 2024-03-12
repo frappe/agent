@@ -57,6 +57,7 @@ def config(name, user, workers, proxy_ip=None):
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
+        "vagrant_directory": f"/home/{user}/agent/vagrant",
         "redis_port": 25025,
         "user": user,
         "workers": workers,
