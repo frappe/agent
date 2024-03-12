@@ -1,23 +1,28 @@
 import hashlib
-import os
 import json
+import os
 import shutil
-from typing import Dict
-import requests
 import string
 import tempfile
 import traceback
 
+from filelock import FileLock
 from random import choices
 from glob import glob
 from datetime import datetime, timedelta
+from glob import glob
+from pathlib import Path
+from random import choices
+from typing import Dict
+
+import requests
 
 from agent.app import App
 from agent.base import AgentException, Base
+from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, get_size
-from agent.exceptions import SiteNotExistsException
 
 
 class Bench(Base):
@@ -135,11 +140,15 @@ class Bench(Base):
     def execute(self, command, input=None):
         return super().execute(command, directory=self.directory, input=input)
 
-    def docker_execute(self, command, input=None):
+    def docker_execute(self, command, input=None, subdir=None):
         interactive = "-i" if input else ""
+        workdir = "/home/frappe/frappe-bench"
+        if subdir:
+            workdir = os.path.join(workdir, subdir)
+
         if self.bench_config.get("single_container"):
             command = (
-                "docker exec -w /home/frappe/frappe-bench "
+                f"docker exec -w {workdir} "
                 f"{interactive} {self.name} {command}"
             )
         else:
@@ -149,7 +158,7 @@ class Bench(Base):
                 f"{service}"
             )["output"].split()[0]
             command = (
-                "docker exec -w /home/frappe/frappe-bench "
+                f"docker exec -w {workdir} "
                 f"{interactive} {service}.1.{task} {command}"
             )
         return self.execute(command, input=input)
@@ -437,7 +446,8 @@ class Bench(Base):
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
-        self.generate_nginx_config()
+        with FileLock(os.path.join(self.directory, "nginx.config.lock")):
+            self.generate_nginx_config()
         self.server._reload_nginx()
 
     def generate_nginx_config(self):
@@ -486,6 +496,7 @@ class Bench(Base):
             "code_server": codeserver,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
+
         self.server._render_template(
             "bench/nginx.conf.jinja2", config, nginx_config
         )
@@ -846,3 +857,67 @@ class Bench(Base):
     def set_bench_config(self, value, indent=1):
         with open(self.bench_config_file, "w") as f:
             json.dump(value, f, indent=indent, sort_keys=True)
+
+    @job("Patch App")
+    def patch_app(
+        self,
+        app: str,
+        patch: str,
+        filename: str,
+        build_assets: bool,
+        revert: bool,
+    ):
+        patch_container_path = self.prepare_app_patch(app, patch, filename)
+        self.git_apply(app, revert, patch_container_path)
+
+        if build_assets:
+            self.rebuild()
+        else:
+            self.run_dummy_step("Rebuild Bench Assets")
+
+        self.restart()
+        
+        
+    def prepare_app_patch(self, app: str, patch: str, filename: str) -> str:
+        """
+        Function returns path inside the container, the sites is
+        mounted in the container at a different path from that of
+        the bench outside it.
+        """
+        relative = ["sites", "patches", app]
+        patch_dir = Path(os.path.join(self.directory, *relative))
+        patch_dir.mkdir(parents=True, exist_ok=True)
+
+        bench_container_dir = "/home/frappe/frappe-bench"
+        patch_container_dir = os.path.join(bench_container_dir, *relative, filename)
+
+        patch_path = patch_dir / filename
+        if patch_path.is_file():
+            return patch_container_dir
+
+        with patch_path.open("w") as f:
+            f.write(patch)
+        
+        return patch_container_dir
+    
+
+    @step("Git Apply")
+    def git_apply(self, app: str, revert: bool, patch_container_path: str):
+        command = "git apply "
+        if revert:
+            command += "--reverse "
+        command += patch_container_path
+
+        app_path = os.path.join("apps", app)
+        self.docker_execute(command, subdir=app_path)
+
+    def run_dummy_step(self, name: str):
+        """
+        To be used for logging purposes when
+        a step is optional and so not being 
+        actually run
+        """
+        step(name)(self.dummy)()
+        
+    def dummy(self):
+        pass

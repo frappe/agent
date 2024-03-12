@@ -4,6 +4,9 @@ import subprocess
 import traceback
 from datetime import datetime
 from functools import partial
+
+import redis
+
 from agent.job import connection
 
 
@@ -123,7 +126,11 @@ class Base:
         value = json.dumps(self.data, default=str)
 
         if "output" in self.data:
-            self.redis.lset(self.redis_key, -1, value)
+            try:
+                self.redis.lset(self.redis_key, -1, value)
+            except redis.exceptions.ResponseError as e:
+                if "no such key" in str(e):
+                    self.redis.rpush(self.redis_key, value)
         else:
             self.redis.rpush(self.redis_key, value)
         self.redis.expire(self.redis_key, 60 * 60 * 6)

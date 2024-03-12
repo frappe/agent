@@ -91,10 +91,12 @@ class Site(Base):
     def install_app(self, app):
         try:
             return self.bench_execute(f"install-app {app} --force")
-        except AgentException:
-            return self.bench_execute(
-                f"install-app {app}"
-            )  # not available in v13
+        except AgentException as e:
+            if "Error: no such option: --force" in e.data["output"]:
+                return self.bench_execute(
+                    f"install-app {app}"
+                )  # not available in < v14
+            raise
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
