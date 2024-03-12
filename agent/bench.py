@@ -876,8 +876,7 @@ class Bench(Base):
             self.run_dummy_step("Rebuild Bench Assets")
 
         self.restart()
-        
-        
+
     def prepare_app_patch(self, app: str, patch: str, filename: str) -> str:
         """
         Function returns path inside the container, the sites is
@@ -889,7 +888,9 @@ class Bench(Base):
         patch_dir.mkdir(parents=True, exist_ok=True)
 
         bench_container_dir = "/home/frappe/frappe-bench"
-        patch_container_dir = os.path.join(bench_container_dir, *relative, filename)
+        patch_container_dir = os.path.join(
+            bench_container_dir, *relative, filename
+        )
 
         patch_path = patch_dir / filename
         if patch_path.is_file():
@@ -897,9 +898,8 @@ class Bench(Base):
 
         with patch_path.open("w") as f:
             f.write(patch)
-        
+
         return patch_container_dir
-    
 
     @step("Git Apply")
     def git_apply(self, app: str, revert: bool, patch_container_path: str):
@@ -914,10 +914,10 @@ class Bench(Base):
     def run_dummy_step(self, name: str):
         """
         To be used for logging purposes when
-        a step is optional and so not being 
+        a step is optional and so not being
         actually run
         """
         step(name)(self.dummy)()
-        
+
     def dummy(self):
         pass
