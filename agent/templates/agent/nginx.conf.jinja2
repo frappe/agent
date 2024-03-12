@@ -42,8 +42,8 @@ server {
 	chunked_transfer_encoding on;
 
 	# Allow press signup pages to check browser-proxy latency
-	{% if press_domain -%}
-	more_set_headers "Access-Control-Allow-Origin: https://{{ press_domain }}";
+	{% if press_url -%}
+	more_set_headers "Access-Control-Allow-Origin: {{ press_url }}";
 	{%- endif %}
 
 	location /agent/ {
