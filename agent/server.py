@@ -736,6 +736,7 @@ class Server(Base):
                     self.directory, "repo", "agent", "pages"
                 ),
                 "tls_protocols": self.config.get("tls_protocols"),
+                "press_domain": self.config.get("press_domain"),
             },
             agent_nginx_config,
         )

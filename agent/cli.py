@@ -87,11 +87,13 @@ def nginx():
 
 @setup.command()
 @click.option("--domain")
-def proxy(domain=None):
+@click.option("--press-domain")
+def proxy(domain=None, press_domain=None):
     proxy = Proxy()
     if domain:
         config = proxy.config
         config["domain"] = domain
+        config["press_domain"] = press_domain
         proxy.setconfig(config, indent=4)
     proxy.setup_proxy()
 
