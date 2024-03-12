@@ -24,9 +24,7 @@ from agent.minio import Minio
 from agent.security import Security
 from agent.hypervisor import Hypervisor
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
-from agent.minio import Minio
-from agent.proxysql import ProxySQL
-from agent.security import Security
+
 
 application = Flask(__name__)
 
