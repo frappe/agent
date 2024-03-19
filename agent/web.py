@@ -1186,6 +1186,21 @@ def all_exception_handler(error):
     }, 500
 
 
+@application.route("", methods=["POST"])
+@validate_bench
+def call_bench_supervisorctl(bench):
+    data = request.json
+    _bench = Server().benches[bench]
+    if data["command"] == "status":
+        return _bench.docker_execute("sudo supervisorctl status")
+
+    job = _bench.call_supervisorctl(
+        data["command"],
+        data["programs"],
+    )
+    return {"job": job}
+
+
 @application.errorhandler(BenchNotExistsException)
 def bench_not_found(e):
     return {
