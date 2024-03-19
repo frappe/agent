@@ -40,7 +40,7 @@ class Base:
         }
         self.log()
         try:
-            output = self.run_subprocess(
+            output, returncode = self.run_subprocess(
                 command,
                 directory,
                 input,
@@ -49,10 +49,10 @@ class Base:
             )
         except subprocess.CalledProcessError as e:
             output = e.output
+            returncode = e.returncode
             self.data.update(
                 {
                     "status": "Failure",
-                    "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
@@ -63,6 +63,7 @@ class Base:
             end = datetime.now()
             self.data.update(
                 {
+                    "returncode": returncode,
                     "duration": end - start,
                     "end": end,
                     "output": output,
@@ -88,12 +89,12 @@ class Base:
                 process._stdin_write(input.encode())
 
             output = self.parse_output(process)
-            retcode = process.poll()
+            returncode = process.poll()
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
-            if non_zero_throw and retcode:
-                raise subprocess.CalledProcessError(retcode, command, output=output)
-        return output
+            if non_zero_throw and returncode:
+                raise subprocess.CalledProcessError(returncode, command, output=output)
+        return output, returncode
 
     def parse_output(self, process):
         lines = []
