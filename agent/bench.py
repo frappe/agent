@@ -917,7 +917,10 @@ class Bench(Base):
 
     @step("Run Supervisorctl Command")
     def run_supervisorctl_command(self, command: str, programs: list[str]):
-        pass
+        target = "all"
+        if len(programs) > 0:
+            target = " ".join(programs)
+        self.docker_execute(f"sudo supervisorctl {command} {target}")
 
     def run_dummy_step(self, name: str):
         """
