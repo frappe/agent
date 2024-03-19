@@ -1181,7 +1181,9 @@ def docker_execute(bench):
     data = request.json
     _bench = Server().benches[bench]
     result: "ExecuteReturn" = _bench.docker_execute(
-        command=data.get("command"), subdir=data.get("subdir")
+        command=data.get("command"),
+        subdir=data.get("subdir"),
+        non_zero_throw=False,
     )
 
     result["start"] = result["start"].isoformat()

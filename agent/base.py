@@ -27,6 +27,7 @@ class Base:
         input=None,
         skip_output_log=False,
         executable=None,
+        non_zero_throw=True,
     ):
         directory = directory or self.directory
         start = datetime.now()
@@ -39,7 +40,13 @@ class Base:
         }
         self.log()
         try:
-            output = self.run_subprocess(command, directory, input, executable)
+            output = self.run_subprocess(
+                command,
+                directory,
+                input,
+                executable,
+                non_zero_throw,
+            )
         except subprocess.CalledProcessError as e:
             output = e.output
             self.data.update(
@@ -64,7 +71,9 @@ class Base:
             self.log()
         return self.data
 
-    def run_subprocess(self, command, directory, input, executable):
+    def run_subprocess(
+        self, command, directory, input, executable, non_zero_throw=True
+    ):
         # Start a child process and start reading output immediately
         with subprocess.Popen(
             command,
@@ -82,10 +91,8 @@ class Base:
             retcode = process.poll()
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
-            if retcode:
-                raise subprocess.CalledProcessError(
-                    retcode, command, output=output
-                )
+            if non_zero_throw and retcode:
+                raise subprocess.CalledProcessError(retcode, command, output=output)
         return output
 
     def parse_output(self, process):
@@ -187,9 +194,7 @@ class Base:
                         "name": x,
                         "size": stats.st_size / 1000,
                         "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(
-                            datetime.fromtimestamp(stats.st_mtime)
-                        ),
+                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
                     }
                 )
 
