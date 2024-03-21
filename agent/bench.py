@@ -62,9 +62,7 @@ class Bench(Base):
         }
 
     def fetch_sites_info(self, since=None):
-        max_retention_time = (
-            datetime.utcnow() - timedelta(days=30)
-        ).timestamp()
+        max_retention_time = (datetime.utcnow() - timedelta(days=30)).timestamp()
 
         if not since:
             since = max_retention_time
@@ -78,9 +76,7 @@ class Bench(Base):
                 f"{self.server.name}-usage-*.json.log",
             )
         )
-        valid_files = [
-            file for file in log_files if os.stat(file).st_mtime > since
-        ]
+        valid_files = [file for file in log_files if os.stat(file).st_mtime > since]
 
         for file in log_files:
             if (file not in valid_files) and (
@@ -137,10 +133,15 @@ class Bench(Base):
                 traceback.print_exc()
         return analytics
 
-    def execute(self, command, input=None):
-        return super().execute(command, directory=self.directory, input=input)
+    def execute(self, command, input=None, non_zero_throw=True):
+        return super().execute(
+            command,
+            directory=self.directory,
+            input=input,
+            non_zero_throw=non_zero_throw,
+        )
 
-    def docker_execute(self, command, input=None, subdir=None):
+    def docker_execute(self, command, input=None, subdir=None, non_zero_throw=True):
         interactive = "-i" if input else ""
         workdir = "/home/frappe/frappe-bench"
         if subdir:
@@ -148,20 +149,18 @@ class Bench(Base):
 
         if self.bench_config.get("single_container"):
             command = (
-                f"docker exec -w {workdir} "
-                f"{interactive} {self.name} {command}"
+                f"docker exec -w {workdir} " f"{interactive} {self.name} {command}"
             )
         else:
             service = f"{self.name}_worker_default"
             task = self.execute(
-                "docker service ps -f desired-state=Running -q --no-trunc "
-                f"{service}"
+                "docker service ps -f desired-state=Running -q --no-trunc " f"{service}"
             )["output"].split()[0]
             command = (
                 f"docker exec -w {workdir} "
                 f"{interactive} {service}.1.{task} {command}"
             )
-        return self.execute(command, input=input)
+        return self.execute(command, input=input, non_zero_throw=non_zero_throw)
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password):
@@ -180,9 +179,7 @@ class Bench(Base):
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @job("Rename Site", priority="high")
-    def rename_site_job(
-        self, site: str, new_name: str, create_user: dict = None
-    ):
+    def rename_site_job(self, site: str, new_name: str, create_user: dict = None):
         try:
             site = Site(site, self)
         except OSError:
@@ -252,9 +249,7 @@ class Bench(Base):
     def fetch_monitor_data(self):
         lines = []
         try:
-            monitor_log_file = os.path.join(
-                self.directory, "logs", "monitor.json.log"
-            )
+            monitor_log_file = os.path.join(self.directory, "logs", "monitor.json.log")
             time = datetime.utcnow().isoformat()
             logs_directory = os.path.join(
                 self.server.directory,
@@ -296,9 +291,7 @@ class Bench(Base):
             inactive = []
             _touch_currentsite_file(bench)
             try:
-                doctor = bench.docker_execute("bench doctor")["output"].split(
-                    "\n"
-                )
+                doctor = bench.docker_execute("bench doctor")["output"].split("\n")
             except AgentException as e:
                 doctor = e.data["output"]
 
@@ -324,8 +317,7 @@ class Bench(Base):
 
         status = {
             "sites": {
-                site: {"scheduler": True, "web": True}
-                for site in self.sites.keys()
+                site: {"scheduler": True, "web": True} for site in self.sites.keys()
             },
             "timestamp": str(datetime.now()),
         }
@@ -339,9 +331,7 @@ class Bench(Base):
         return status
 
     @job("New Site", priority="high")
-    def new_site(
-        self, name, config, apps, mariadb_root_password, admin_password
-    ):
+    def new_site(self, name, config, apps, mariadb_root_password, admin_password):
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.install_apps(apps)
@@ -417,9 +407,7 @@ class Bench(Base):
         private_file = (
             download_file(private_url, prefix=directory) if private_url else ""
         )
-        public_file = (
-            download_file(public_url, prefix=directory) if public_url else ""
-        )
+        public_file = download_file(public_url, prefix=directory) if public_url else ""
         return {
             "directory": directory,
             "database": database_file,
@@ -469,9 +457,7 @@ class Bench(Base):
         if os.path.exists(codeserver_directory):
             codeservers = os.listdir(codeserver_directory)
             if codeservers:
-                with open(
-                    os.path.join(codeserver_directory, codeservers[0])
-                ) as file:
+                with open(os.path.join(codeserver_directory, codeservers[0])) as file:
                     port = file.read()
                 codeserver = {"name": codeservers[0], "port": port}
             else:
@@ -497,9 +483,7 @@ class Bench(Base):
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
-        self.server._render_template(
-            "bench/nginx.conf.jinja2", config, nginx_config
-        )
+        self.server._render_template("bench/nginx.conf.jinja2", config, nginx_config)
 
     @step("Bench Disable Production")
     def disable_production(self):
@@ -517,9 +501,7 @@ class Bench(Base):
 
     @step("Bench Restart")
     def restart(self, web_only=False):
-        return self.docker_execute(
-            f"bench restart {'--web' if web_only else ''}"
-        )
+        return self.docker_execute(f"bench restart {'--web' if web_only else ''}")
 
     @job("Rebuild Bench Assets")
     def rebuild_job(self):
@@ -575,9 +557,7 @@ class Bench(Base):
         self.docker_execute("supervisorctl update")
 
     def generate_supervisor_config(self):
-        supervisor_config = os.path.join(
-            self.directory, "config", "supervisor.conf"
-        )
+        supervisor_config = os.path.join(self.directory, "config", "supervisor.conf")
         self.server._render_template(
             "bench/supervisor.conf",
             {
@@ -586,21 +566,15 @@ class Bench(Base):
                 "http_timeout": self.bench_config["http_timeout"],
                 "name": self.name,
                 "statsd_host": self.bench_config["statsd_host"],
-                "is_ssh_enabled": self.bench_config.get(
-                    "is_ssh_enabled", False
-                ),
+                "is_ssh_enabled": self.bench_config.get("is_ssh_enabled", False),
                 "merge_all_rq_queues": self.bench_config.get(
                     "merge_all_rq_queues", False
                 ),
                 "merge_default_and_short_rq_queues": self.bench_config.get(
                     "merge_default_and_short_rq_queues", False
                 ),
-                "use_rq_workerpool": self.bench_config.get(
-                    "use_rq_workerpool", False
-                ),
-                "environment_variables": self.bench_config.get(
-                    "environment_variables"
-                ),
+                "use_rq_workerpool": self.bench_config.get("use_rq_workerpool", False),
+                "environment_variables": self.bench_config.get("environment_variables"),
                 "gunicorn_threads_per_worker": self.bench_config.get(
                     "gunicorn_threads_per_worker"
                 ),
@@ -692,12 +666,8 @@ class Bench(Base):
                 self.server.benches_directory = /home/frappe/benches (Host)
                 bench_directory = "/home/frappe/frappe-bench" (container)
                 """
-                host_path = os.path.join(
-                    self.server.benches_directory, mp["source"]
-                )
-                destination_path = os.path.join(
-                    bench_directory, mp["destination"]
-                )
+                host_path = os.path.join(self.server.benches_directory, mp["source"])
+                destination_path = os.path.join(bench_directory, mp["destination"])
 
                 _create_mounts(host_path)
 
@@ -773,9 +743,7 @@ class Bench(Base):
         self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
 
     @step("Update Bench Memory Limits")
-    def _update_runtime_limits(
-        self, memory_high, memory_max, memory_swap, vcpu
-    ):
+    def _update_runtime_limits(self, memory_high, memory_max, memory_swap, vcpu):
         cmd = f"docker update {self.name}"
         if memory_high:
             cmd += f" --memory-reservation={memory_high}M"
@@ -791,16 +759,12 @@ class Bench(Base):
     def job_record(self):
         return self.server.job_record
 
-    def readable_jde_err(
-        self, title: str, jde: json.decoder.JSONDecodeError
-    ) -> str:
+    def readable_jde_err(self, title: str, jde: json.decoder.JSONDecodeError) -> str:
         output = f"{title}:\n" f"{jde.doc}\n" f"{jde}\n"
         import re
 
         output = re.sub(r'("db_name":.* ")(\w*)(")', r"\1********\3", output)
-        output = re.sub(
-            r'("db_password":.* ")(\w*)(")', r"\1********\3", output
-        )
+        output = re.sub(r'("db_password":.* ")(\w*)(")', r"\1********\3", output)
         return output
 
     @property
@@ -844,9 +808,7 @@ class Bench(Base):
     def get_usage(self):
         return {
             "storage": get_size(self.directory),
-            "database": sum(
-                [site.get_database_size() for site in self.sites.values()]
-            ),
+            "database": sum([site.get_database_size() for site in self.sites.values()]),
         }
 
     @property
@@ -876,8 +838,7 @@ class Bench(Base):
             self.run_dummy_step("Rebuild Bench Assets")
 
         self.restart()
-        
-        
+
     def prepare_app_patch(self, app: str, patch: str, filename: str) -> str:
         """
         Function returns path inside the container, the sites is
@@ -897,9 +858,8 @@ class Bench(Base):
 
         with patch_path.open("w") as f:
             f.write(patch)
-        
+
         return patch_container_dir
-    
 
     @step("Git Apply")
     def git_apply(self, app: str, revert: bool, patch_container_path: str):
@@ -911,13 +871,24 @@ class Bench(Base):
         app_path = os.path.join("apps", app)
         self.docker_execute(command, subdir=app_path)
 
+    @job("Call Bench Supervisorctl")
+    def call_supervisorctl(self, command: str, programs: "list[str]"):
+        self.run_supervisorctl_command(command, programs)
+
+    @step("Run Supervisorctl Command")
+    def run_supervisorctl_command(self, command: str, programs: "list[str]"):
+        target = "all"
+        if len(programs) > 0:
+            target = " ".join(programs)
+        self.docker_execute(f"supervisorctl {command} {target}")
+
     def run_dummy_step(self, name: str):
         """
         To be used for logging purposes when
-        a step is optional and so not being 
+        a step is optional and so not being
         actually run
         """
         step(name)(self.dummy)()
-        
+
     def dummy(self):
         pass

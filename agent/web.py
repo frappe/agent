@@ -6,22 +6,42 @@ import traceback
 import uuid
 from base64 import b64decode
 from functools import wraps
+from typing import TYPE_CHECKING
 
 from flask import Flask, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 
-from agent.builder import get_image_build_context_directory, ImageBuilder
-from agent.proxy import Proxy
-from agent.ssh import SSHProxy
-from agent.job import JobModel, connection
-from agent.server import Server
-from agent.monitor import Monitor
+from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
+from agent.job import JobModel, connection
 from agent.minio import Minio
+from agent.monitor import Monitor
+from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
+from agent.server import Server
+from agent.ssh import SSHProxy
+
+if TYPE_CHECKING:
+    from datetime import datetime, timedelta
+    from typing import Optional, TypedDict
+
+    ExecuteReturn = TypedDict(
+        "ExecuteReturn",
+        {
+            "command": str,
+            "status": str,
+            "start": datetime,
+            "end": datetime,
+            "duration": timedelta,
+            "output": str,
+            "directory": Optional[str],
+            "traceback": Optional[str],
+            "returncode": Optional[int],
+        },
+    )
 
 application = Flask(__name__)
 
@@ -65,14 +85,10 @@ def validate_access_token():
             return
         method, access_token = request.headers["Authorization"].split(" ")
         stored_hash = Server().config["access_token"]
-        if method.lower() == "bearer" and pbkdf2.verify(
-            access_token, stored_hash
-        ):
+        if method.lower() == "bearer" and pbkdf2.verify(access_token, stored_hash):
             return
         access_token = b64decode(access_token).decode().split(":")[1]
-        if method.lower() == "basic" and pbkdf2.verify(
-            access_token, stored_hash
-        ):
+        if method.lower() == "basic" and pbkdf2.verify(access_token, stored_hash):
             return
     except Exception:
         pass
@@ -143,11 +159,13 @@ def upload_build_context_for_image_builder():
     build_context_file.save(os.path.join(get_image_build_context_directory(), filename))
     return {"filename": filename}
 
+
 @application.route("/builder/build", methods=["POST"])
 def build_image():
     data = request.json
     job = ImageBuilder(**data).build_and_push_image()
     return {"job": job}
+
 
 @application.route("/server")
 def get_server():
@@ -253,9 +271,7 @@ def get_logs(bench, site):
     return jsonify(Server().benches[bench].sites[site].logs)
 
 
-@application.route(
-    "/benches/<string:bench>/sites/<string:site>/logs/<string:log>"
-)
+@application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
 @validate_bench_and_site
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
@@ -433,9 +449,7 @@ def optimize_tables(bench, site):
     return {"job": job}
 
 
-@application.route(
-    "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
-)
+@application.route("/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"])
 @validate_bench_and_site
 def install_app_site(bench, site):
     data = request.json
@@ -460,10 +474,7 @@ def uninstall_app_site(bench, site, app):
 def setup_erpnext(bench, site):
     data = request.json
     job = (
-        Server()
-        .benches[bench]
-        .sites[site]
-        .setup_erpnext(data["user"], data["config"])
+        Server().benches[bench].sites[site].setup_erpnext(data["user"], data["config"])
     )
     return {"job": job}
 
@@ -482,9 +493,7 @@ def fetch_site_status(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_status()}
 
 
-@application.route(
-    "/benches/<string:bench>/sites/<string:site>/info", methods=["GET"]
-)
+@application.route("/benches/<string:bench>/sites/<string:site>/info", methods=["GET"])
 @validate_bench_and_site
 def fetch_site_info(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_info()}
@@ -727,9 +736,7 @@ def site_create_database_access_credentials(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .create_database_access_credentials(
-            data["mode"], data["mariadb_root_password"]
-        )
+        .create_database_access_credentials(data["mode"], data["mariadb_root_password"])
     )
     return credentials
 
@@ -745,9 +752,7 @@ def site_revoke_database_access_credentials(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .revoke_database_access_credentials(
-            data["user"], data["mariadb_root_password"]
-        )
+        .revoke_database_access_credentials(data["user"], data["mariadb_root_password"])
     )
 
 
@@ -762,9 +767,7 @@ def bench_set_config(bench):
 @application.route("/proxy/hosts", methods=["POST"])
 def proxy_add_host():
     data = request.json
-    job = Proxy().add_host_job(
-        data["name"], data["target"], data["certificate"]
-    )
+    job = Proxy().add_host_job(data["name"], data["target"], data["certificate"])
     return {"job": job}
 
 
@@ -807,18 +810,14 @@ def get_upstreams():
     return Proxy().upstreams
 
 
-@application.route(
-    "/proxy/upstreams/<string:upstream>/rename", methods=["POST"]
-)
+@application.route("/proxy/upstreams/<string:upstream>/rename", methods=["POST"])
 def proxy_rename_upstream(upstream):
     data = request.json
     job = Proxy().rename_upstream_job(upstream, data["name"])
     return {"job": job}
 
 
-@application.route(
-    "/proxy/upstreams/<string:upstream>/sites", methods=["POST"]
-)
+@application.route("/proxy/upstreams/<string:upstream>/sites", methods=["POST"])
 def proxy_add_upstream_site(upstream):
     data = request.json
     job = Proxy().add_site_to_upstream_job(upstream, data["name"])
@@ -1016,9 +1015,7 @@ def jobs(id=None, ids=None, status=None):
         job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
     elif status in choices:
         job = to_dict(
-            JobModel.select(JobModel.id, JobModel.name).where(
-                JobModel.status == status
-            )
+            JobModel.select(JobModel.id, JobModel.name).where(JobModel.status == status)
         )
     return jsonify(json.loads(json.dumps(job, default=str)))
 
@@ -1032,9 +1029,7 @@ def agent_jobs(id=None, ids=None):
         return jsonify(json.loads(json.dumps(job, default=str)))
     elif ids:
         ids = ids.split(",")
-        job = list(
-            map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids))
-        )
+        job = list(map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids)))
         return jsonify(json.loads(json.dumps(job, default=str)))
 
 
@@ -1133,9 +1128,7 @@ def setup_code_server(bench):
     return {"job": job}
 
 
-@application.route(
-    "/benches/<string:bench>/codeserver/start", methods=["POST"]
-)
+@application.route("/benches/<string:bench>/codeserver/start", methods=["POST"])
 @validate_bench
 def start_code_server(bench):
     data = request.json
@@ -1150,9 +1143,7 @@ def stop_code_server(bench):
     return {"job": job}
 
 
-@application.route(
-    "/benches/<string:bench>/codeserver/archive", methods=["POST"]
-)
+@application.route("/benches/<string:bench>/codeserver/archive", methods=["POST"])
 @validate_bench
 def archive_code_server(bench):
     job = Server().benches[bench].archive_code_server()
@@ -1180,25 +1171,48 @@ def patch_app(bench, app):
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
-        "error": "".join(
-            traceback.format_exception(*sys.exc_info())
-        ).splitlines()
+        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
     }, 500
+
+
+@application.route("/benches/<string:bench>/docker_execute", methods=["POST"])
+@validate_bench
+def docker_execute(bench: str):
+    data = request.json
+    _bench = Server().benches[bench]
+    result: "ExecuteReturn" = _bench.docker_execute(
+        command=data.get("command"),
+        subdir=data.get("subdir"),
+        non_zero_throw=False,
+    )
+
+    result["start"] = result["start"].isoformat()
+    result["end"] = result["end"].isoformat()
+    result["duration"] = result["duration"].total_seconds()
+    return result
+
+
+@application.route("/benches/<string:bench>/supervisorctl", methods=["POST"])
+@validate_bench
+def call_bench_supervisorctl(bench: str):
+    data = request.json
+    _bench = Server().benches[bench]
+    job = _bench.call_supervisorctl(
+        data["command"],
+        data["programs"],
+    )
+    return {"job": job}
 
 
 @application.errorhandler(BenchNotExistsException)
 def bench_not_found(e):
     return {
-        "error": "".join(
-            traceback.format_exception(*sys.exc_info())
-        ).splitlines()
+        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
     }, 404
 
 
 @application.errorhandler(SiteNotExistsException)
 def site_not_found(e):
     return {
-        "error": "".join(
-            traceback.format_exception(*sys.exc_info())
-        ).splitlines()
+        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
     }, 404
