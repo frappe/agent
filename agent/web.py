@@ -1177,7 +1177,7 @@ def all_exception_handler(error):
 
 @application.route("/benches/<string:bench>/docker_execute", methods=["POST"])
 @validate_bench
-def docker_execute(bench):
+def docker_execute(bench: str):
     data = request.json
     _bench = Server().benches[bench]
     result: "ExecuteReturn" = _bench.docker_execute(
@@ -1194,7 +1194,7 @@ def docker_execute(bench):
 
 @application.route("/benches/<string:bench>/supervisorctl", methods=["POST"])
 @validate_bench
-def call_bench_supervisorctl(bench):
+def call_bench_supervisorctl(bench: str):
     data = request.json
     _bench = Server().benches[bench]
     job = _bench.call_supervisorctl(
