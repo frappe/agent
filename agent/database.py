@@ -216,7 +216,8 @@ class DatabaseServer(Server):
                     {
                         "type": file.name.replace(name, "").strip("-"),
                         "output": open(
-                            os.path.join(self.pt_stalk_directory, file.name)
+                            os.path.join(self.pt_stalk_directory, file.name),
+                            errors="replace",
                         ).read(),
                     }
                 )
