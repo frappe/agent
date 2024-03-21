@@ -872,11 +872,11 @@ class Bench(Base):
         self.docker_execute(command, subdir=app_path)
 
     @job("Call Bench Supervisorctl")
-    def call_supervisorctl(self, command: str, programs: list[str]):
+    def call_supervisorctl(self, command: str, programs: "list[str]"):
         self.run_supervisorctl_command(command, programs)
 
     @step("Run Supervisorctl Command")
-    def run_supervisorctl_command(self, command: str, programs: list[str]):
+    def run_supervisorctl_command(self, command: str, programs: "list[str]"):
         target = "all"
         if len(programs) > 0:
             target = " ".join(programs)
