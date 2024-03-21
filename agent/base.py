@@ -27,7 +27,6 @@ class Base:
         input=None,
         skip_output_log=False,
         executable=None,
-        non_zero_throw=True,
     ):
         directory = directory or self.directory
         start = datetime.now()
@@ -40,19 +39,13 @@ class Base:
         }
         self.log()
         try:
-            output, returncode = self.run_subprocess(
-                command,
-                directory,
-                input,
-                executable,
-                non_zero_throw,
-            )
+            output = self.run_subprocess(command, directory, input, executable)
         except subprocess.CalledProcessError as e:
             output = e.output
-            returncode = e.returncode
             self.data.update(
                 {
                     "status": "Failure",
+                    "returncode": e.returncode,
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
@@ -63,7 +56,6 @@ class Base:
             end = datetime.now()
             self.data.update(
                 {
-                    "returncode": returncode,
                     "duration": end - start,
                     "end": end,
                     "output": output,
@@ -72,9 +64,7 @@ class Base:
             self.log()
         return self.data
 
-    def run_subprocess(
-        self, command, directory, input, executable, non_zero_throw=True
-    ):
+    def run_subprocess(self, command, directory, input, executable):
         # Start a child process and start reading output immediately
         with subprocess.Popen(
             command,
@@ -89,12 +79,14 @@ class Base:
                 process._stdin_write(input.encode())
 
             output = self.parse_output(process)
-            returncode = process.poll()
+            retcode = process.poll()
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
-            if non_zero_throw and returncode:
-                raise subprocess.CalledProcessError(returncode, command, output=output)
-        return output, returncode
+            if retcode:
+                raise subprocess.CalledProcessError(
+                    retcode, command, output=output
+                )
+        return output
 
     def parse_output(self, process):
         lines = []
@@ -195,7 +187,9 @@ class Base:
                         "name": x,
                         "size": stats.st_size / 1000,
                         "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
                     }
                 )
 
