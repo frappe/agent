@@ -881,6 +881,11 @@ def get_database_processes():
     data = request.json
     return jsonify(DatabaseServer().processes(**data))
 
+@application.route("/database/locks", methods=["POST"])
+def get_database_locks():
+    data = request.json
+    return jsonify(DatabaseServer().locks(**data))
+
 
 @application.route("/database/processes/kill", methods=["POST"])
 def kill_database_processes():

@@ -91,6 +91,26 @@ class DatabaseServer(Server):
             traceback.print_exc()
         return []
 
+    def locks(self, private_ip, mariadb_root_password):
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            return self.sql(mariadb, """
+                    SELECT l.*, t.*
+                    FROM information_schema.INNODB_LOCKS l
+                    JOIN information_schema.INNODB_TRX t ON l.lock_trx_id = t.trx_id
+            """)
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return []
+
     def kill_processes(
         self, private_ip, mariadb_root_password, kill_threshold
     ):
