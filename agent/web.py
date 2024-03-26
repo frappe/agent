@@ -3,7 +3,6 @@ import logging
 import os
 import sys
 import traceback
-import uuid
 from base64 import b64decode
 from functools import wraps
 from typing import TYPE_CHECKING
@@ -85,10 +84,14 @@ def validate_access_token():
             return
         method, access_token = request.headers["Authorization"].split(" ")
         stored_hash = Server().config["access_token"]
-        if method.lower() == "bearer" and pbkdf2.verify(access_token, stored_hash):
+        if method.lower() == "bearer" and pbkdf2.verify(
+            access_token, stored_hash
+        ):
             return
         access_token = b64decode(access_token).decode().split(":")[1]
-        if method.lower() == "basic" and pbkdf2.verify(access_token, stored_hash):
+        if method.lower() == "basic" and pbkdf2.verify(
+            access_token, stored_hash
+        ):
             return
     except Exception:
         pass
@@ -150,20 +153,27 @@ def ping():
     return {"message": "pong"}
 
 
-@application.route("/builder/upload", methods=["POST"])
-def upload_build_context_for_image_builder():
-    if "build_context_file" not in request.files:
-        return {"message": "No file part"}, 400
+@application.route("/builder/upload/<string:dc_name>", methods=["POST"])
+def upload_build_context_for_image_builder(dc_name: str):
+    filename = f"{dc_name}.tar.gz"
+    filepath = os.path.join(get_image_build_context_directory(), filename)
+
     build_context_file = request.files["build_context_file"]
-    filename = f"{uuid.uuid4()}.tar.gz"
-    build_context_file.save(os.path.join(get_image_build_context_directory(), filename))
+    build_context_file.save(filepath)
     return {"filename": filename}
 
 
 @application.route("/builder/build", methods=["POST"])
 def build_image():
     data = request.json
-    job = ImageBuilder(**data).build_and_push_image()
+    image_builder = ImageBuilder(
+        filename=data.get("filename"),
+        image_repository=data.get("image_repository"),
+        image_tag=data.get("image_tag"),
+        no_cache=data.get("no_cache"),
+        registry=data.get("registry"),
+    )
+    job = image_builder.run_remote_builder()
     return {"job": job}
 
 
@@ -271,7 +281,9 @@ def get_logs(bench, site):
     return jsonify(Server().benches[bench].sites[site].logs)
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/logs/<string:log>")
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/logs/<string:log>"
+)
 @validate_bench_and_site
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
@@ -449,7 +461,9 @@ def optimize_tables(bench, site):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/apps", methods=["POST"]
+)
 @validate_bench_and_site
 def install_app_site(bench, site):
     data = request.json
@@ -474,7 +488,10 @@ def uninstall_app_site(bench, site, app):
 def setup_erpnext(bench, site):
     data = request.json
     job = (
-        Server().benches[bench].sites[site].setup_erpnext(data["user"], data["config"])
+        Server()
+        .benches[bench]
+        .sites[site]
+        .setup_erpnext(data["user"], data["config"])
     )
     return {"job": job}
 
@@ -493,7 +510,9 @@ def fetch_site_status(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_status()}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/info", methods=["GET"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/info", methods=["GET"]
+)
 @validate_bench_and_site
 def fetch_site_info(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_info()}
@@ -736,7 +755,9 @@ def site_create_database_access_credentials(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .create_database_access_credentials(data["mode"], data["mariadb_root_password"])
+        .create_database_access_credentials(
+            data["mode"], data["mariadb_root_password"]
+        )
     )
     return credentials
 
@@ -752,7 +773,9 @@ def site_revoke_database_access_credentials(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .revoke_database_access_credentials(data["user"], data["mariadb_root_password"])
+        .revoke_database_access_credentials(
+            data["user"], data["mariadb_root_password"]
+        )
     )
 
 
@@ -767,7 +790,9 @@ def bench_set_config(bench):
 @application.route("/proxy/hosts", methods=["POST"])
 def proxy_add_host():
     data = request.json
-    job = Proxy().add_host_job(data["name"], data["target"], data["certificate"])
+    job = Proxy().add_host_job(
+        data["name"], data["target"], data["certificate"]
+    )
     return {"job": job}
 
 
@@ -810,14 +835,18 @@ def get_upstreams():
     return Proxy().upstreams
 
 
-@application.route("/proxy/upstreams/<string:upstream>/rename", methods=["POST"])
+@application.route(
+    "/proxy/upstreams/<string:upstream>/rename", methods=["POST"]
+)
 def proxy_rename_upstream(upstream):
     data = request.json
     job = Proxy().rename_upstream_job(upstream, data["name"])
     return {"job": job}
 
 
-@application.route("/proxy/upstreams/<string:upstream>/sites", methods=["POST"])
+@application.route(
+    "/proxy/upstreams/<string:upstream>/sites", methods=["POST"]
+)
 def proxy_add_upstream_site(upstream):
     data = request.json
     job = Proxy().add_site_to_upstream_job(upstream, data["name"])
@@ -1015,7 +1044,9 @@ def jobs(id=None, ids=None, status=None):
         job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
     elif status in choices:
         job = to_dict(
-            JobModel.select(JobModel.id, JobModel.name).where(JobModel.status == status)
+            JobModel.select(JobModel.id, JobModel.name).where(
+                JobModel.status == status
+            )
         )
     return jsonify(json.loads(json.dumps(job, default=str)))
 
@@ -1029,7 +1060,9 @@ def agent_jobs(id=None, ids=None):
         return jsonify(json.loads(json.dumps(job, default=str)))
     elif ids:
         ids = ids.split(",")
-        job = list(map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids)))
+        job = list(
+            map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids))
+        )
         return jsonify(json.loads(json.dumps(job, default=str)))
 
 
@@ -1128,7 +1161,9 @@ def setup_code_server(bench):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/codeserver/start", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/codeserver/start", methods=["POST"]
+)
 @validate_bench
 def start_code_server(bench):
     data = request.json
@@ -1143,14 +1178,18 @@ def stop_code_server(bench):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/codeserver/archive", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/codeserver/archive", methods=["POST"]
+)
 @validate_bench
 def archive_code_server(bench):
     job = Server().benches[bench].archive_code_server()
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/patch/<string:app>", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/patch/<string:app>", methods=["POST"]
+)
 @validate_bench
 def patch_app(bench, app):
     data = request.json
@@ -1171,7 +1210,9 @@ def patch_app(bench, app):
 @application.errorhandler(Exception)
 def all_exception_handler(error):
     return {
-        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
     }, 500
 
 
@@ -1207,12 +1248,16 @@ def call_bench_supervisorctl(bench: str):
 @application.errorhandler(BenchNotExistsException)
 def bench_not_found(e):
     return {
-        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
     }, 404
 
 
 @application.errorhandler(SiteNotExistsException)
 def site_not_found(e):
     return {
-        "error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()
+        "error": "".join(
+            traceback.format_exception(*sys.exc_info())
+        ).splitlines()
     }, 404

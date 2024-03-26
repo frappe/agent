@@ -1,287 +1,198 @@
-import datetime
-import json
 import os
-import re
 import shlex
 import subprocess
-import uuid
 from subprocess import Popen
 
 import docker
-import dockerfile
 
-from agent.base import AgentException, Base
-from agent.job import job, Job, Step, step
+from agent.base import Base
+from agent.job import Job, Step, job, step
 
 
 class ImageBuilder(Base):
-	def __init__(self, filename: str, image_repository: str, image_tag: str, no_cache: bool, registry: dict,
-	             build_steps: dict, **kwargs) -> None:
-		super().__init__()
-		self.directory = os.getcwd()
-		self.config_file = os.path.join(self.directory, "config.json")
-		self.job = None
-		self.step = None
-		self.filename = filename
-		self.image_repository = image_repository
-		self.image_tag = image_tag
-		self.no_cache = no_cache
-		self.registry = registry
-		self.build_steps = build_steps
-		self.build_output = ""
-		self.docker_image_id = ""
-		self._validate_registry_details()
+    def __init__(
+        self,
+        filename: str,
+        image_repository: str,
+        image_tag: str,
+        no_cache: bool,
+        registry: dict,
+    ) -> None:
+        super().__init__()
 
-	@property
-	def job_record(self):
-		if self.job is None:
-			self.job = Job()
-		return self.job
+        # Image push params
+        self.image_repository = image_repository
+        self.image_tag = image_tag
+        self.registry = registry
 
-	@property
-	def step_record(self):
-		if self.step is None:
-			self.step = Step()
-		return self.step
+        # Build context, params
+        self.filename = filename
+        self.filepath = os.path.join(
+            get_image_build_context_directory(),
+            self.filename,
+        )
+        self.no_cache = no_cache
 
-	@step_record.setter
-	def step_record(self, value):
-		self.step = value
+        cwd = os.getcwd()
+        self.config_file = os.path.join(cwd, "config.json")
 
-	def _validate_registry_details(self):
-		if not self.registry.get("url"):
-			raise AgentException("registry.url is required")
-		if not self.registry.get("username"):
-			raise AgentException("registry.username is required")
-		if not self.registry.get("password"):
-			raise AgentException("registry.password is required")
+        # Lines from build and push are sent to press for processing
+        # and updating the respective Deploy Candidate
+        self.build_image_lines = []
+        self.push_image_lines = []
 
-	@job("Docker Image Build")
-	def build_and_push_image(self):
-		self._build_and_push_image()
+        self.job = None
+        self.step = None
 
-	@step("Docker Image Build")
-	def _build_and_push_image(self):
-		self._build_image()
-		self._push_docker_image()
-		self._remove_build_context()
-		return self.data
+    @property
+    def job_record(self):
+        if self.job is None:
+            self.job = Job()
+        return self.job
 
-	def _build_image(self):
-		import platform
-		command = "docker build"
-		# check if it's running on apple silicon mac
-		if (
-				platform.machine() == "arm64"
-				and platform.system() == "Darwin"
-				and platform.processor() == "arm"
-		):
-			command = f"{command}x build --platform linux/amd64"
+    @property
+    def step_record(self):
+        if self.step is None:
+            self.step = Step()
+        return self.step
 
-		environment = os.environ.copy()
-		environment.update(
-			{"DOCKER_BUILDKIT": "1", "BUILDKIT_PROGRESS": "plain", "PROGRESS_NO_TRUNC": "1"}
-		)
-		command = f"{command} -t {self._get_image_name()}"
-		if self.no_cache:
-			command = f"{command} --no-cache"
-		command = f"{command} - "
-		result = self._run(
-			command,
-			environment,
-			input_filepath=self._build_context_file
-		)
-		return self._parse_docker_build_result(result)
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
 
-	def _parse_docker_build_result(self, result):
-		lines = []
-		last_update = datetime.datetime.now()
-		steps = dict()
-		for line in result:
-			line = self._ansi_escape(line)
-			lines.append(line)
-			# Strip appended newline
-			line = line.strip()
-			# Skip blank lines
-			if not line:
-				continue
-			unusual_line = False
-			try:
-				# Remove step index from line
-				step_index, line = line.split(maxsplit=1)
-				try:
-					step_index = int(step_index[1:])
-				except ValueError:
-					line = str(step_index) + " " + line
-					step_index = sorted(steps)[-1]
-					unusual_line = True
+    @job("Run Remote Builder")
+    def run_remote_builder(self):
+        self._build_image()
+        # self._push_docker_image()
+        self._cleanup_context()
+        return self.data
 
-				# Parse first line and add step to steps dict
-				if step_index not in steps and line.startswith("[stage-"):
-					name = line.split("]", maxsplit=1)[1].strip()
-					match = re.search("`#stage-(.*)`", name)
-					if name.startswith("RUN") and match:
-						flags = dockerfile.parse_string(name)[0].flags
-						if flags:
-							name = name.replace(flags[0], "")
-						name = name.replace(match.group(0), "").strip().replace("   ", " \\\n  ")[4:]
-						stage_slug, step_slug = match.group(1).split("-", maxsplit=1)
-						step = self._find(
-							self.build_steps,
-							lambda x: x["stage_slug"] == stage_slug and x["step_slug"] == step_slug,
-						)
+    @step("Build Image")
+    def _build_image(self):
+        # Note: build command and environment are different from when
+        # build runs on the press server.
+        command = self._get_build_command()
+        environment = self._get_build_environment()
+        result = self._run(
+            command=command,
+            environment=environment,
+            input_filepath=self.filepath,
+        )
+        self._publish_docker_build_output(result)
 
-						step["step_index"] = step_index
-						step["command"] = name
-						step["status"] = "Running"
-						step["output"] = ""
+    def _get_build_command(self) -> str:
+        command = "docker build"
+        command = f"{command} -t {self._get_image_name()}"
 
-						if stage_slug == "apps":
-							step["command"] = f"bench get-app {step_slug}"
-						steps[step_index] = step
+        if self.no_cache:
+            command = f"{command} --no-cache"
 
-				elif step_index in steps:
-					# Parse rest of the lines
-					step = self._find(self.build_steps, lambda x: x["step_index"] == step_index)
-					# step = steps[step_index]
-					if line.startswith("sha256:"):
-						step["hash"] = line[7:]
-					elif line.startswith("DONE"):
-						step["status"] = "Success"
-						step["duration"] = float(line.split()[1][:-1])
-					elif line == "CACHED":
-						step["status"] = "Success"
-						step["cached"] = True
-					elif line.startswith("ERROR"):
-						step["status"] = "Failure"
-						step["output"] += line[7:] + "\n"
-					else:
-						if unusual_line:
-							# This line doesn't contain any docker step info
-							output = line
-						else:
-							# Preserve additional whitespaces while splitting
-							time, _, output = line.partition(" ")
-						step["output"] += output + "\n"
-				elif line.startswith("writing image"):
-					self.docker_image_id = line.split()[2].split(":")[1]
+        command = f"{command} - "
+        return command
 
-				# Publish Progress
-				if (datetime.datetime.now() - last_update).total_seconds() > 1:
-					self.build_output = "".join(lines)
-					self.publish_progress()
-					last_update = datetime.datetime.now()
-			except Exception:
-				import traceback
-				print("Error in parsing line:", line)
-				traceback.print_exc()
+    def _get_build_environment() -> dict:
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "DOCKER_BUILDKIT": "1",
+                "BUILDKIT_PROGRESS": "plain",
+                "PROGRESS_NO_TRUNC": "1",
+            }
+        )
+        return environment
 
-		self.build_output = "".join(lines)
-		self.publish_progress()
+    def _publish_docker_build_output(self, result):
+        for line in result:
+            self.build_image_lines.append(line)
+            self.publish_build_image_output()
+        self.publish_build_image_output(True)
 
-	def _push_docker_image(self):
-		step = self._find(self.build_steps, lambda x: x["stage_slug"] == "upload")
-		step["status"] = "Running"
-		start_time = datetime.datetime.now()
-		self.publish_progress()
+    @step("Push Docker Image")
+    def _push_docker_image(self):
+        self.push_image_lines = []
+        environment = os.environ.copy()
+        client = docker.from_env(environment=environment)
 
-		try:
-			environment = os.environ.copy()
+        auth_config = {
+            "username": self.registry["username"],
+            "password": self.registry["password"],
+            "serveraddress": self.registry["url"],
+        }
+        try:
+            for line in client.images.push(
+                self.image_repository,
+                self.image_tag,
+                stream=True,
+                decode=True,
+                auth_config=auth_config,
+            ):
+                self.push_image_lines.append(line)
+                self.publish_push_image_output()
+        except Exception:
+            # TODO: Handle this
+            raise
 
-			client = docker.from_env(environment=environment)
-			step["output"] = ""
-			output = []
-			last_update = datetime.datetime.now()
+    def publish_build_image_output(self, flush=False):
+        if not flush and (len(self.build_image_lines) % 25 != 0):
+            return
 
-			for line in client.images.push(
-					self.image_repository, self.image_tag, stream=True, decode=True, auth_config={
-						"username": self.registry["username"],
-						"password": self.registry["password"],
-						"serveraddress": self.registry["url"],
-					}
-			):
-				if "id" not in line.keys():
-					continue
+        if len(self.build_image_lines) == 0:
+            return
 
-				line_output = f'{line["id"]}: {line["status"]} {line.get("progress", "")}'
+        self.publish_data({"build": self.build_image_lines})
+        # self.build_image_lines = []
 
-				existing = self._find(output, lambda x: x["id"] == line["id"])
-				if existing:
-					existing["output"] = line_output
-				else:
-					output.append({"id": line["id"], "output": line_output})
+    def publish_push_image_output(self, flush=False):
+        if not flush and (len(self.push_image_lines) % 5) != 0:
+            return
 
-				if (datetime.datetime.now() - last_update).total_seconds() > 1:
-					step["output"] = "\n".join(ll["output"] for ll in output)
-					self.publish_progress()
-					last_update = datetime.datetime.now()
+        if len(self.push_image_lines) == 0:
+            return
 
-			end_time = datetime.datetime.now()
-			step["output"] = "\n".join(ll["output"] for ll in output)
-			step["duration"] = round((end_time - start_time).total_seconds(), 1)
-			step["status"] = "Success"
-			self.publish_progress()
-		except Exception:
-			step.status = "Failure"
-			self.publish_progress()
-			raise
+        self.publish_lines(self.push_image_lines, "push")
+        self.publish_data({"push": self.push_image_lines})
+        # self.push_image_lines = []
 
-	def publish_progress(self):
-		self.publish_output([json.dumps(self._generate_output(), default=str)])
+    def _get_image_name(self):
+        return f"{self.image_repository}:{self.image_tag}"
 
-	def _get_image_name(self):
-		return f"{self.image_repository}:{self.image_tag}"
+    def _run(
+        self,
+        command: str,
+        environment: dict,
+        input_filepath: str,
+    ):
+        with open(input_filepath, "rb") as input_file:
+            process = Popen(
+                shlex.split(command),
+                stdin=input_file,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=environment,
+                universal_newlines=True,
+            )
 
-	def _generate_output(self):
-		return {
-			"build_output": self.build_output,
-			"build_steps": self.build_steps,
-			"docker_image_id": self.docker_image_id,
-		}
+        for line in process.stdout:
+            yield line
 
-	def _run(self, command, environment=None, directory=None, input_filepath=None):
-		input_file = None
-		if input_filepath:
-			input_file = open(input_filepath, "rb")
-		process = Popen(
-			shlex.split(command),
-			stdin=input_file,
-			stdout=subprocess.PIPE,
-			stderr=subprocess.STDOUT,
-			env=environment,
-			cwd=directory,
-			universal_newlines=True
-		)
-		for line in process.stdout:
-			yield line
-		process.stdout.close()
-		return_code = process.wait()
-		input_file.close()
-		if return_code:
-			raise subprocess.CalledProcessError(return_code, command)
+        process.stdout.close()
+        input_file.close()
 
-	def _ansi_escape(self, t: str):
-		# Reference:
-		# https://stackoverflow.com/questions/14693701/how-can-i-remove-the-ansi-escape-sequences-from-a-string-in-python
-		ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-		return ansi_escape.sub("", t)
+        return_code = process.wait()
+        self.publish_build_image_output(True)
 
-	def _find(self, iterable, predicate) -> dict:
-		for item in iterable:
-			if predicate(item):
-				return item
-		return {}
+        if return_code:
+            # TODO: Handle this properly
+            raise subprocess.CalledProcessError(return_code, command)
 
-	@property
-	def _build_context_file(self):
-		return os.path.join(get_image_build_context_directory(), self.filename)
+    @step("Cleanup Context")
+    def _cleanup_context(self):
+        if os.path.exists(self.filepath):
+            os.remove(self.filepath)
 
-	def _remove_build_context(self):
-		if os.path.exists(self._build_context_file):
-			os.remove(self._build_context_file)
 
 def get_image_build_context_directory():
-	path = os.path.join(os.getcwd(), "build_context")
-	if not os.path.exists(path):
-		os.makedirs(path)
-	return path
+    path = os.path.join(os.getcwd(), "build_context")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path

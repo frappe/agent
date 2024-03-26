@@ -93,7 +93,9 @@ class Base:
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
             if non_zero_throw and returncode:
-                raise subprocess.CalledProcessError(returncode, command, output=output)
+                raise subprocess.CalledProcessError(
+                    returncode, command, output=output
+                )
         return output, returncode
 
     def parse_output(self, process):
@@ -126,6 +128,13 @@ class Base:
     def publish_output(self, lines):
         output = "\n".join(lines)
         self.data.update({"output": output})
+        self.update_redis()
+
+    def publish_data(self, data):
+        if not isinstance(data, str):
+            data = json.dumps(data, default=str)
+
+        self.data.update({"data": data})
         self.update_redis()
 
     def update_redis(self):
@@ -195,7 +204,9 @@ class Base:
                         "name": x,
                         "size": stats.st_size / 1000,
                         "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
                     }
                 )
 
