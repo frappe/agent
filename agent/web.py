@@ -171,6 +171,7 @@ def build_image():
         image_repository=data.get("image_repository"),
         image_tag=data.get("image_tag"),
         no_cache=data.get("no_cache"),
+        no_push=data.get("no_push"),
         registry=data.get("registry"),
     )
     job = image_builder.run_remote_builder()

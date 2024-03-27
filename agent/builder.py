@@ -16,6 +16,7 @@ class ImageBuilder(Base):
         image_repository: str,
         image_tag: str,
         no_cache: bool,
+        no_push: bool,
         registry: dict,
     ) -> None:
         super().__init__()
@@ -32,6 +33,7 @@ class ImageBuilder(Base):
             self.filename,
         )
         self.no_cache = no_cache
+        self.no_push = no_push
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
@@ -63,7 +65,8 @@ class ImageBuilder(Base):
     @job("Run Remote Builder")
     def run_remote_builder(self):
         self._build_image()
-        # self._push_docker_image()
+        if not self.no_push:
+            self._push_docker_image()
         self._cleanup_context()
         return self.data
 
@@ -90,7 +93,7 @@ class ImageBuilder(Base):
         command = f"{command} - "
         return command
 
-    def _get_build_environment() -> dict:
+    def _get_build_environment(self) -> dict:
         environment = os.environ.copy()
         environment.update(
             {
