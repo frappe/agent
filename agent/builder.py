@@ -152,7 +152,6 @@ class ImageBuilder(Base):
         if len(self.push_image_lines) == 0:
             return
 
-        self.publish_lines(self.push_image_lines, "push")
         self.publish_data({"push": self.push_image_lines})
         # self.push_image_lines = []
 
