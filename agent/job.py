@@ -17,7 +17,16 @@ from redis import Redis
 from rq import Queue, get_current_job
 
 
-agent_database = SqliteDatabase("jobs.sqlite3")
+agent_database = SqliteDatabase(
+    "jobs.sqlite3",
+    timeout=15,
+    pragmas={
+        "journal_mode": "wal",
+        "synchronous": "normal",
+        "mmap_size": 2**32 - 1,
+        "page_size": 8192,
+    },
+)
 
 
 def connection():
