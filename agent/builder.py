@@ -3,6 +3,7 @@ import shlex
 import subprocess
 from subprocess import Popen
 from typing import TYPE_CHECKING
+from datetime import datetime
 
 import docker
 
@@ -10,7 +11,7 @@ from agent.base import Base
 from agent.job import Job, Step, job, step
 
 if TYPE_CHECKING:
-    from typing import Literal, Optional
+    from typing import Literal
 
     OutputKey = Literal["build", "push"]
     Output = dict[OutputKey, list[str]]
@@ -43,6 +44,7 @@ class ImageBuilder(Base):
         )
         self.no_cache = no_cache
         self.no_push = no_push
+        self.last_published = datetime.now()
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
@@ -120,7 +122,7 @@ class ImageBuilder(Base):
     def _publish_docker_build_output(self, result):
         for line in result:
             self.output["build"].append(line)
-            self._publish_throttled_output(False, "build")
+            self._publish_throttled_output(False)
         self._publish_throttled_output(True)
 
     @step("Push Docker Image")
@@ -141,24 +143,22 @@ class ImageBuilder(Base):
                 auth_config=auth_config,
             ):
                 self.output["push"].append(line)
-                self._publish_throttled_output(False, "push")
+                self._publish_throttled_output(False)
         except Exception:
             self._publish_throttled_output(True)
             # TODO: Handle this
             raise
 
-    def _publish_throttled_output(
-        self,
-        flush: bool,
-        throttle_key: "Optional[OutputKey]" = None,
-    ):
+    def _publish_throttled_output(self, flush: bool):
         if flush:
             self.publish_data(self.output)
             return
 
-        if throttle_key and len(self.output[throttle_key]) % 25 != 0:
+        now = datetime.now()
+        if (now - self.last_published).total_seconds() <= 1:
             return
 
+        self.last_published = now
         self.publish_data(self.output)
 
     def _get_image_name(self):
