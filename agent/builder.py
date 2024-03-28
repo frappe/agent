@@ -10,7 +10,7 @@ from agent.base import Base
 from agent.job import Job, Step, job, step
 
 if TYPE_CHECKING:
-    from typing import Literal
+    from typing import Literal, Optional
 
     OutputKey = Literal["build", "push"]
     Output = dict[OutputKey, list[str]]
@@ -148,7 +148,9 @@ class ImageBuilder(Base):
             raise
 
     def _publish_throttled_output(
-        self, flush: bool, throttle_key: "OutputKey"
+        self,
+        flush: bool,
+        throttle_key: "Optional[OutputKey]" = None,
     ):
         if flush:
             self.publish_data(self.output)
