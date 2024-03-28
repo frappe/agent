@@ -2,14 +2,23 @@ import os
 import shlex
 import subprocess
 from subprocess import Popen
+from typing import TYPE_CHECKING
 
 import docker
 
 from agent.base import Base
 from agent.job import Job, Step, job, step
 
+if TYPE_CHECKING:
+    from typing import Literal
+
+    OutputKey = Literal["build", "push"]
+    Output = dict[OutputKey, list[str]]
+
 
 class ImageBuilder(Base):
+    output: "Output"
+
     def __init__(
         self,
         filename: str,
@@ -40,8 +49,11 @@ class ImageBuilder(Base):
 
         # Lines from build and push are sent to press for processing
         # and updating the respective Deploy Candidate
-        self.build_image_lines = []
-        self.push_image_lines = []
+        self.output = {
+            "build": [],
+            "push": [],
+        }
+        self.push_output_lines = []
 
         self.job = None
         self.step = None
@@ -81,6 +93,7 @@ class ImageBuilder(Base):
             environment=environment,
             input_filepath=self.filepath,
         )
+        self.output["build"] = []
         self._publish_docker_build_output(result)
 
     def _get_build_command(self) -> str:
@@ -106,16 +119,14 @@ class ImageBuilder(Base):
 
     def _publish_docker_build_output(self, result):
         for line in result:
-            self.build_image_lines.append(line)
-            self.publish_build_image_output()
-        self.publish_build_image_output(True)
+            self.output["build"].append(line)
+            self._publish_throttled_output(False, "build")
+        self._publish_throttled_output(True)
 
     @step("Push Docker Image")
     def _push_docker_image(self):
-        self.push_image_lines = []
         environment = os.environ.copy()
         client = docker.from_env(environment=environment)
-
         auth_config = {
             "username": self.registry["username"],
             "password": self.registry["password"],
@@ -129,31 +140,24 @@ class ImageBuilder(Base):
                 decode=True,
                 auth_config=auth_config,
             ):
-                self.push_image_lines.append(line)
-                self.publish_push_image_output()
+                self.output["push"].append(line)
+                self._publish_throttled_output(False, "push")
         except Exception:
+            self._publish_throttled_output(True)
             # TODO: Handle this
             raise
 
-    def publish_build_image_output(self, flush=False):
-        if not flush and (len(self.build_image_lines) % 25 != 0):
+    def _publish_throttled_output(
+        self, flush: bool, throttle_key: "OutputKey"
+    ):
+        if flush:
+            self.publish_data(self.output)
             return
 
-        if len(self.build_image_lines) == 0:
+        if throttle_key and len(self.output[throttle_key]) % 25 != 0:
             return
 
-        self.publish_data({"build": self.build_image_lines})
-        # self.build_image_lines = []
-
-    def publish_push_image_output(self, flush=False):
-        if not flush and (len(self.push_image_lines) % 5) != 0:
-            return
-
-        if len(self.push_image_lines) == 0:
-            return
-
-        self.publish_data({"push": self.push_image_lines})
-        # self.push_image_lines = []
+        self.publish_data(self.output)
 
     def _get_image_name(self):
         return f"{self.image_repository}:{self.image_tag}"
@@ -181,7 +185,7 @@ class ImageBuilder(Base):
         input_file.close()
 
         return_code = process.wait()
-        self.publish_build_image_output(True)
+        self._publish_throttled_output(True)
 
         if return_code:
             # TODO: Handle this properly
