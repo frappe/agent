@@ -16,6 +16,12 @@ from peewee import (
 from redis import Redis
 from rq import Queue, get_current_job
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Optional
+    from agent.base import Base
+
 
 agent_database = SqliteDatabase(
     "jobs.sqlite3",
@@ -41,12 +47,15 @@ def queue(name):
 
 
 @wrapt.decorator
-def save(wrapped, instance, args, kwargs):
+def save(wrapped, instance: "Action", args, kwargs):
     wrapped(*args, **kwargs)
     instance.model.save()
 
 
 class Action:
+    if TYPE_CHECKING:
+        model: "Optional[Model]"
+
     def success(self, data):
         self.model.status = "Success"
         self.model.data = json.dumps(data, default=str)
@@ -64,6 +73,9 @@ class Action:
 
 
 class Step(Action):
+    if TYPE_CHECKING:
+        model: "Optional[StepModel]"
+
     @save
     def start(self, name, job):
         self.model = StepModel()
@@ -74,6 +86,9 @@ class Step(Action):
 
 
 class Job(Action):
+    if TYPE_CHECKING:
+        model: "Optional[JobModel]"
+
     @save
     def start(self):
         self.model.start = datetime.datetime.now()
@@ -100,7 +115,7 @@ class Job(Action):
 
 def step(name):
     @wrapt.decorator
-    def wrapper(wrapped, instance, args, kwargs):
+    def wrapper(wrapped, instance: "Base", args, kwargs):
         from agent.base import AgentException
 
         instance.step_record.start(name, instance.job_record.model.id)
@@ -123,9 +138,9 @@ def step(name):
     return wrapper
 
 
-def job(name, priority="default"):
+def job(name: str, priority="default"):
     @wrapt.decorator
-    def wrapper(wrapped, instance, args, kwargs):
+    def wrapper(wrapped, instance: "Base", args, kwargs):
         from agent.base import AgentException
 
         if get_current_job(connection=connection()):

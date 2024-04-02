@@ -8,9 +8,18 @@ from functools import partial
 import redis
 
 from agent.job import connection
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Optional, Any
+    from agent.job import Job, Step
 
 
 class Base:
+    if TYPE_CHECKING:
+        job_record: "Optional[Job]"
+        step_record: "Optional[Step]"
+
     def __init__(self):
         self.directory = None
         self.config_file = None
@@ -93,64 +102,83 @@ class Base:
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
             if non_zero_throw and returncode:
-                raise subprocess.CalledProcessError(returncode, command, output=output)
+                raise subprocess.CalledProcessError(
+                    returncode, command, output=output
+                )
         return output, returncode
 
     def parse_output(self, process):
+        if not process.stdout:
+            return ""
+
+        line = ""
         lines = []
         # This is equivalent of remove_crs
         # Make sure output matches what'll be shown in the terminal
         # This won't work for top, htop etc, but good enough to handle progress bars
-        if process.stdout:
-            line = ""
-            for char in iter(partial(process.stdout.read, 1), ""):
-                char = char.decode(errors="replace")
-                if char == "" and process.poll() is not None:
-                    break
-                elif char == "\r":
-                    # Publish output and then wipe current line.
-                    # Include the overwritten line in the output
-                    self.publish_output(lines + [line])
-                    line = ""
-                elif char == "\n":
-                    lines.append(line)
-                    line = ""
-                    self.publish_output(lines)
-                else:
-                    line += char
-            if line:
+        for char in iter(partial(process.stdout.read, 1), ""):
+            char = char.decode(errors="replace")
+            if char == "" and process.poll() is not None:
+                break
+            elif char == "\r":
+                # Publish output and then wipe current line.
+                # Include the overwritten line in the output
+                self.publish_lines(lines + [line])
+                line = ""
+            elif char == "\n":
                 lines.append(line)
-            self.publish_output(lines)
+                line = ""
+                self.publish_lines(lines)
+            else:
+                line += char
+
+        if line:
+            lines.append(line)
+        self.publish_lines(lines)
         return "\n".join(lines)
 
-    def publish_output(self, lines):
+    def publish_lines(self, lines: "list[str]"):
         output = "\n".join(lines)
         self.data.update({"output": output})
         self.update_redis()
 
+    def publish_data(self, data: "Any"):
+        if not isinstance(data, str):
+            data = json.dumps(data, default=str)
+
+        self.data.update({"output": data})
+        self.update_redis()
+
     def update_redis(self):
-        if not self.redis_key:
+        if not (redis_key := self.get_redis_key()):
             return
+
         value = json.dumps(self.data, default=str)
+        self.push_redis_value(redis_key, value)
+        self.redis.expire(redis_key, 60 * 60 * 6)
 
-        if "output" in self.data:
-            try:
-                self.redis.lset(self.redis_key, -1, value)
-            except redis.exceptions.ResponseError as e:
-                if "no such key" in str(e):
-                    self.redis.rpush(self.redis_key, value)
-        else:
-            self.redis.rpush(self.redis_key, value)
-        self.redis.expire(self.redis_key, 60 * 60 * 6)
+    def push_redis_value(self, key: str, value: str):
+        if "output" not in self.data:
+            self.redis.rpush(key, value)
 
-    @property
-    def redis_key(self):
-        if self.job_record and getattr(self.job_record, "model", None):
-            key = f"agent:job:{self.job_record.model.id}"
-            if self.step_record and getattr(self.step_record, "model", None):
-                return f"{key}:step:{self.step_record.model.id}"
-            return key
-        return None
+        try:
+            self.redis.lset(key, -1, value)
+        except redis.exceptions.ResponseError as e:
+            if "no such key" in str(e):
+                self.redis.rpush(key, value)
+
+    def get_redis_key(self):
+        if not self.job_record:
+            return None
+
+        if not hasattr(self.job_record, "model"):
+            return None
+
+        key = f"agent:job:{self.job_record.model.id}"
+        if self.step_record and hasattr(self.step_record, "model"):
+            return f"{key}:step:{self.step_record.model.id}"
+
+        return key
 
     @property
     def redis(self):
@@ -195,7 +223,9 @@ class Base:
                         "name": x,
                         "size": stats.st_size / 1000,
                         "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
+                        "modified": str(
+                            datetime.fromtimestamp(stats.st_mtime)
+                        ),
                     }
                 )
 
