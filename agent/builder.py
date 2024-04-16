@@ -45,6 +45,7 @@ class ImageBuilder(Base):
         self.no_cache = no_cache
         self.no_push = no_push
         self.last_published = datetime.now()
+        self.build_failed = False
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
@@ -79,6 +80,9 @@ class ImageBuilder(Base):
     @job("Run Remote Builder")
     def run_remote_builder(self):
         self._build_image()
+        if self.build_failed:
+            return
+
         if not self.no_push:
             self._push_docker_image()
         self._cleanup_context()
@@ -146,7 +150,6 @@ class ImageBuilder(Base):
                 self._publish_throttled_output(False)
         except Exception:
             self._publish_throttled_output(True)
-            # TODO: Handle this
             raise
 
     def _publish_throttled_output(self, flush: bool):
@@ -189,9 +192,7 @@ class ImageBuilder(Base):
         return_code = process.wait()
         self._publish_throttled_output(True)
 
-        if return_code:
-            # TODO: Handle this properly
-            raise subprocess.CalledProcessError(return_code, command)
+        self.build_failed = return_code != 0
 
     @step("Cleanup Context")
     def _cleanup_context(self):
