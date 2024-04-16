@@ -157,6 +157,8 @@ def ping():
 def upload_build_context_for_image_builder(dc_name: str):
     filename = f"{dc_name}.tar.gz"
     filepath = os.path.join(get_image_build_context_directory(), filename)
+    if os.path.exists(filepath):
+        os.unlink(filepath)
 
     build_context_file = request.files["build_context_file"]
     build_context_file.save(filepath)
@@ -910,6 +912,7 @@ def get_binary_logs():
 def get_database_processes():
     data = request.json
     return jsonify(DatabaseServer().processes(**data))
+
 
 @application.route("/database/locks", methods=["POST"])
 def get_database_locks():
