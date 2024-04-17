@@ -101,6 +101,7 @@ class ImageBuilder(Base):
         )
         self.output["build"] = []
         self._publish_docker_build_output(result)
+        return self.output["build"]
 
     def _get_build_command(self) -> str:
         command = "docker build"
@@ -151,6 +152,7 @@ class ImageBuilder(Base):
         except Exception:
             self._publish_throttled_output(True)
             raise
+        return self.output["push"]
 
     def _publish_throttled_output(self, flush: bool):
         if flush:
@@ -193,11 +195,15 @@ class ImageBuilder(Base):
         self._publish_throttled_output(True)
 
         self.build_failed = return_code != 0
+        self.data.update("build_failed", self.build_failed)
 
     @step("Cleanup Context")
     def _cleanup_context(self):
-        if os.path.exists(self.filepath):
-            os.remove(self.filepath)
+        if not os.path.exists(self.filepath):
+            return {"cleanup": False}
+
+        os.remove(self.filepath)
+        return {"cleanup": True}
 
 
 def get_image_build_context_directory():
