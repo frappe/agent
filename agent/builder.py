@@ -104,7 +104,7 @@ class ImageBuilder(Base):
         return self.output["build"]
 
     def _get_build_command(self) -> str:
-        command = "docker build"
+        command = "docker buildx build --platform linux/amd64"
         command = f"{command} -t {self._get_image_name()}"
 
         if self.no_cache:
