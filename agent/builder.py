@@ -195,7 +195,7 @@ class ImageBuilder(Base):
         self._publish_throttled_output(True)
 
         self.build_failed = return_code != 0
-        self.data.update("build_failed", self.build_failed)
+        self.data.update({"build_failed": self.build_failed})
 
     @step("Cleanup Context")
     def _cleanup_context(self):
