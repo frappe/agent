@@ -14,22 +14,25 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
-from typing import Tuple, TypedDict
+from typing import TYPE_CHECKING
 
-CommandOutput = TypedDict(
-    "CommandOutput",
-    cwd=str,
-    image_tag=str,
-    returncode=int,
-    output=str,
-)
+if TYPE_CHECKING:
+    from typing import TypedDict
+
+    CommandOutput = TypedDict(
+        "CommandOutput",
+        cwd=str,
+        image_tag=str,
+        returncode=int,
+        output=str,
+    )
 
 
 def copy_file_from_docker_cache(
     container_source: str,
     host_dest: str = ".",
     cache_target: str = "/home/frappe/.cache",
-):
+) -> "CommandOutput":
     """
     Function is used to copy files from docker cache i.e. `cache_target/container_source`
     to the host system i.e `host_dest`.
@@ -72,7 +75,7 @@ def run_command_in_docker_cache(
     command: str = "ls -A",
     cache_target: str = "/home/frappe/.cache",
     remove_image: bool = True,
-) -> CommandOutput:
+) -> "CommandOutput":
     """
     This function works by capturing the output of the given `command`
     by running it in the cache dir (`cache_target`) while building a
@@ -172,7 +175,7 @@ def prep_dockerfile_path(dockerfile: str) -> Path:
     return df_path
 
 
-def run_build_command(df_path: Path, remove_image: bool) -> CommandOutput:
+def run_build_command(df_path: Path, remove_image: bool) -> "CommandOutput":
     command, image_tag = get_cache_check_build_command()
     env = os.environ.copy()
     env["DOCKER_BUILDKIT"] = "1"
@@ -196,7 +199,7 @@ def run_build_command(df_path: Path, remove_image: bool) -> CommandOutput:
     )
 
 
-def get_cache_check_build_command() -> Tuple[str, str]:
+def get_cache_check_build_command() -> "tuple[str, str]":
     command = "docker build"
     if (
         platform.machine() == "arm64"
@@ -240,7 +243,7 @@ def strip_build_output(stdout: str) -> str:
     return "\n".join(output)
 
 
-def get_cached_apps() -> dict[str, list[str]]:
+def get_cached_apps() -> "dict[str, list[str]]":
     result = run_command_in_docker_cache(
         command="ls -A bench/apps",
         cache_target="/home/frappe/.cache",
