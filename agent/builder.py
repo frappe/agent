@@ -81,7 +81,7 @@ class ImageBuilder(Base):
     def run_remote_builder(self):
         self._build_image()
         if self.build_failed:
-            return
+            return self.data
 
         if not self.no_push:
             self._push_docker_image()
@@ -101,7 +101,7 @@ class ImageBuilder(Base):
         )
         self.output["build"] = []
         self._publish_docker_build_output(result)
-        return self.output["build"]
+        return {"output": self.output["build"]}
 
     def _get_build_command(self) -> str:
         command = "docker buildx build --platform linux/amd64"
