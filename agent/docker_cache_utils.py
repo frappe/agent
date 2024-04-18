@@ -1,6 +1,7 @@
-# Code below copied verbatim from press, this is tentative and will be removed
-# once build code has been moved out of press:
-
+# Code below copied mostly verbatim from press, this is tentative and
+# will be removed once build code has been moved out of press.
+#
+# Primary source:
 # https://github.com/frappe/press/blob/40859becf2976a3b6a5ac0ff79e2dff8cd2c46af/press/press/doctype/deploy_candidate/cache_utils.py
 
 import os
@@ -17,7 +18,7 @@ from typing import Tuple, TypedDict
 
 CommandOutput = TypedDict(
     "CommandOutput",
-    cwd=Path,
+    cwd=str,
     image_tag=str,
     returncode=int,
     output=str,
@@ -188,7 +189,7 @@ def run_build_command(df_path: Path, remove_image: bool) -> CommandOutput:
     if remove_image:
         run_image_rm(image_tag)
     return dict(
-        cwd=df_path.parent,
+        cwd=df_path.parent.absolute().as_posix(),
         image_tag=image_tag,
         returncode=output.returncode,
         output=strip_build_output(output.stdout),
