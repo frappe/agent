@@ -1270,3 +1270,16 @@ def site_not_found(e):
             traceback.format_exception(*sys.exc_info())
         ).splitlines()
     }, 404
+
+
+@application.route("/docker_cache_utils/<string:method>", methods=["POST"])
+def docker_cache_utils(method: str):
+    from docker_cache_utils import run_command_in_docker_cache, get_cached_apps
+
+    if method == "run_command_in_docker_cache":
+        return run_command_in_docker_cache(**request.data)
+
+    if method == "get_cached_apps":
+        return get_cached_apps()
+
+    return None
