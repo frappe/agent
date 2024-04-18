@@ -1280,7 +1280,7 @@ def docker_cache_utils(method: str):
     )
 
     if method == "run_command_in_docker_cache":
-        return run_command_in_docker_cache(**request.data)
+        return run_command_in_docker_cache(**request.json)
 
     if method == "get_cached_apps":
         return get_cached_apps()
