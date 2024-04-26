@@ -448,7 +448,8 @@ class Bench(Base):
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
-        self.generate_nginx_config()
+        with FileLock(os.path.join(self.directory, "nginx.config.lock")):
+            self.generate_nginx_config()
         self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
