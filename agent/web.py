@@ -7,7 +7,7 @@ from base64 import b64decode
 from functools import wraps
 from typing import TYPE_CHECKING
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 
@@ -41,6 +41,9 @@ if TYPE_CHECKING:
             "returncode": Optional[int],
         },
     )
+from rq import Queue, Worker
+from rq.job import JobStatus
+
 
 application = Flask(__name__)
 
@@ -218,6 +221,13 @@ def get_benches():
 @validate_bench
 def get_bench(bench):
     return Server().benches[bench].dump()
+
+
+@application.route("/benches/<string:bench>/metrics", methods=["GET"])
+def get_bench_metrics(bench):
+    from agent.exporter import get_bench_metrics
+
+    return Response(get_bench_metrics(bench), mimetype="text/plain")
 
 
 @application.route("/benches/<string:bench>/info", methods=["POST", "GET"])
