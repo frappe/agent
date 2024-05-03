@@ -111,29 +111,28 @@ class Base:
         if not process.stdout:
             return ""
 
-        line = ""
+        line = b""
         lines = []
         # This is equivalent of remove_crs
         # Make sure output matches what'll be shown in the terminal
         # This won't work for top, htop etc, but good enough to handle progress bars
-        for char in iter(partial(process.stdout.read, 1), ""):
-            char = char.decode(errors="replace")
-            if char == "" and process.poll() is not None:
+        for char in iter(partial(process.stdout.read, 1), b""):
+            if char == b"" and process.poll() is not None:
                 break
-            elif char == "\r":
+            elif char == b"\r":
                 # Publish output and then wipe current line.
                 # Include the overwritten line in the output
-                self.publish_lines(lines + [line])
-                line = ""
-            elif char == "\n":
-                lines.append(line)
-                line = ""
+                self.publish_lines(lines + [line.decode(errors="replace")])
+                line = b""
+            elif char == b"\n":
+                lines.append(line.decode(errors="replace"))
+                line = b""
                 self.publish_lines(lines)
             else:
                 line += char
 
         if line:
-            lines.append(line)
+            lines.append(line.decode(errors="replace"))
         self.publish_lines(lines)
         return "\n".join(lines)
 
