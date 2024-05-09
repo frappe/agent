@@ -593,6 +593,8 @@ class Site(Base):
         return data
 
     def fetch_site_analytics(self):
+        if not os.path.exists(self.analytics_file):
+            return {}
         return json.load(open(self.analytics_file))
 
     def sid(self, user="Administrator"):
