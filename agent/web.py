@@ -1218,6 +1218,12 @@ def patch_app(bench, app):
 
 @application.errorhandler(Exception)
 def all_exception_handler(error):
+    try:
+        from sentry_sdk import capture_exception
+
+        capture_exception(error)
+    except ImportError:
+        pass
     return {
         "error": "".join(
             traceback.format_exception(*sys.exc_info())

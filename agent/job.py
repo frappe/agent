@@ -1,6 +1,7 @@
 import datetime
 import json
 import traceback
+import os
 
 import wrapt
 from peewee import (
@@ -21,6 +22,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Optional
     from agent.base import Base
+
+
+if os.environ.get("SENTRY_DSN"):
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(dsn=os.environ["SENTRY_DSN"])
+    except ImportError:
+        pass
 
 
 agent_database = SqliteDatabase(
