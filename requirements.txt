@@ -18,9 +18,10 @@ python-crontab==2.5.1
 python-dateutil==2.8.2
 requests==2.26.0
 rq==1.13.0
-urllib3==1.26.0
+urllib3==1.26.18
 Werkzeug==0.16.0
 wrapt==1.11.2
 docker==6.1.2
 dockerfile==3.1.0
 filelock==3.13.1
+sentry-sdk[flask, rq]==2.1.1
