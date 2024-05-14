@@ -79,7 +79,7 @@ def authentication(password):
 
 
 @setup.command()
-@click.option("--sentry_dsn", required=True)
+@click.option("--sentry-dsn", required=True)
 def sentry(sentry_dsn):
     Server().setup_sentry(sentry_dsn)
 
