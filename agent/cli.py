@@ -51,7 +51,8 @@ def ping_server(password: str):
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
 @click.option("--proxy-ip", required=False, type=str)
-def config(name, user, workers, proxy_ip=None):
+@click.option("--sentry-dsn", required=False, type=str)
+def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
@@ -65,6 +66,8 @@ def config(name, user, workers, proxy_ip=None):
     }
     if proxy_ip:
         config["proxy_ip"] = proxy_ip
+    if sentry_dsn:
+        config["sentry_dsn"] = sentry_dsn
 
     json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)
 
@@ -73,6 +76,12 @@ def config(name, user, workers, proxy_ip=None):
 @click.option("--password", prompt=True, hide_input=True)
 def authentication(password):
     Server().setup_authentication(password)
+
+
+@setup.command()
+@click.option("--sentry_dsn", required=True)
+def sentry(sentry_dsn):
+    Server().setup_sentry(sentry_dsn)
 
 
 @setup.command()

@@ -1,6 +1,6 @@
 [program:web]
 command={{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application
-environment=PYTHONUNBUFFERED=1
+environment=PYTHONUNBUFFERED=1{% if sentry_dsn %}, SENTRY_DSN="{{ sentry_dsn }}"{% endif %}
 autostart=true
 autorestart=true
 stdout_logfile={{ directory }}/logs/web.log
@@ -18,7 +18,7 @@ user={{ user }}
 directory={{ directory }}
 
 [program:worker]
-command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/rq worker --url redis://127.0.0.1:{{ redis_port }} high default low"
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/rq worker {% if sentry_dsn %}--sentry_dsn '{{ sentry_dsn }}'{% endif %} --url redis://127.0.0.1:{{ redis_port }} high default low"
 environment=PYTHONUNBUFFERED=1
 autostart=true
 autorestart=true

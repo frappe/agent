@@ -437,6 +437,10 @@ class Server(Base):
         self.update_config({"trace": True})
         self.setup_nginx()
 
+    def setup_sentry(self, sentry_dsn):
+        self.update_config({"sentry_dsn": sentry_dsn})
+        self.setup_supervisor()
+
     def setup_nginx(self):
         self._generate_nginx_config()
         self._generate_agent_nginx_config()
@@ -760,6 +764,7 @@ class Server(Base):
                 "workers": self.config["workers"],
                 "directory": self.directory,
                 "user": self.config["user"],
+                "sentry_dsn": self.config.get("sentry_dsn"),
             },
             supervisor_config,
         )
