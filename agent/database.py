@@ -30,7 +30,7 @@ class DatabaseServer(Server):
             f"mysqlbinlog --short-form --database {database} "
             f"--start-datetime '{start_datetime}' "
             f"--stop-datetime '{stop_datetime}' "
-            f" {log} | grep -Piv '{LINES_TO_SKIP}' | head -n {max_lines}"
+            f" {log} | grep -Piv '{LINES_TO_SKIP}'"
         )
 
         DELIMITER = "/*!*/;"
@@ -55,6 +55,8 @@ class DatabaseServer(Server):
                             ),
                         }
                     )
+                    if len(events) > max_lines:
+                        break
         return events
 
     @property
