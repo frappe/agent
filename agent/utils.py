@@ -11,11 +11,11 @@ def download_file(url, prefix):
     local_filename = os.path.join(prefix, filename)
 
     with requests.get(url, stream=True) as r:
+        total_size = int(r.headers.get("content-length", 0))
+        chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
         with open(local_filename, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                # If you have chunk encoded response uncomment if
-                # and set chunk_size parameter to None.
+            for chunk in r.iter_content(chunk_size=chunk_size):
                 f.write(chunk)
 
     return local_filename
