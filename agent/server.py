@@ -715,6 +715,7 @@ class Server(Base):
                 "nginx_vts_module_enabled": self.config.get(
                     "nginx_vts_module_enabled", True
                 ),
+                "ip_whitelist": self.config.get("ip_whitelist", []),
             },
             nginx_config,
         )

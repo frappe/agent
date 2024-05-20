@@ -20,6 +20,14 @@ http {
 	include /etc/nginx/mime.types;
 	default_type application/octet-stream;
 
+	{% if ip_whitelist -%}
+	{%- for ip in ip_whitelist -%}
+	allow {{ ip }};
+	{% endfor -%}
+
+	deny all;
+	{%- endif %}
+
 	{% if nginx_vts_module_enabled %}
 	vhost_traffic_status_zone;
 	vhost_traffic_status_dump /var/log/nginx/vts.db;
