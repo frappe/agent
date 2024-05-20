@@ -186,20 +186,36 @@ class Bench(Base):
         )
 
     @step("New Site")
-    def bench_new_site(self, name, mariadb_root_password, admin_password):
-        site_database, temp_user, temp_password = self.create_mariadb_user(
-            name, mariadb_root_password
-        )
-        try:
-            return self.docker_execute(
-                f"bench new-site --no-mariadb-socket "
-                f"--mariadb-root-username {temp_user} "
-                f"--mariadb-root-password {temp_password} "
-                f"--admin-password {admin_password} "
-                f"--db-name {site_database} {name}"
+    def bench_new_site(self, name, mariadb_root_password, admin_password, config=None):
+        if config.get("managed_databse"):
+            try:
+                return self.docker_execute(
+                    f"bench new-site --no-mariadb-socket "
+                    f"--mariadb-root-username {config.get('db_user')} "
+                    f"--mariadb-root-password {config.get('db_password')} "
+                    f"--db-user {config.get('db_user')} "
+                    f"--db-name {config.get('db_name')} "
+                    f"--db-port {config.get('db_port')} "
+                    f"--db-host {config.get('db_host')} "
+                    f"--admin-password {admin_password} "
+                    f"--no-setup-db {name}"
+                )
+            except Exception:
+                pass
+        else:
+            site_database, temp_user, temp_password = self.create_mariadb_user(
+                name, mariadb_root_password
             )
-        finally:
-            self.drop_mariadb_user(name, mariadb_root_password, site_database)
+            try:
+                return self.docker_execute(
+                    f"bench new-site --no-mariadb-socket "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--mariadb-root-password {temp_password} "
+                    f"--admin-password {admin_password} "
+                    f"--db-name {site_database} {name}"
+                )
+            finally:
+                self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @job("Create User", priority="high")
     def create_user(
