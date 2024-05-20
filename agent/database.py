@@ -102,11 +102,14 @@ class DatabaseServer(Server):
                 host=private_ip,
                 port=3306,
             )
-            return self.sql(mariadb, """
+            return self.sql(
+                mariadb,
+                """
                     SELECT l.*, t.*
                     FROM information_schema.INNODB_LOCKS l
                     JOIN information_schema.INNODB_TRX t ON l.lock_trx_id = t.trx_id
-            """)
+            """,
+            )
         except Exception:
             import traceback
 
