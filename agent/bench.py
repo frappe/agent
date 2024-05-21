@@ -187,7 +187,7 @@ class Bench(Base):
 
     @step("New Site")
     def bench_new_site(self, name, mariadb_root_password, admin_password, config=None):
-        if config.get("managed_databse"):
+        if config.get("managed_database"):
             try:
                 return self.docker_execute(
                     f"bench new-site --no-mariadb-socket "
@@ -201,7 +201,7 @@ class Bench(Base):
                     f"--no-setup-db {name}"
                 )
             except Exception:
-                pass
+                traceback.print_exc()
         else:
             site_database, temp_user, temp_password = self.create_mariadb_user(
                 name, mariadb_root_password
@@ -397,7 +397,7 @@ class Bench(Base):
     def new_site(
         self, name, config, apps, mariadb_root_password, admin_password, create_user: dict = None
     ):
-        self.bench_new_site(name, mariadb_root_password, admin_password)
+        self.bench_new_site(name, mariadb_root_password, admin_password, config=config)
         site = Site(name, self)
         site.install_apps(apps)
         site.update_config(config)
@@ -427,7 +427,7 @@ class Bench(Base):
         skip_failing_patches,
     ):
         files = self.download_files(name, database, public, private)
-        self.bench_new_site(name, mariadb_root_password, admin_password)
+        self.bench_new_site(name, mariadb_root_password, admin_password, config=default_config)
         site = Site(name, self)
         site.update_config(default_config)
         try:
