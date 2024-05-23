@@ -59,10 +59,27 @@ class Bench(Base):
             "sites": {name: site.dump() for name, site in self.sites.items()},
         }
 
+    def _delete_older_usage_files(self, max_retention_time):
+        log_files = glob(
+            os.path.join(
+                self.directory,
+                "logs",
+                f"{self.server.name}-usage-*.json.log",
+            )
+        )
+
+        for file in log_files:
+            if os.stat(file).st_mtime < max_retention_time:
+                print(
+                    f"Deleting {file} as it's older than {max_retention_time}"
+                )
+                os.remove(file)
+
     def fetch_sites_info(self, since=None):
         max_retention_time = (
-            datetime.utcnow() - timedelta(days=30)
+            datetime.utcnow() - timedelta(days=7)
         ).timestamp()
+        self._delete_older_usage_files(max_retention_time)
 
         if not since:
             since = max_retention_time
@@ -76,17 +93,10 @@ class Bench(Base):
                 f"{self.server.name}-usage-*.json.log",
             )
         )
-        valid_files = [
-            file for file in log_files if os.stat(file).st_mtime > since
-        ]
 
         for file in log_files:
-            if (file not in valid_files) and (
-                os.stat(file).st_mtime > max_retention_time
-            ):
-                print(f"Deleting {file}")
-                os.remove(file)
-            else:
+            # Only load files that are newer than the since timestamp
+            if os.stat(file).st_mtime > since:
                 try:
                     usage_data.extend(json.load(open(file)))
                 except json.decoder.JSONDecodeError:
