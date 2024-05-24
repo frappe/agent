@@ -102,6 +102,11 @@ class Bench(Base):
                 except json.decoder.JSONDecodeError:
                     print(f"Error loading JSON from {file}")
 
+        usage_data.sort(
+            key=lambda x: datetime.fromisoformat(x["timestamp"]),
+            reverse=True,
+        )
+
         for site in self.sites.values():
             try:
                 timezone_data = {
