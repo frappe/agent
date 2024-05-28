@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import time
+import traceback
 from datetime import datetime
 from typing import Dict, TYPE_CHECKING
 from shlex import quote
@@ -111,6 +112,8 @@ class Site(Base):
         database_file,
         public_file,
         private_file,
+        managed_database=False,
+        mariadb_root_user=None,
     ):
         sites_directory = self.bench.sites_directory
         database_file = database_file.replace(
@@ -130,22 +133,36 @@ class Site(Base):
             f"--with-private-files {private_file} " if private_file else ""
         )
 
-        _, temp_user, temp_password = self.bench.create_mariadb_user(
-            self.name, mariadb_root_password, self.database
-        )
-        try:
-            return self.bench_execute(
-                "--force restore "
-                f"--mariadb-root-username {temp_user} "
-                f"--mariadb-root-password {temp_password} "
-                f"--admin-password {admin_password} "
-                f"{public_file_option} "
-                f"{private_file_option} "
-                f"{database_file}"
-            )
-        finally:
-            self.bench.drop_mariadb_user(
+        if managed_database:
+            try:
+                return self.bench_execute(
+                    "--force restore "
+                    f"--mariadb-root-username {mariadb_root_user} "
+                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--admin-password {admin_password} "
+                    f"{public_file_option} "
+                    f"{private_file_option} "
+                    f"{database_file}"
+                )
+            except Exception:
+                traceback.print_exc()
+        else:
+            _, temp_user, temp_password = self.bench.create_mariadb_user(
                 self.name, mariadb_root_password, self.database
+            )
+            try:
+                return self.bench_execute(
+                    "--force restore "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--mariadb-root-password {temp_password} "
+                    f"--admin-password {admin_password} "
+                    f"{public_file_option} "
+                    f"{private_file_option} "
+                    f"{database_file}"
+                )
+            finally:
+                self.bench.drop_mariadb_user(
+                    self.name, mariadb_root_password, self.database
             )
 
     @job("Restore Site")
@@ -158,6 +175,8 @@ class Site(Base):
         public,
         private,
         skip_failing_patches,
+        mariadb_root_user,
+        managed_database,
     ):
         files = self.bench.download_files(self.name, database, public, private)
         try:
@@ -167,6 +186,8 @@ class Site(Base):
                 files["database"],
                 files["public"],
                 files["private"],
+                managed_database,
+                mariadb_root_user,
             )
         finally:
             self.bench.delete_downloaded_files(files["directory"])
@@ -191,29 +212,44 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
+        managed_database=False,
+        mariadb_root_user=None,
     ):
-        _, temp_user, temp_password = self.bench.create_mariadb_user(
-            self.name, mariadb_root_password, self.database
-        )
-        try:
-            return self.bench_execute(
-                f"reinstall --yes "
-                f"--mariadb-root-username {temp_user} "
-                f"--mariadb-root-password {temp_password} "
-                f"--admin-password {admin_password}"
-            )
-        finally:
-            self.bench.drop_mariadb_user(
+        if managed_database:
+            try:
+                return self.bench_execute(
+                    f"reinstall --yes "
+                    f"--mariadb-root-username {mariadb_root_user} "
+                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--admin-password {admin_password}"
+                )
+            except Exception:
+                traceback.print_exc()
+        else:
+            _, temp_user, temp_password = self.bench.create_mariadb_user(
                 self.name, mariadb_root_password, self.database
             )
+            try:
+                return self.bench_execute(
+                    f"reinstall --yes "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--mariadb-root-password {temp_password} "
+                    f"--admin-password {admin_password}"
+                )
+            finally:
+                self.bench.drop_mariadb_user(
+                    self.name, mariadb_root_password, self.database
+                )
 
     @job("Reinstall Site")
     def reinstall_job(
         self,
         mariadb_root_password,
         admin_password,
+        managed_database=False,
+        mariadb_root_user=None,
     ):
-        return self.reinstall(mariadb_root_password, admin_password)
+        return self.reinstall(mariadb_root_password, admin_password, managed_database, mariadb_root_user)
 
     @job("Install App on Site")
     def install_app_job(self, app):

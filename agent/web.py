@@ -423,6 +423,8 @@ def restore_site(bench, site):
             data.get("public"),
             data.get("private"),
             data.get("skip_failing_patches", False),
+            data.get("managed_database", False),
+            data.get("mariadb_root_user", "")
         )
     )
     return {"job": job}
@@ -438,7 +440,7 @@ def reinstall_site(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .reinstall_job(data["mariadb_root_password"], data["admin_password"])
+        .reinstall_job(data["mariadb_root_password"], data["admin_password"], data["managed_database"], data["mariadb_root_user"])
     )
     return {"job": job}
 
