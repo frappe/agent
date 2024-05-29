@@ -116,7 +116,8 @@ class Proxy(Server):
     @step("Remove Host from Proxy")
     def remove_host(self, host):
         host_directory = os.path.join(self.hosts_directory, host)
-        shutil.rmtree(host_directory)
+        if os.path.exists(host_directory):
+            shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
     def remove_site_from_upstream_job(self, upstream, site, skip_reload=False):
