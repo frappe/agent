@@ -47,6 +47,7 @@ class Site(Base):
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
+        self.port = self.config.get("db_port", '3306')
 
     def bench_execute(self, command, input=None):
         return self.bench.docker_execute(
@@ -175,10 +176,11 @@ class Site(Base):
         public,
         private,
         skip_failing_patches,
-        mariadb_root_user,
-        managed_database,
+        managed_database_config=None,
     ):
         files = self.bench.download_files(self.name, database, public, private)
+
+        managed_database = 1 if managed_database_config else 0
         try:
             self.restore(
                 mariadb_root_password,
@@ -186,8 +188,8 @@ class Site(Base):
                 files["database"],
                 files["public"],
                 files["private"],
-                managed_database,
-                mariadb_root_user,
+                managed_database=managed_database,
+                mariadb_root_user=managed_database_config['database_user'],
             )
         finally:
             self.bench.delete_downloaded_files(files["directory"])
@@ -212,11 +214,11 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
-        managed_database=False,
-        mariadb_root_user=None,
+        managed_database_config=None
     ):
-        if managed_database:
+        if managed_database_config:
             try:
+                mariadb_root_user = managed_database_config["database_user"]
                 return self.bench_execute(
                     f"reinstall --yes "
                     f"--mariadb-root-username {mariadb_root_user} "
@@ -246,10 +248,9 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
-        managed_database=False,
-        mariadb_root_user=None,
+        managed_database_config=None
     ):
-        return self.reinstall(mariadb_root_password, admin_password, managed_database, mariadb_root_user)
+        return self.reinstall(mariadb_root_password, admin_password, managed_database_config)
 
     @job("Install App on Site")
     def install_app_job(self, app):
@@ -580,7 +581,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P{self.port}"
                     f"{self.database}",
                     executable="/bin/bash",
                 )
