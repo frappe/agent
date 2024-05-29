@@ -186,19 +186,14 @@ class Bench(Base):
         )
 
     @step("New Site")
-    def bench_new_site(self, name, mariadb_root_password, admin_password, config=None):
-        if config.get("managed_database"):
+    def bench_new_site(self, name, mariadb_root_password, admin_password, managed_database_config=None):
+        if managed_database_config:
             try:
                 return self.docker_execute(
                     f"bench new-site --no-mariadb-socket "
-                    f"--mariadb-root-username {config.get('db_user')} "
-                    f"--mariadb-root-password {config.get('db_password')} "
-                    f"--db-user {config.get('db_user')} "
-                    f"--db-name {config.get('db_name')} "
-                    f"--db-port {config.get('db_port')} "
-                    f"--db-host {config.get('db_host')} "
-                    f"--admin-password {admin_password} "
-                    f"--no-setup-db {name}"
+                    f"--mariadb-root-username {managed_database_config.get('database_user')} "
+                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--admin-password {admin_password} {name}"
                 )
             except Exception:
                 traceback.print_exc()
@@ -390,9 +385,11 @@ class Bench(Base):
 
     @job("New Site", priority="high")
     def new_site(
-        self, name, config, apps, mariadb_root_password, admin_password, create_user: dict = None
+        self, name, config, apps, mariadb_root_password, admin_password, managed_database_config, create_user: dict = None
     ):
-        self.bench_new_site(name, mariadb_root_password, admin_password, config=config)
+        self.bench_new_site(
+            name, mariadb_root_password, admin_password, managed_database_config=managed_database_config
+        )
         site = Site(name, self)
         site.install_apps(apps)
         site.update_config(config)
@@ -420,11 +417,16 @@ class Bench(Base):
         public,
         private,
         skip_failing_patches,
+        managed_database_config=None,
     ):
         files = self.download_files(name, database, public, private)
-        self.bench_new_site(name, mariadb_root_password, admin_password, config=default_config)
+        self.bench_new_site(
+            name, mariadb_root_password, admin_password, managed_database_config=managed_database_config
+        )
         site = Site(name, self)
         site.update_config(default_config)
+        managed_database = 1 if managed_database_config else 0
+
         try:
             site.restore(
                 mariadb_root_password,
@@ -432,6 +434,8 @@ class Bench(Base):
                 files["database"],
                 files["public"],
                 files["private"],
+                managed_database=managed_database,
+                mariadb_root_user=managed_database_config['database_user']
             )
             if site_config:
                 site_config = json.loads(site_config)
