@@ -189,7 +189,7 @@ class Site(Base):
                 files["public"],
                 files["private"],
                 managed_database=managed_database,
-                mariadb_root_user=managed_database_config['database_user'],
+                mariadb_root_user=managed_database_config['database_root_user'],
             )
         finally:
             self.bench.delete_downloaded_files(files["directory"])
@@ -218,7 +218,7 @@ class Site(Base):
     ):
         if managed_database_config:
             try:
-                mariadb_root_user = managed_database_config["database_user"]
+                mariadb_root_user = managed_database_config["database_root_user"]
                 return self.bench_execute(
                     f"reinstall --yes "
                     f"--mariadb-root-username {mariadb_root_user} "

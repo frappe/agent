@@ -191,7 +191,7 @@ class Bench(Base):
             try:
                 return self.docker_execute(
                     f"bench new-site --no-mariadb-socket "
-                    f"--mariadb-root-username {managed_database_config.get('database_user')} "
+                    f"--mariadb-root-username {managed_database_config.get('database_root_user')} "
                     f"--mariadb-root-password {mariadb_root_password} "
                     f"--admin-password {admin_password} {name}"
                 )
@@ -435,7 +435,7 @@ class Bench(Base):
                 files["public"],
                 files["private"],
                 managed_database=managed_database,
-                mariadb_root_user=managed_database_config['database_user']
+                mariadb_root_user=managed_database_config['database_root_user']
             )
             if site_config:
                 site_config = json.loads(site_config)
