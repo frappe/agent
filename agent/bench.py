@@ -37,6 +37,7 @@ class Bench(Base):
             self.directory, "sites", "common_site_config.json"
         )
         self.host = self.config.get("db_host", "localhost")
+        self.db_port = self.config.get("db_port", "3306")
         self.docker_image = self.bench_config.get("docker_image")
         self.mounts = mounts
         if not (
