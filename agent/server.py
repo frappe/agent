@@ -119,6 +119,8 @@ class Server(Base):
             return
         try:
             bench = Bench(name, self)
+        except json.JSONDecodeError:
+            pass
         except FileNotFoundError as e:
             if not e.filename.endswith("common_site_config.json"):
                 raise
