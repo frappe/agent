@@ -308,7 +308,7 @@ class Site(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password} -P {self.port}"
                 f' -e "{query}"'
             )
             self.execute(command)
@@ -324,7 +324,7 @@ class Site(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password} -P {self.port}"
                 f' -e "{query}"'
             )
             self.execute(command)
@@ -354,7 +354,7 @@ class Site(Base):
             output = self.execute(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -499,7 +499,7 @@ class Site(Base):
                 "set -o pipefail && "
                 "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
-                f"{self.database} '{table}' "
+                f"{self.database} -P {self.port} '{table}' "
                 f" | gzip > '{backup_file}'",
                 executable="/bin/bash",
             )
@@ -567,7 +567,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P{self.port}"
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -582,7 +582,7 @@ class Site(Base):
         data = {"dropped": {}}
         for table in new_tables:
             output = self.execute(
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -664,7 +664,7 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         try:
             timezone = self.execute(
-                f"mysql -h {self.host} -u{self.database} -p{self.password} "
+                f"mysql -h {self.host} -u{self.database} -p{self.password} -P {self.port}"
                 f'-sN -e "{query}"'
             )["output"].strip()
         except Exception:
@@ -675,7 +675,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def tables(self):
         return self.execute(
             "mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
+            f"-h {self.host} -u {self.user} -p{self.password} -P {self.port} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -708,7 +708,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
                 f" {self.database} -e '{query}'"
             )
 
@@ -784,7 +784,7 @@ print(">>>" + frappe.session.sid + "<<<")
             " GROUP BY `table_schema`"
         )
         command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
             f" -e '{query}'"
         )
         database_size = self.execute(command).get("output")
@@ -825,7 +825,7 @@ print(">>>" + frappe.session.sid + "<<<")
             " GROUP BY `table_schema`"
         )
         command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
             f" -e '{query}'"
         )
         database_size = self.execute(command).get("output")
@@ -846,7 +846,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
             command = (
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
                 f" -e '{query}'"
             )
             output = self.execute(command).get("output")
