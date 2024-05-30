@@ -879,6 +879,7 @@ def proxy_rename_upstream_site(upstream, site):
         data["domains"],
         site,
         data["new_name"],
+        data.get("skip_reload", False),
     )
     return {"job": job}
 

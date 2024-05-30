@@ -136,7 +136,12 @@ class Proxy(Server):
 
     @job("Rename Site on Upstream")
     def rename_site_on_upstream_job(
-        self, upstream: str, hosts: List[str], site: str, new_name: str
+        self,
+        upstream: str,
+        hosts: List[str],
+        site: str,
+        new_name: str,
+        skip_reload=False,
     ):
         self.rename_site_on_upstream(upstream, site, new_name)
         site_host_dir = os.path.join(self.hosts_directory, site)
@@ -145,6 +150,8 @@ class Proxy(Server):
             self.rename_site_in_host_dir(new_name, site, new_name)
         for host in hosts:
             self.rename_site_in_host_dir(host, site, new_name)
+        if skip_reload:
+            return
         self.generate_proxy_config()
         self.reload_nginx()
 
