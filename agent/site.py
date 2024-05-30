@@ -354,7 +354,7 @@ class Site(Base):
             output = self.execute(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -567,7 +567,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -582,7 +582,7 @@ class Site(Base):
         data = {"dropped": {}}
         for table in new_tables:
             output = self.execute(
-                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port}"
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -664,7 +664,7 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         try:
             timezone = self.execute(
-                f"mysql -h {self.host} -u{self.database} -p{self.password} -P {self.port}"
+                f"mysql -h {self.host} -u{self.database} -p{self.password} -P {self.port} "
                 f'-sN -e "{query}"'
             )["output"].strip()
         except Exception:
