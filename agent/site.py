@@ -47,7 +47,7 @@ class Site(Base):
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
-        self.port = self.config.get("db_port", '3306')
+        self.port = self.config.get("db_port", self.bench.db_port)
 
     def bench_execute(self, command, input=None):
         return self.bench.docker_execute(
