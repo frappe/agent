@@ -193,7 +193,7 @@ class Bench(Base):
                 return self.docker_execute(
                     f"bench new-site --no-mariadb-socket "
                     f"--mariadb-root-username {managed_database_config.get('database_root_user')} "
-                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--mariadb-root-password '{mariadb_root_password}' "
                     f"--admin-password {admin_password} {name}"
                 )
             except Exception:
