@@ -852,7 +852,9 @@ def proxy_rename_upstream(upstream):
 )
 def proxy_add_upstream_site(upstream):
     data = request.json
-    job = Proxy().add_site_to_upstream_job(upstream, data["name"])
+    job = Proxy().add_site_to_upstream_job(
+        upstream, data["name"], data.get("skip_reload", False)
+    )
     return {"job": job}
 
 

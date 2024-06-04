@@ -72,9 +72,11 @@ class Proxy(Server):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
     @job("Add Site to Upstream")
-    def add_site_to_upstream_job(self, upstream, site):
+    def add_site_to_upstream_job(self, upstream, site, skip_reload=False):
         self.add_site_to_upstream(upstream, site)
         self.generate_proxy_config()
+        if skip_reload:
+            return
         self.reload_nginx()
 
     @step("Add Site File to Upstream Directory")
