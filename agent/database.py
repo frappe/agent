@@ -236,6 +236,11 @@ class DatabaseServer(Server):
     def get_stalk(self, name):
         diagnostics = []
         for file in Path(self.pt_stalk_directory).iterdir():
+            if os.path.getsize(
+                os.path.join(self.pt_stalk_directory, file.name)
+            ) > 16 * (1024**2):
+                # Skip files larger than 16 MB
+                continue
             if re.match(name, file.name):
                 diagnostics.append(
                     {
