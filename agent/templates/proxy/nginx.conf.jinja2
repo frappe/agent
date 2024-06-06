@@ -100,8 +100,8 @@ server {
 	ssl_stapling on;
 	ssl_stapling_verify on;
 
-	resolver 8.8.8.8 8.8.4.4 1.1.1.1 1.0.0.1 208.67.222.222 208.67.220.220 valid=60s;
-	resolver_timeout 2s;
+	resolver 8.8.8.8 8.8.4.4 1.1.1.1 1.0.0.1 208.67.222.222 208.67.220.220 valid=600s;
+	resolver_timeout 30s;
 
 	client_max_body_size 250M;
 	client_body_buffer_size 16K;
