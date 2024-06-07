@@ -794,7 +794,10 @@ def bench_set_config(bench):
 def proxy_add_host():
     data = request.json
     job = Proxy().add_host_job(
-        data["name"], data["target"], data["certificate"]
+        data["name"],
+        data["target"],
+        data["certificate"],
+        data.get("skip_reload", False),
     )
     return {"job": job}
 

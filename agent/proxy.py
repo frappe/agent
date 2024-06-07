@@ -30,9 +30,11 @@ class Proxy(Server):
         self.step = None
 
     @job("Add Host to Proxy")
-    def add_host_job(self, host, target, certificate):
+    def add_host_job(self, host, target, certificate, skip_reload=False):
         self.add_host(host, target, certificate)
         self.generate_proxy_config()
+        if skip_reload:
+            return
         self.reload_nginx()
 
     @step("Add Host to Proxy")
