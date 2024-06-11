@@ -201,6 +201,13 @@ class Bench(Base):
         finally:
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
+    @job("Create User", priority="high")
+    def create_user(
+        self, site: str, first_name: str, last_name: str, email: str, password: str = None
+    ):
+        _site = Site(site, self)
+        _site.create_user(email, first_name, last_name, password)
+
     @job("Rename Site", priority="high")
     def rename_site_job(
         self, site: str, new_name: str, create_user: dict = None

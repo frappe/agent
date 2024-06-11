@@ -457,6 +457,20 @@ def rename_site(bench, site):
 
 
 @application.route(
+	"/benches/<string:bench>/sites/<string:site>/create-user", methods=["POST"]
+)
+@validate_bench_and_site
+def create_user(bench, site):
+	data = request.json
+	email = data.get("email")
+	first_name = data.get("first_name")
+	last_name = data.get("last_name")
+	password = data.get("password")
+	job = Server().benches[bench].create_user(site, email, first_name, last_name, password)
+	return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"]
 )
 def optimize_tables(bench, site):
