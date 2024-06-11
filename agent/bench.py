@@ -203,7 +203,7 @@ class Bench(Base):
 
     @job("Create User", priority="high")
     def create_user(
-        self, site: str, first_name: str, last_name: str, email: str, password: str = None
+        self, site: str, email: str, first_name: str, last_name: str, password: str = None
     ):
         _site = Site(site, self)
         _site.create_user(email, first_name, last_name, password)
