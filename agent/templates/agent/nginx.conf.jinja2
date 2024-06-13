@@ -279,6 +279,12 @@ server {
 		proxy_pass http://127.0.0.1:9000/;
 	}
 
+	{% elif mirror_server %}
+	location /ubuntu {
+		autoindex on;
+		root /home/frappe/ubuntu/mirror/archive.ubuntu.com;
+	}
+
 	{% else %}
 
 	location / {
