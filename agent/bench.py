@@ -267,7 +267,7 @@ class Bench(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mariadb -h {self.host} -uroot -p{mariadb_root_password}"
                 f' -e "{query}"'
             )
             self.execute(command)
@@ -283,7 +283,7 @@ class Bench(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mariadb -h {self.host} -uroot -p{mariadb_root_password}"
                 f' -e "{query}"'
             )
             self.execute(command)
