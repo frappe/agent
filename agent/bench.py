@@ -266,7 +266,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f"mariadb -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
         return database, user, password
 
@@ -279,7 +279,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f"mariadb -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
 
     def fetch_monitor_data(self):
