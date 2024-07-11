@@ -466,12 +466,16 @@ def create_user(bench, site):
     first_name = data.get("first_name")
     last_name = data.get("last_name")
     password = data.get("password")
-    job = Server().benches[bench].create_user(
-        site,
-        email=email,
-        first_name=first_name,
-        last_name=last_name,
-        password=password
+    job = (
+        Server()
+        .benches[bench]
+        .create_user(
+            site,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=password,
+        )
     )
     return {"job": job}
 
@@ -759,12 +763,13 @@ def describe_database_table(bench, site):
 @validate_bench_and_site
 def add_database_index(bench, site):
     data = request.json
-    return {
-        "data": Server()
+    job = (
+        Server()
         .benches[bench]
         .sites[site]
         .add_database_index(data["doctype"], data.get("columns"))
-    }
+    )
+    return {"job": job}
 
 
 @application.route(
