@@ -774,7 +774,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def add_database_index(self, doctype, columns=None):
         if not columns:
             return
-        return self._add_database_index(doctype, columns)
+        self._add_database_index(doctype, columns)
 
     @step("Add Database Index With Bench Command")
     def _add_database_index(self, doctype, columns):
