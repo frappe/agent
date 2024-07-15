@@ -243,7 +243,7 @@ def get_sites(bench):
 
 @application.route("/benches/<string:bench>/apps")
 @validate_bench
-def get_apps(bench):
+def get_bench_apps(bench):
     apps = Server().benches[bench].apps
     return {name: site.dump() for name, site in apps.items()}
 
@@ -773,14 +773,12 @@ def add_database_index(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/sync_apps_list_from_site",
+    "/benches/<string:bench>/sites/<string:site>/apps",
     methods=["POST"],
 )
 @validate_bench_and_site
-def sync_apps_list_from_site(bench, site):
-    return {
-        "data": Server().benches[bench].sites[site].sync_apps_list_from_site()
-    }
+def get_site_apps(bench, site):
+    return {"data": Server().benches[bench].sites[site].apps}
 
 
 @application.route(

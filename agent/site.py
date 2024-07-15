@@ -770,7 +770,8 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return {}
 
-    def sync_apps_list_from_site(self):
+    @property
+    def apps(self):
         return self.bench_execute("list-apps")
 
     @job("Add Database Index")
