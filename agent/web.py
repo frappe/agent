@@ -773,6 +773,17 @@ def add_database_index(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/sync_apps_list_from_site",
+    methods=["POST"],
+)
+@validate_bench_and_site
+def sync_apps_list_from_site(bench, site):
+    return {
+        "data": Server().benches[bench].sites[site].sync_apps_list_from_site()
+    }
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/credentials",
     methods=["POST"],
 )
