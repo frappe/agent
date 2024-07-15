@@ -49,7 +49,7 @@ class Site(Base):
     def bench_execute(self, command, input=None):
         return self.bench.docker_execute(
             f"bench --site {self.name} {command}", input=input
-        )
+        )["output"]
 
     def dump(self):
         return {"name": self.name}
