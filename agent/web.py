@@ -774,7 +774,7 @@ def add_database_index(bench, site):
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/apps",
-    methods=["POST"],
+    methods=["GET"],
 )
 @validate_bench_and_site
 def get_site_apps(bench, site):
