@@ -49,7 +49,7 @@ class Site(Base):
     def bench_execute(self, command, input=None):
         return self.bench.docker_execute(
             f"bench --site {self.name} {command}", input=input
-        )["output"]
+        )
 
     def dump(self):
         return {"name": self.name}
@@ -772,7 +772,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def apps(self):
-        return self.bench_execute("list-apps")
+        return self.bench_execute("list-apps")["output"]
 
     @job("Add Database Index")
     def add_database_index(self, doctype, columns=None):
