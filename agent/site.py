@@ -770,15 +770,19 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return {}
 
+    @job("Add Database Index")
     def add_database_index(self, doctype, columns=None):
         if not columns:
             return
+        self._add_database_index(doctype, columns)
 
+    @step("Add Database Index With Bench Command")
+    def _add_database_index(self, doctype, columns):
         command = f"add-database-index --doctype '{doctype}' "
         for column in columns:
             command += f"--column {column} "
 
-        self.bench_execute(command)
+        return self.bench_execute(command)
 
     def get_database_free_size(self):
         query = (
