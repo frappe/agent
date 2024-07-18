@@ -180,7 +180,7 @@ class DatabaseServer(Server):
     def fetch_column_stats(
         self, schema, table, private_ip, mariadb_root_password
     ):
-        self._fetch_column_stats(
+        return self._fetch_column_stats(
             schema, table, private_ip, mariadb_root_password
         )
 
