@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
+from agent.job import job, step
 
 
 class DatabaseServer(Server):
@@ -175,7 +176,16 @@ class DatabaseServer(Server):
         columns = [d[0] for d in cursor.description]
         return list(map(lambda x: dict(zip(columns, x)), rows))
 
+    @job("Column Statistics")
     def fetch_column_stats(
+        self, schema, table, private_ip, mariadb_root_password
+    ):
+        self._fetch_column_stats(
+            schema, table, private_ip, mariadb_root_password
+        )
+
+    @step("Fetch Column Statistics")
+    def _fetch_column_stats(
         self, schema, table, private_ip, mariadb_root_password
     ):
         """Get various stats about columns in a table.

@@ -1000,7 +1000,8 @@ def get_database_deadlocks():
 @application.route("/database/column-stats", methods=["POST"])
 def fetch_column_stats():
     data = request.json
-    return jsonify(DatabaseServer().fetch_column_stats(**data))
+    job = DatabaseServer().fetch_column_stats(**data)
+    return {"job": job}
 
 
 @application.route("/database/explain", methods=["POST"])
