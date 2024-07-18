@@ -499,7 +499,7 @@ class Server(Base):
     def step_record(self, value):
         self.step = value
 
-    def update_agent_web(self, url=None):
+    def update_agent_web(self, url=None, branch="master"):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
@@ -508,10 +508,10 @@ class Server(Base):
                 f"git remote set-url upstream {url}", directory=directory
             )
         self.execute("git fetch upstream", directory=directory)
+        self.execute(f"git checkout {branch}", directory=directory)
         self.execute(
-            "git merge --ff-only upstream/master", directory=directory
+            f"git merge --ff-only upstream/{branch}", directory=directory
         )
-
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self._generate_redis_config()

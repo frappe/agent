@@ -1119,7 +1119,7 @@ def agent_jobs(id=None, ids=None):
 @application.route("/update", methods=["POST"])
 def update_agent():
     data = request.json
-    Server().update_agent_web(data.get("url"))
+    Server().update_agent_web(url=data.get("url"), branch=data.get("branch"))
     return {"message": "Success"}
 
 
