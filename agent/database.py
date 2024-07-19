@@ -183,9 +183,10 @@ class DatabaseServer(Server):
     def fetch_column_stats(
         self, schema, table, private_ip, mariadb_root_password
     ):
-        return self._fetch_column_stats(
+        self._fetch_column_stats(
             schema, table, private_ip, mariadb_root_password
         )
+        return self.data
 
     @step("Fetch Column Statistics")
     def _fetch_column_stats(
@@ -226,7 +227,8 @@ class DatabaseServer(Server):
                     row[column] = float(row[column]) if row[column] else None
         except Exception as e:
             print(e)
-        return results
+
+        return {"output": results}
 
     def explain_query(self, schema, query, private_ip, mariadb_root_password):
         mariadb = MySQLDatabase(
