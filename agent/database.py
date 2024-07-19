@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
-from agent.job import Job, Step, job, step
+from agent.job import job, step
 
 
 class DatabaseServer(Server):
@@ -226,7 +226,6 @@ class DatabaseServer(Server):
                     row[column] = float(row[column]) if row[column] else None
         except Exception as e:
             print(e)
-
         return results
 
     def explain_query(self, schema, query, private_ip, mariadb_root_password):
@@ -284,19 +283,3 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
-
-    @property
-    def job_record(self):
-        if self.job is None:
-            self.job = Job()
-        return self.job
-
-    @property
-    def step_record(self):
-        if self.step is None:
-            self.step = Step()
-        return self.step
-
-    @step_record.setter
-    def step_record(self, value):
-        self.step = value
