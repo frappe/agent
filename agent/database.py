@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
-from agent.job import job, step
+from agent.job import Job, Step, job, step
 
 
 class DatabaseServer(Server):
@@ -15,6 +15,9 @@ class DatabaseServer(Server):
 
         self.mariadb_directory = "/var/lib/mysql"
         self.pt_stalk_directory = "/var/lib/pt-stalk"
+
+        self.job = None
+        self.step = None
 
     def search_binary_log(
         self,
@@ -281,3 +284,19 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
+
+    @property
+    def job_record(self):
+        if self.job is None:
+            self.job = Job()
+        return self.job
+
+    @property
+    def step_record(self):
+        if self.step is None:
+            self.step = Step()
+        return self.step
+
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
