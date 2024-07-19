@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
 from agent.job import job, step
+import json
 
 
 class DatabaseServer(Server):
@@ -227,7 +228,7 @@ class DatabaseServer(Server):
         except Exception as e:
             print(e)
 
-        return {"output": results}
+        return {"output": json.dumps(results)}
 
     def explain_query(self, schema, query, private_ip, mariadb_root_password):
         mariadb = MySQLDatabase(
