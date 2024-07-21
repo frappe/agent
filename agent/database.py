@@ -182,7 +182,7 @@ class DatabaseServer(Server):
 
     @job("Column Statistics")
     def fetch_column_stats(
-        self, schema, table, private_ip, mariadb_root_password
+        self, schema, table, private_ip, mariadb_root_password, doc_name
     ):
         self._fetch_column_stats(
             schema, table, private_ip, mariadb_root_password
