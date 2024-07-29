@@ -374,6 +374,7 @@ def new_site(bench):
             data["apps"],
             data["mariadb_root_password"],
             data["admin_password"],
+            data.get('managed_database_config', {})
         )
     )
     return {"job": job}
@@ -398,6 +399,7 @@ def new_site_from_backup(bench):
             data.get("public"),
             data.get("private"),
             data.get("skip_failing_patches", False),
+            data.get('managed_database_config', {})
         )
     )
     return {"job": job}
@@ -422,6 +424,7 @@ def restore_site(bench, site):
             data.get("public"),
             data.get("private"),
             data.get("skip_failing_patches", False),
+            data.get('managed_database_config', {})
         )
     )
     return {"job": job}
@@ -437,7 +440,11 @@ def reinstall_site(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .reinstall_job(data["mariadb_root_password"], data["admin_password"])
+        .reinstall_job(
+            data["mariadb_root_password"],
+            data["admin_password"],
+            data.get('managed_database_config', {})
+        )
     )
     return {"job": job}
 

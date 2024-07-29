@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import time
+import traceback
 from datetime import datetime
 from typing import Dict, TYPE_CHECKING
 
@@ -45,6 +46,7 @@ class Site(Base):
         self.user = self.config["db_name"]
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
+        self.port = self.config.get("db_port", self.bench.db_port)
 
     def bench_execute(self, command, input=None):
         return self.bench.docker_execute(
@@ -110,6 +112,8 @@ class Site(Base):
         database_file,
         public_file,
         private_file,
+        managed_database=False,
+        mariadb_root_user=None,
     ):
         sites_directory = self.bench.sites_directory
         database_file = database_file.replace(
@@ -129,22 +133,36 @@ class Site(Base):
             f"--with-private-files {private_file} " if private_file else ""
         )
 
-        _, temp_user, temp_password = self.bench.create_mariadb_user(
-            self.name, mariadb_root_password, self.database
-        )
-        try:
-            return self.bench_execute(
-                "--force restore "
-                f"--mariadb-root-username {temp_user} "
-                f"--mariadb-root-password {temp_password} "
-                f"--admin-password {admin_password} "
-                f"{public_file_option} "
-                f"{private_file_option} "
-                f"{database_file}"
-            )
-        finally:
-            self.bench.drop_mariadb_user(
+        if managed_database:
+            try:
+                return self.bench_execute(
+                    "--force restore "
+                    f"--mariadb-root-username {mariadb_root_user} "
+                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--admin-password {admin_password} "
+                    f"{public_file_option} "
+                    f"{private_file_option} "
+                    f"{database_file}"
+                )
+            except Exception:
+                traceback.print_exc()
+        else:
+            _, temp_user, temp_password = self.bench.create_mariadb_user(
                 self.name, mariadb_root_password, self.database
+            )
+            try:
+                return self.bench_execute(
+                    "--force restore "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--mariadb-root-password {temp_password} "
+                    f"--admin-password {admin_password} "
+                    f"{public_file_option} "
+                    f"{private_file_option} "
+                    f"{database_file}"
+                )
+            finally:
+                self.bench.drop_mariadb_user(
+                    self.name, mariadb_root_password, self.database
             )
 
     @job("Restore Site")
@@ -157,8 +175,11 @@ class Site(Base):
         public,
         private,
         skip_failing_patches,
+        managed_database_config=None,
     ):
         files = self.bench.download_files(self.name, database, public, private)
+
+        managed_database = 1 if managed_database_config else 0
         try:
             self.restore(
                 mariadb_root_password,
@@ -166,6 +187,8 @@ class Site(Base):
                 files["database"],
                 files["public"],
                 files["private"],
+                managed_database=managed_database,
+                mariadb_root_user=managed_database_config['database_root_user'],
             )
         finally:
             self.bench.delete_downloaded_files(files["directory"])
@@ -190,29 +213,43 @@ class Site(Base):
         self,
         mariadb_root_password,
         admin_password,
+        managed_database_config=None
     ):
-        _, temp_user, temp_password = self.bench.create_mariadb_user(
-            self.name, mariadb_root_password, self.database
-        )
-        try:
-            return self.bench_execute(
-                f"reinstall --yes "
-                f"--mariadb-root-username {temp_user} "
-                f"--mariadb-root-password {temp_password} "
-                f"--admin-password {admin_password}"
-            )
-        finally:
-            self.bench.drop_mariadb_user(
+        if managed_database_config:
+            try:
+                mariadb_root_user = managed_database_config["database_root_user"]
+                return self.bench_execute(
+                    f"reinstall --yes "
+                    f"--mariadb-root-username {mariadb_root_user} "
+                    f"--mariadb-root-password {mariadb_root_password} "
+                    f"--admin-password {admin_password}"
+                )
+            except Exception:
+                traceback.print_exc()
+        else:
+            _, temp_user, temp_password = self.bench.create_mariadb_user(
                 self.name, mariadb_root_password, self.database
             )
+            try:
+                return self.bench_execute(
+                    f"reinstall --yes "
+                    f"--mariadb-root-username {temp_user} "
+                    f"--mariadb-root-password {temp_password} "
+                    f"--admin-password {admin_password}"
+                )
+            finally:
+                self.bench.drop_mariadb_user(
+                    self.name, mariadb_root_password, self.database
+                )
 
     @job("Reinstall Site")
     def reinstall_job(
         self,
         mariadb_root_password,
         admin_password,
+        managed_database_config=None
     ):
-        return self.reinstall(mariadb_root_password, admin_password)
+        return self.reinstall(mariadb_root_password, admin_password, managed_database_config)
 
     @job("Install App on Site")
     def install_app_job(self, app):
@@ -271,7 +308,7 @@ class Site(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password} -P {self.port}"
                 f' -e "{query}"'
             )
             self.execute(command)
@@ -287,7 +324,7 @@ class Site(Base):
         ]
         for query in queries:
             command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
+                f"mysql -h {self.host} -uroot -p{mariadb_root_password} -P {self.port}"
                 f' -e "{query}"'
             )
             self.execute(command)
@@ -317,7 +354,7 @@ class Site(Base):
             output = self.execute(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -462,7 +499,7 @@ class Site(Base):
                 "set -o pipefail && "
                 "mysqldump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
-                f"{self.database} '{table}' "
+                f"{self.database} -P {self.port} '{table}' "
                 f" | gzip > '{backup_file}'",
                 executable="/bin/bash",
             )
@@ -530,7 +567,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -545,7 +582,7 @@ class Site(Base):
         data = {"dropped": {}}
         for table in new_tables:
             output = self.execute(
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mysql -h {self.host} -u {self.user} -p{self.password} -P {self.port} "
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -627,7 +664,7 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         try:
             timezone = self.execute(
-                f"mysql -h {self.host} -u{self.database} -p{self.password} "
+                f"mysql -h {self.host} -u{self.database} -p{self.password} -P {self.port} "
                 f'-sN -e "{query}"'
             )["output"].strip()
         except Exception:
@@ -638,7 +675,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def tables(self):
         return self.execute(
             "mysql --disable-column-names -B -e 'SHOW TABLES' "
-            f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
+            f"-h {self.host} -u {self.user} -p{self.password} -P {self.port} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -671,7 +708,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
                 f" {self.database} -e '{query}'"
             )
 
@@ -747,7 +784,7 @@ print(">>>" + frappe.session.sid + "<<<")
             " GROUP BY `table_schema`"
         )
         command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
             f" -e '{query}'"
         )
         database_size = self.execute(command).get("output")
@@ -796,7 +833,7 @@ print(">>>" + frappe.session.sid + "<<<")
             " GROUP BY `table_schema`"
         )
         command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
             f" -e '{query}'"
         )
         database_size = self.execute(command).get("output")
@@ -817,7 +854,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
             command = (
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -P {self.port}"
                 f" -e '{query}'"
             )
             output = self.execute(command).get("output")
