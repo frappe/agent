@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import re
 from peewee import MySQLDatabase
 from agent.job import job, step
+import json
 
 
 class DatabaseServer(Server):
@@ -15,6 +16,9 @@ class DatabaseServer(Server):
 
         self.mariadb_directory = "/var/lib/mysql"
         self.pt_stalk_directory = "/var/lib/pt-stalk"
+
+        self.job = None
+        self.step = None
 
     def search_binary_log(
         self,
@@ -178,11 +182,12 @@ class DatabaseServer(Server):
 
     @job("Column Statistics")
     def fetch_column_stats(
-        self, schema, table, private_ip, mariadb_root_password
+        self, schema, table, private_ip, mariadb_root_password, doc_name
     ):
-        return self._fetch_column_stats(
+        self._fetch_column_stats(
             schema, table, private_ip, mariadb_root_password
         )
+        return {"doc_name": doc_name}
 
     @step("Fetch Column Statistics")
     def _fetch_column_stats(
@@ -224,7 +229,7 @@ class DatabaseServer(Server):
         except Exception as e:
             print(e)
 
-        return results
+        return {"output": json.dumps(results)}
 
     def explain_query(self, schema, query, private_ip, mariadb_root_password):
         mariadb = MySQLDatabase(

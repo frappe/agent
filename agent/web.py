@@ -998,7 +998,7 @@ def get_database_deadlocks():
 
 
 @application.route("/database/column-stats", methods=["POST"])
-def fetch_column_stats():
+def fetch_column_statistics():
     data = request.json
     job = DatabaseServer().fetch_column_stats(**data)
     return {"job": job}
