@@ -369,13 +369,20 @@ class Bench(Base):
 
     @job("New Site", priority="high")
     def new_site(
-        self, name, config, apps, mariadb_root_password, admin_password
+        self, name, config, apps, mariadb_root_password, admin_password, create_user: dict = None
     ):
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
         site.install_apps(apps)
         site.update_config(config)
         site.enable_scheduler()
+        if create_user and create_user.get("email"):
+            site.create_user(
+                create_user.get("email"),
+                create_user.get("first_name"),
+                create_user.get("last_name"),
+                create_user.get("password"),
+            )
         self.setup_nginx()
         self.server.reload_nginx()
 
