@@ -374,6 +374,7 @@ def new_site(bench):
             data["apps"],
             data["mariadb_root_password"],
             data["admin_password"],
+            create_user=data.get("create_user"),
         )
     )
     return {"job": job}
