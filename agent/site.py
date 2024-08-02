@@ -337,6 +337,10 @@ class Site(Base):
 
     @step("Create User")
     def create_user(self, email, first_name, last_name, password=None):
+        first_name = "'{}'".format(first_name.replace("'", "\\'"))
+        last_name = "'{}'".format(last_name.replace("'", "\\'"))
+        if password:
+            password =  "'{}'".format(password.replace("'", "\\'"))
         command = f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         if password:
             command += f" --password {password}"
