@@ -5,6 +5,7 @@ import shutil
 import time
 from datetime import datetime
 from typing import Dict, TYPE_CHECKING
+from shlex import quote
 
 import requests
 
@@ -337,10 +338,10 @@ class Site(Base):
 
     @step("Create User")
     def create_user(self, email, first_name, last_name, password=None):
-        first_name = "'{}'".format(first_name.replace("'", "\\'"))
-        last_name = "'{}'".format(last_name.replace("'", "\\'"))
+        first_name = quote(first_name)
+        last_name = quote(last_name)
         if password:
-            password =  "'{}'".format(password.replace("'", "\\'"))
+            password =  quote(password)
         command = f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         if password:
             command += f" --password {password}"
