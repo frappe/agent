@@ -346,11 +346,9 @@ class Site(Base):
         if password:
             command += f" --password {password}"
         return self.bench_execute(command)
-    
-    @job("Complete Setup Wizard")
+
+    @step("Complete Setup Wizard")
     def complete_setup_wizard(self, data):
-        if type(data) == str:
-            data = json.loads(data)
         payload = {
             "args" : data
         }

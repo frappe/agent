@@ -208,6 +208,11 @@ class Bench(Base):
         _site = Site(site, self)
         _site.create_user(email, first_name, last_name, password)
 
+    @job("Complete Setup Wizard")
+    def complete_setup_wizard(self, site:str, data: dict):
+        _site = Site(site, self)
+        return _site.complete_setup_wizard(data)
+
     @job("Rename Site", priority="high")
     def rename_site_job(
         self, site: str, new_name: str, create_user: dict = None
