@@ -346,6 +346,17 @@ class Site(Base):
         if password:
             command += f" --password {password}"
         return self.bench_execute(command)
+    
+    @job("Complete Setup Wizard")
+    def complete_setup_wizard(self, data):
+        if type(data) == str:
+            data = json.loads(data)
+        payload = {
+            "args" : data
+        }
+        payload = quote(json.dumps(payload))
+        command = f"frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs {payload}"
+        return self.bench_execute(command)
 
     @job("Update Site Configuration", priority="high")
     def update_config_job(self, value, remove):
