@@ -353,7 +353,7 @@ class Site(Base):
             "args" : data
         }
         payload = quote(json.dumps(payload))
-        command = f"frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs {payload}"
+        command = f"execute frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs {payload}"
         return self.bench_execute(command)
 
     @job("Update Site Configuration", priority="high")
