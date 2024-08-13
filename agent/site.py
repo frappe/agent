@@ -505,6 +505,7 @@ class Site(Base):
             sort_keys=True,
         )
         data = {"tables": {}}
+
         for table in tables:
             backup_file = os.path.join(
                 self.backup_directory, f"{table}.sql.gz"
