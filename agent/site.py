@@ -642,7 +642,7 @@ print(">>>" + frappe.session.sid + "<<<")
         try:
             timezone = self.execute(
                 f"mysql -h {self.host} -u{self.database} -p{self.password} "
-                f'-sN -e "{query}"'
+                f'--connect-timeout 3 -sN -e "{query}"'
             )["output"].strip()
         except Exception:
             timezone = ""
