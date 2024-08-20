@@ -11,7 +11,7 @@ from random import choices
 from glob import glob
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict
+from typing import TypedDict, Dict, TYPE_CHECKING
 
 import requests
 
@@ -21,6 +21,14 @@ from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, get_size
+
+
+if TYPE_CHECKING:
+
+    class BenchUpdateApp(TypedDict):
+        app: string
+        url: string
+        hash: string
 
 
 class Bench(Base):
@@ -203,13 +211,18 @@ class Bench(Base):
 
     @job("Create User", priority="high")
     def create_user(
-        self, site: str, email: str, first_name: str, last_name: str, password: str = None
+        self,
+        site: str,
+        email: str,
+        first_name: str,
+        last_name: str,
+        password: str = None,
     ):
         _site = Site(site, self)
         _site.create_user(email, first_name, last_name, password)
 
     @job("Complete Setup Wizard")
-    def complete_setup_wizard(self, site:str, data: dict):
+    def complete_setup_wizard(self, site: str, data: dict):
         _site = Site(site, self)
         return _site.complete_setup_wizard(data)
 
@@ -374,7 +387,13 @@ class Bench(Base):
 
     @job("New Site", priority="high")
     def new_site(
-        self, name, config, apps, mariadb_root_password, admin_password, create_user: dict = None
+        self,
+        name,
+        config,
+        apps,
+        mariadb_root_password,
+        admin_password,
+        create_user: dict = None,
     ):
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
@@ -568,7 +587,7 @@ class Bench(Base):
         return self.rebuild()
 
     @step("Rebuild Bench Assets")
-    def rebuild(self, web_only=False):
+    def rebuild(self):
         return self.docker_execute("bench build")
 
     @property
@@ -961,3 +980,34 @@ class Bench(Base):
         if len(programs) > 0:
             target = " ".join(programs)
         self.docker_execute(f"supervisorctl {command} {target}")
+
+    @job("Update Bench In Place")
+    def update_inplace(self, tag: str, apps: "list[BenchUpdateApp]"):
+        # pull updates
+        self.pull_app_updates()
+
+        # migrate site databases
+        self.migrate_sites()
+
+        # rebuild frontend
+        self.rebuild()
+
+        # commit container changes
+        self.commit_container_changes()
+
+        # restart site
+        self.restart(web_only=False)
+
+    @step("Pull App Changes")
+    def pull_app_updates(self):
+        ...
+
+    @step("Migrate Sites")
+    def migrate_sites(self):
+        ...
+
+    @step("Commit Container Changes")
+    def commit_container_changes(self):
+        # commit container changes
+        # push changes to the repository
+        ...

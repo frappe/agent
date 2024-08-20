@@ -480,18 +480,17 @@ def create_user(bench, site):
     )
     return {"job": job}
 
+
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/complete-setup-wizard", methods=["POST"]
+    "/benches/<string:bench>/sites/<string:site>/complete-setup-wizard",
+    methods=["POST"],
 )
 @validate_bench_and_site
 def complete_setup_wizard(bench, site):
     data = request.json
-    job = (
-        Server()
-        .benches[bench]
-        .complete_setup_wizard(site, data)
-    )
+    job = Server().benches[bench].complete_setup_wizard(site, data)
     return {"job": job}
+
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"]
@@ -1346,3 +1345,9 @@ def docker_cache_utils(method: str):
         return get_cached_apps()
 
     return None
+
+
+@application.route("/benches/<string:bench>/update_inplace", methods=["POST"])
+def update_inplace(bench: str):
+    apps = request.json.get("apps")
+    return Server().benches[bench].update_inplace(apps)
