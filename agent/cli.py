@@ -283,12 +283,12 @@ def stop(bench):
         return Server().stop_all_benches()
 
 
-@cli.command(help="Run iPython console")
+@cli.command(help="Run iPython console.")
 @click.option(
     "--config-path",
     required=False,
     type=str,
-    help="Path to agent config.json",
+    help="Path to agent config.json.",
 )
 def console(config_path):
     from atexit import register
@@ -342,6 +342,7 @@ def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
     potential = [
         config_dir / "config.json",
         config_dir / ".." / "config.json",
+        Path("/home/frappe/agent/config.json"),
     ]
 
     for p in potential:
