@@ -302,6 +302,12 @@ def retrieve_ssh_session_log(filename):
     return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
+@application.route("/server/append_authorized_key", methods=["POST"])
+def append_authorized_key():
+    text = request.json or None
+    return {"job": Server().append_authorized_key(text)}
+
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"]
 )
