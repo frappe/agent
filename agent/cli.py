@@ -10,6 +10,7 @@ import requests
 
 from agent.proxy import Proxy
 from agent.server import Server
+from agent.utils import get_timestamp
 
 if TYPE_CHECKING:
     from IPython.terminal.embed import InteractiveShellEmbed
@@ -292,13 +293,21 @@ def stop(bench):
 )
 def console(config_path):
     from atexit import register
+
     from IPython.terminal.embed import InteractiveShellEmbed
 
     terminal = InteractiveShellEmbed.instance()
 
     config_dir = get_config_dir(config_path)
     if config_dir:
-        init_server_for_console(config_dir)
+        try:
+            locals()["server"] = Server(config_dir)
+            print(
+                f"In namespace:\nserver = agent.server.Server('{config_dir}')"
+            )
+        except Exception:
+            print(f"Could not initialize agent.server.Server('{config_dir}')")
+
     elif config_path:
         print(f"Could not find config.json at '{config_path}'")
     else:
@@ -319,17 +328,10 @@ def console(config_path):
     terminal()
 
 
-def init_server_for_console(config_dir: str):
-    try:
-        locals()["server"] = Server(config_dir)
-        print(f"In namespace:\nserver = agent.server.Server('{config_dir}')")
-    except Exception:
-        print(f"Could not initialize Server('{config_dir}')")
-
-
 def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
+    cwd = os.getcwd()
     if config_path is None:
-        config_path = os.getcwd()
+        config_path = cwd
 
     config_dir = Path(config_path)
 
@@ -340,13 +342,17 @@ def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
         config_dir = config_dir.parent
 
     potential = [
+        Path("/home/frappe/agent/config.json"),
         config_dir / "config.json",
         config_dir / ".." / "config.json",
-        Path("/home/frappe/agent/config.json"),
     ]
 
     for p in potential:
-        if p.exists():
+        if not p.exists():
+            continue
+        try:
+            return p.parent.relative_to(cwd).as_posix()
+        except Exception:
             return p.parent.as_posix()
     return None
 
@@ -354,8 +360,6 @@ def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
 def store_ipython_logs(
     terminal: "InteractiveShellEmbed", config_dir: "Optional[str]"
 ):
-    from datetime import UTC, datetime
-
     if not config_dir:
         config_dir = os.getcwd()
 
@@ -363,7 +367,8 @@ def store_ipython_logs(
     log_path.parent.mkdir(exist_ok=True)
 
     with log_path.open("a") as file:
-        timestamp = str(datetime.now(UTC))
+        timestamp = get_timestamp()
+
         file.write(f"# SESSION BEGIN {timestamp}\n")
         for line in terminal.history_manager.get_range():
             file.write(f"{line[2]}\n")
