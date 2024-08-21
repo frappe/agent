@@ -32,6 +32,12 @@ if TYPE_CHECKING:
         url: string
         hash: string
 
+    class ShouldRunUpdatePhase(TypedDict):
+        setup_requirements_node: bool
+        setup_requirements_python: bool
+        rebuild_frontend: bool
+        migrate_sites: bool
+
 
 class Bench(Base):
     def __init__(self, name, server, mounts=None):
@@ -985,17 +991,19 @@ class Bench(Base):
 
     @job("Update Bench In Place")
     def update_inplace(self, image: str, apps: "list[BenchUpdateApp]"):
-        # pull updates
-        self.pull_app_changes(apps)
+        diff = self.pull_app_changes(apps)
+        should_run_phase = get_should_run_update_phase(diff)
 
-        # setup requirements
-        self.setup_requirements()
+        if (node := should_run_phase["setup_requirements_node"]) or (
+            python := should_run_phase["setup_requirements_python"]
+        ):
+            self.setup_requirements(node, python)
 
-        # migrate site databases
-        self.migrate_sites()
+        if should_run_phase["migrate_sites"]:
+            self.migrate_sites()
 
-        # rebuild frontend
-        self.rebuild()
+        if should_run_phase["rebuild_frontend"]:
+            self.rebuild()
 
         # commit container changes
         self.commit_container_changes(image)
@@ -1065,8 +1073,16 @@ class Bench(Base):
         )
 
     @step("Setup Requirements")
-    def setup_requirements(self):
-        ...
+    def setup_requirements(self, node: bool = True, python: bool = True):
+        flag = ""
+
+        if node and not python:
+            flag = " --node"
+
+        if not node and python:
+            flag = " --python"
+
+        self.docker_execute("bench setup requirements" + flag)
 
     @step("Migrate Sites")
     def migrate_sites(self):
@@ -1077,3 +1093,103 @@ class Bench(Base):
         # commit container changes
         # push changes to the repository
         ...
+
+
+def get_should_run_update_phase(diff: "list[str]") -> "ShouldRunUpdatePhase":
+    setup_node = False
+    setup_python = False
+    rebuild = False
+    migrate = False
+
+    for file in diff:
+        if all([setup_node, setup_python, rebuild, migrate]):
+            break
+
+        if not setup_node:
+            setup_node = should_setup_requirements_node(file)
+
+        if not setup_python:
+            setup_python = should_setup_requirements_py(file)
+
+        if not rebuild:
+            rebuild = should_rebuild_frontend(file)
+
+        if not migrate:
+            migrate = should_migrate_sites(file)
+
+    return dict(
+        setup_requirements_node=setup_node,
+        setup_requirements_python=setup_python,
+        rebuild_frontend=rebuild,
+        migrate_sites=migrate,
+    )
+
+
+def should_setup_requirements_node(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        [
+            "package.json",
+            "package-lock.json",
+            "yarn.lock",
+            ".lockb",
+            "pnpm-lock.yaml",
+        ],
+        [],
+    )
+
+
+def should_setup_requirements_py(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        ["pyproject.toml", "setup.py", "requirements.txt"],
+        [],
+    )
+
+
+def should_rebuild_frontend(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        [
+            ".js",
+            ".ts",
+            ".html",
+            ".vue",
+            ".jsx",
+            ".tsx",
+            ".css",
+            ".scss",
+            ".sass",
+        ],
+        ["www", "public", "frontend", "dashboard"],
+    )
+
+
+def should_migrate_sites(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        [".json", "hooks.py"],
+        ["patches"],
+    )
+
+
+def _should_run_phase(file: str, ends: "list[str]", subs: "list[str]") -> bool:
+    ends = [
+        ".js",
+        ".ts",
+        ".html",
+        ".vue",
+        ".jsx",
+        ".tsx",
+        ".css",
+        ".scss",
+        ".sass",
+    ]
+    if any([file.endswith(e) for e in ends]):
+        return True
+
+    subs = ["www", "public", "frontend"]
+    if any([s in file for s in subs]):
+        return True
+
+    return False
