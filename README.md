@@ -20,7 +20,7 @@ honcho start
 
 ## CLI
 
-Agent has a CLI interface
+Agent has a CLI
 ([ref](https://github.com/frappe/agent/blob/master/agent/cli.py)). You can
 access this by activating the env:
 
