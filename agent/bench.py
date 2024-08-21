@@ -1174,21 +1174,9 @@ def should_migrate_sites(file: str) -> bool:
 
 
 def _should_run_phase(file: str, ends: "list[str]", subs: "list[str]") -> bool:
-    ends = [
-        ".js",
-        ".ts",
-        ".html",
-        ".vue",
-        ".jsx",
-        ".tsx",
-        ".css",
-        ".scss",
-        ".sass",
-    ]
     if any([file.endswith(e) for e in ends]):
         return True
 
-    subs = ["www", "public", "frontend"]
     if any([s in file for s in subs]):
         return True
 
