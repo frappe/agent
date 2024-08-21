@@ -1,5 +1,6 @@
 import hashlib
 import json
+import path
 import os
 import shutil
 import string
@@ -12,6 +13,7 @@ from glob import glob
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict, Dict, TYPE_CHECKING
+from functools import partial
 
 import requests
 
@@ -982,9 +984,12 @@ class Bench(Base):
         self.docker_execute(f"supervisorctl {command} {target}")
 
     @job("Update Bench In Place")
-    def update_inplace(self, tag: str, apps: "list[BenchUpdateApp]"):
+    def update_inplace(self, image: str, apps: "list[BenchUpdateApp]"):
         # pull updates
-        self.pull_app_updates()
+        self.pull_app_changes(apps)
+
+        # setup requirements
+        self.setup_requirements()
 
         # migrate site databases
         self.migrate_sites()
@@ -993,13 +998,74 @@ class Bench(Base):
         self.rebuild()
 
         # commit container changes
-        self.commit_container_changes()
+        self.commit_container_changes(image)
 
         # restart site
         self.restart(web_only=False)
 
     @step("Pull App Changes")
-    def pull_app_updates(self):
+    def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
+        diff: "list[str]" = []
+        for app in apps:
+            app_diff = self._pull_app_change(app)
+            diff.extend(app_diff)
+        return diff
+
+    def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
+        remote = "inplace"
+        app_path = path.join("apps", app["app"])
+        exec = partial(self.docker_execute, subdir=app_path)
+
+        self.set_git_remote(app["app"], app["url"], remote)
+
+        app_path: str = path.join("apps", app)
+        new_hash: str = app["hash"]
+        old_hash: str = exec("git rev-parse HEAD")["output"]
+
+        # Fetch new hash and get changed files
+        exec(f"git fetch --depth 1 {remote} {new_hash}")
+        diff: str = exec(f"git diff --name-only {old_hash} {new_hash}")[
+            "output"
+        ]
+
+        # Ensure repo is not dirty and checkout next_hash
+        exec(f"git reset --hard {old_hash}")
+        exec("git clean -fd")
+        exec(f"git checkout {new_hash}")
+
+        # Remove remote, url might be private
+        exec(f"git remote remove {remote}")
+        return diff.split("\n")
+
+    def set_git_remote(
+        self,
+        app: str,
+        url: str,
+        remote: str,
+    ):
+        app_path = path.join("apps", app)
+        res = self.docker_execute(
+            f"git remote get-url {remote}",
+            subdir=app_path,
+            non_zero_throw=False,
+        )
+
+        if res["output"] == url:
+            return
+
+        if res["returncode"] == 0:
+            self.docker_execute(
+                f"git remote remove {remote}",
+                subdir=app_path,
+            )
+
+        self.docker_execute(
+            f"git remote add {remote} {url}",
+            subdir=app_path,
+        )
+
+    @step("Setup Requirements")
+    def setup_requirements(self):
         ...
 
     @step("Migrate Sites")
@@ -1007,7 +1073,7 @@ class Bench(Base):
         ...
 
     @step("Commit Container Changes")
-    def commit_container_changes(self):
+    def commit_container_changes(self, image: str):
         # commit container changes
         # push changes to the repository
         ...
