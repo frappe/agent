@@ -1349,12 +1349,14 @@ def docker_cache_utils(method: str):
 
 @application.route("/benches/<string:bench>/update_inplace", methods=["POST"])
 def update_inplace(bench: str):
+    sites = request.json.get("sites")
     apps = request.json.get("apps")
     image = request.json.get("image")
     return (
         Server()
         .benches[bench]
         .update_inplace(
+            sites,
             image,
             apps,
         )

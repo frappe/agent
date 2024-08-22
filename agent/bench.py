@@ -990,19 +990,24 @@ class Bench(Base):
         self.docker_execute(f"supervisorctl {command} {target}")
 
     @job("Update Bench In Place")
-    def update_inplace(self, image: str, apps: "list[BenchUpdateApp]"):
+    def update_inplace(
+        self,
+        sites: "list[str]",
+        image: str,
+        apps: "list[BenchUpdateApp]",
+    ):
         diff = self.pull_app_changes(apps)
-        should_run_phase = get_should_run_update_phase(diff)
+        should_run = get_should_run_update_phase(diff)
 
-        if (node := should_run_phase["setup_requirements_node"]) or (
-            python := should_run_phase["setup_requirements_python"]
+        if (node := should_run["setup_requirements_node"]) or (
+            python := should_run["setup_requirements_python"]
         ):
             self.setup_requirements(node, python)
 
-        if should_run_phase["migrate_sites"]:
-            self.migrate_sites()
+        if should_run["migrate_sites"]:
+            self.migrate_sites(sites)
 
-        if should_run_phase["rebuild_frontend"]:
+        if should_run["rebuild_frontend"]:
             self.rebuild()
 
         # commit container changes
@@ -1082,17 +1087,30 @@ class Bench(Base):
         if not node and python:
             flag = " --python"
 
-        self.docker_execute("bench setup requirements" + flag)
+        return self.docker_execute("bench setup requirements" + flag)
 
     @step("Migrate Sites")
-    def migrate_sites(self):
-        ...
+    def migrate_sites(
+        self,
+        sites: "list[str]",
+        skip_search_index: bool = False,
+        skip_failing_patches: bool = False,
+    ):
+        output = {}
+        for site_name in sites:
+            site = self.sites[site_name]
+            output[site_name] = site._migrate(
+                skip_search_index,
+                skip_failing_patches,
+            )
+        return output
 
     @step("Commit Container Changes")
     def commit_container_changes(self, image: str):
-        # commit container changes
-        # push changes to the repository
-        ...
+        container_id = self.execute(f'docker ps -aqf "name={self.name}"')[
+            "output"
+        ]
+        return self.execute(f"docker commit {container_id} {image}")
 
 
 def get_should_run_update_phase(diff: "list[str]") -> "ShouldRunUpdatePhase":
