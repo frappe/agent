@@ -2,7 +2,7 @@ import json
 import os
 import subprocess
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 
 import redis
@@ -11,8 +11,24 @@ from agent.job import connection
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Optional, Any
+    from typing import Optional, Any, TypedDict, Literal
     from agent.job import Job, Step
+
+    class ExecutionResult(TypedDict):
+        command: str
+        directory: str
+        start: datetime
+        status: Literal[
+            "Pending",
+            "Running",
+            "Success",
+            "Failure",
+        ]
+        end: datetime | None
+        duration: timedelta | None
+        output: str | None
+        returncode: int | None
+        traceback: str | None
 
 
 class Base:
@@ -41,13 +57,15 @@ class Base:
         directory = directory or self.directory
         start = datetime.now()
         self.skip_output_log = skip_output_log
-        self.data = {
+        self.data: "ExecutionResult" = {
             "command": command,
             "directory": directory,
             "start": start,
             "status": "Running",
+            "output": "",
         }
         self.log()
+        output = ""
         try:
             output, returncode = self.run_subprocess(
                 command,
@@ -57,7 +75,7 @@ class Base:
                 non_zero_throw,
             )
         except subprocess.CalledProcessError as e:
-            output = e.output
+            output = str(e.output or "")
             returncode = e.returncode
             self.data.update(
                 {
@@ -98,7 +116,7 @@ class Base:
                 process._stdin_write(input.encode())
 
             output = self.parse_output(process)
-            returncode = process.poll()
+            returncode = process.poll() or 0
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
             if non_zero_throw and returncode:
@@ -107,7 +125,7 @@ class Base:
                 )
         return output, returncode
 
-    def parse_output(self, process):
+    def parse_output(self, process) -> str:
         if not process.stdout:
             return ""
 
