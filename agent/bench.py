@@ -996,8 +996,8 @@ class Bench(Base):
         image: str,
         apps: "list[BenchUpdateApp]",
     ):
-        diff = self.pull_app_changes(apps)
-        should_run = get_should_run_update_phase(diff)
+        diff_dict = self.pull_app_changes(apps)
+        should_run = get_should_run_update_phase(diff_dict)
 
         if (node := should_run["setup_requirements_node"]) or (
             python := should_run["setup_requirements_python"]
@@ -1018,10 +1018,9 @@ class Bench(Base):
 
     @step("Pull App Changes")
     def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
-        diff: "list[str]" = []
+        diff: "dict[str, list[str]]" = []
         for app in apps:
-            app_diff = self._pull_app_change(app)
-            diff.extend(app_diff)
+            diff[app["app"]] = self._pull_app_change(app)
         return diff
 
     def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
@@ -1113,7 +1112,13 @@ class Bench(Base):
         return self.execute(f"docker commit {container_id} {image}")
 
 
-def get_should_run_update_phase(diff: "list[str]") -> "ShouldRunUpdatePhase":
+def get_should_run_update_phase(
+    diff_dict: "dict[str,list[str]]",
+) -> "ShouldRunUpdatePhase":
+    diff = []
+    for dl in diff_dict.values():
+        diff.extend(dl)
+
     setup_node = False
     setup_python = False
     rebuild = False
