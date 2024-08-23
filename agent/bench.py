@@ -1,6 +1,5 @@
 import hashlib
 import json
-import path
 import os
 import shutil
 import string
@@ -1025,12 +1024,12 @@ class Bench(Base):
 
     def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
         remote = "inplace"
-        app_path = path.join("apps", app["app"])
+        app_path = os.path.join("apps", app["app"])
         exec = partial(self.docker_execute, subdir=app_path)
 
         self.set_git_remote(app["app"], app["url"], remote)
 
-        app_path: str = path.join("apps", app)
+        app_path: str = os.path.join("apps", app)
         new_hash: str = app["hash"]
         old_hash: str = exec("git rev-parse HEAD")["output"]
 
@@ -1055,7 +1054,7 @@ class Bench(Base):
         url: str,
         remote: str,
     ):
-        app_path = path.join("apps", app)
+        app_path = os.path.join("apps", app)
         res = self.docker_execute(
             f"git remote get-url {remote}",
             subdir=app_path,
