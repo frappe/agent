@@ -1029,7 +1029,7 @@ class Bench(Base):
 
         self.set_git_remote(app["app"], app["url"], remote)
 
-        app_path: str = os.path.join("apps", app)
+        app_path: str = os.path.join("apps", app["app"])
         new_hash: str = app["hash"]
         old_hash: str = exec("git rev-parse HEAD")["output"]
 
