@@ -1352,12 +1352,10 @@ def update_inplace(bench: str):
     sites = request.json.get("sites")
     apps = request.json.get("apps")
     image = request.json.get("image")
-    return (
-        Server()
-        .benches[bench]
-        .update_inplace(
-            sites,
-            image,
-            apps,
-        )
+    _bench = Server().benches[bench]
+    job = _bench.update_inplace(
+        sites,
+        image,
+        apps,
     )
+    return {"job": job}
