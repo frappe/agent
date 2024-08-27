@@ -210,7 +210,7 @@ class Bench(Base):
 
     @job("Rename Site", priority="high")
     def rename_site_job(
-        self, site: str, new_name: str, create_user: dict = None
+        self, site: str, new_name: str, create_user: dict = None, config: dict = None
     ):
         try:
             site = Site(site, self)
@@ -221,8 +221,13 @@ class Bench(Base):
             raise Exception(f"Neither {site} nor {new_name} exists")
         site.enable_maintenance_mode()
         site.wait_till_ready()
-        if site.config.get("host_name") == f"https://{site.name}":
-            site.update_config({"host_name": f"https://{new_name}"})
+        if config:
+            if site.config.get("host_name") == f"https://{site.name}":
+                config.update({"host_name": f"https://{new_name}"})
+            site.update_config(config)
+        else:
+            if site.config.get("host_name") == f"https://{site.name}":
+                site.update_config({"host_name": f"https://{new_name}"})
         site.rename(new_name)
         self.setup_nginx()
         self.server.reload_nginx()
