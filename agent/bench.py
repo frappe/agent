@@ -1096,12 +1096,27 @@ class Bench(Base):
     ):
         output = {}
         for site_name in sites:
-            site = self.sites[site_name]
-            output[site_name] = site._migrate(
+            output[site_name] = self.migrate_site(
+                self.sites[site_name],
                 skip_search_index,
                 skip_failing_patches,
             )
         return output
+
+    def migrate_site(
+        self,
+        site: "Site",
+        skip_search_index: bool = False,
+        skip_failing_patches: bool = False,
+    ):
+        return [
+            site._enable_maintenance_mode(),
+            site._migrate(
+                skip_search_index,
+                skip_failing_patches,
+            ),
+            site._disable_maintenance_mode(),
+        ]
 
     @step("Commit Container Changes")
     def commit_container_changes(self, image: str):

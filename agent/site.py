@@ -429,6 +429,9 @@ class Site(Base):
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
+        return self._enable_maintenance_mode()
+
+    def _enable_maintenance_mode(self):
         return self.bench_execute("set-maintenance-mode on")
 
     @step("Set Administrator Password")
@@ -535,6 +538,9 @@ class Site(Base):
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
+        self._disable_maintenance_mode()
+
+    def _disable_maintenance_mode(self):
         return self.bench_execute("set-maintenance-mode off")
 
     @step("Restore Touched Tables")
