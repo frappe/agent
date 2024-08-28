@@ -452,7 +452,7 @@ def rename_site(bench, site):
     job = (
         Server()
         .benches[bench]
-        .rename_site_job(site, data["new_name"], data.get("create_user"))
+        .rename_site_job(site, data["new_name"], data.get("create_user"), data.get("config"))
     )
     return {"job": job}
 
