@@ -49,3 +49,14 @@ def cint(x):
 def b2mb(x):
     """Return B value in MiB"""
     return ceil(cint(x) / (1024**2))
+
+
+def get_timestamp():
+    try:
+        from datetime import UTC, datetime
+
+        return str(datetime.now(UTC))
+    except Exception:
+        from datetime import datetime
+
+        return str(datetime.utcnow())

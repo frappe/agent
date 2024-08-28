@@ -260,7 +260,7 @@ class Proxy(Server):
     @job("Reload NGINX Job")
     def reload_nginx_job(self):
         self.generate_proxy_config()
-        self.reload_nginx()
+        return self.reload_nginx()
 
     @step("Generate NGINX Configuration")
     def generate_proxy_config(self):
