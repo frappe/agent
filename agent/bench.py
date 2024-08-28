@@ -1017,7 +1017,7 @@ class Bench(Base):
 
     @step("Pull App Changes")
     def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
-        diff: "dict[str, list[str]]" = []
+        diff: "dict[str, list[str]]" = {}
         for app in apps:
             diff[app["app"]] = self._pull_app_change(app)
         return diff
