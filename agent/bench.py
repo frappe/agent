@@ -995,7 +995,9 @@ class Bench(Base):
         image: str,
         apps: "list[BenchUpdateApp]",
     ):
-        diff_dict = self.pull_app_changes(apps)
+        if not (diff_dict := self.pull_app_changes(apps)):
+            return
+
         should_run = get_should_run_update_phase(diff_dict)
 
         if (node := should_run["setup_requirements_node"]) or (
@@ -1019,7 +1021,8 @@ class Bench(Base):
     def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
         diff: "dict[str, list[str]]" = {}
         for app in apps:
-            diff[app["app"]] = self._pull_app_change(app)
+            if files := self._pull_app_change(app):
+                diff[app["app"]] = files
         return diff
 
     def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
@@ -1046,7 +1049,7 @@ class Bench(Base):
 
         # Remove remote, url might be private
         exec(f"git remote remove {remote}")
-        return diff.split("\n")
+        return [s for s in diff.split("\n") if s]
 
     def set_git_remote(
         self,
