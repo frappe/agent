@@ -6,6 +6,7 @@ import string
 import tempfile
 import traceback
 
+from pathlib import PurePath
 from filelock import FileLock
 from random import choices
 from glob import glob
@@ -1175,7 +1176,6 @@ def should_setup_requirements_node(file: str) -> bool:
             ".lockb",
             "pnpm-lock.yaml",
         ],
-        [],
     )
 
 
@@ -1183,7 +1183,6 @@ def should_setup_requirements_py(file: str) -> bool:
     return _should_run_phase(
         file,
         ["pyproject.toml", "setup.py", "requirements.txt"],
-        [],
     )
 
 
@@ -1208,16 +1207,29 @@ def should_rebuild_frontend(file: str) -> bool:
 def should_migrate_sites(file: str) -> bool:
     return _should_run_phase(
         file,
-        [".json", "hooks.py"],
+        ["hooks.py"],
         ["patches"],
+        ["*/doctype/*/*.json"],
     )
 
 
-def _should_run_phase(file: str, ends: "list[str]", subs: "list[str]") -> bool:
+def _should_run_phase(
+    file: str,
+    ends: "list[str] | None" = None,
+    subs: "list[str] | None" = None,
+    globs: "list[str] | None" = None,
+) -> bool:
+    ends = ends or []
+    subs = subs or []
+    globs = globs or []
+
     if any([file.endswith(e) for e in ends]):
         return True
 
     if any([s in file for s in subs]):
+        return True
+
+    if any([PurePath(file).match(s) for s in globs]):
         return True
 
     return False
