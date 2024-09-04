@@ -483,6 +483,17 @@ class Server(Base):
         except KeyError:
             raise BenchNotExistsException(bench)
 
+    @job("Append Authorized Key to frappe", priority="low")
+    def append_authorized_key(self, text):
+        import io, os, stat
+        if not text:
+            return
+        path = "/home/frappe/.ssh/authorized_keys"
+        with open(path, "a") as f:
+            f.seek(0, io.SEEK_END)
+            f.write(f"\n{text}")
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
     @property
     def job_record(self):
         if self.job is None:
