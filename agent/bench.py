@@ -1139,22 +1139,21 @@ class Bench(Base):
         self._update_config(bench_config={"docker_image": image})
         return res
 
-    @job("Recover Update Inplace")
+    @job("Recover Update In Place")
     def recover_update_inplace(
         self,
         site_names: "list[str]",
         image: str,
     ):
         self._update_config(bench_config={"docker_image": image})
+        sites = [Site(name, self) for name in site_names]
 
         # Enable maintenance mode on sites if possible
-        sites = [Site(name, self) for name in site_names]
         self.enable_maintenance_mode(sites)
 
         """
-        Will stop and remove previous inplace update container and
-        run container pointed to by image which is the last running
-        container.
+        Will stop and remove failed inplace updated container and
+        start last running container pointed to by image.
         """
         self.deploy()
 
