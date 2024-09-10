@@ -1334,8 +1334,8 @@ def site_not_found(e):
 @application.route("/docker_cache_utils/<string:method>", methods=["POST"])
 def docker_cache_utils(method: str):
     from agent.docker_cache_utils import (
-        run_command_in_docker_cache,
         get_cached_apps,
+        run_command_in_docker_cache,
     )
 
     if method == "run_command_in_docker_cache":
@@ -1357,5 +1357,17 @@ def update_inplace(bench: str):
         sites,
         image,
         apps,
+    )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/recover_update_inplace", methods=["POST"]
+)
+def recover_update_inplace(bench: str):
+    _bench = Server().benches[bench]
+    job = _bench.recover_update_inplace(
+        request.json.get("sites"),
+        request.json.get("image"),
     )
     return {"job": job}

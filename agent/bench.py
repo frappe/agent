@@ -5,17 +5,16 @@ import shutil
 import string
 import tempfile
 import traceback
-
-from pathlib import PurePath
-from filelock import FileLock
-from random import choices
-from glob import glob
+from contextlib import suppress
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import TypedDict, Dict, TYPE_CHECKING
 from functools import partial
+from glob import glob
+from pathlib import Path, PurePath
+from random import choices
+from typing import TYPE_CHECKING, Dict, TypedDict
 
 import requests
+from filelock import FileLock
 
 from agent.app import App
 from agent.base import AgentException, Base
@@ -24,8 +23,8 @@ from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, get_size
 
-
 if TYPE_CHECKING:
+    from agent.server import Server
 
     class BenchUpdateApp(TypedDict):
         app: string
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
 
 
 class Bench(Base):
-    def __init__(self, name, server, mounts=None):
+    def __init__(self, name: str, server: "Server", mounts=None):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
@@ -511,13 +510,13 @@ class Bench(Base):
     def setup_nginx(self):
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
-        self.server._reload_nginx()
+        return self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
-        self.server._reload_nginx()
+        return self.server._reload_nginx()
 
     def generate_nginx_config(self):
         domains = {}
@@ -1139,6 +1138,42 @@ class Bench(Base):
         res = self.execute(f"docker commit {container_id} {image}")
         self._update_config(bench_config={"docker_image": image})
         return res
+
+    @job("Recover Update Inplace")
+    def recover_update_inplace(
+        self,
+        site_names: "list[str]",
+        image: str,
+    ):
+        self._update_config(bench_config={"docker_image": image})
+
+        # Enable maintenance mode on sites if possible
+        sites = [Site(name, self) for name in site_names]
+        self.enable_maintenance_mode(sites)
+
+        """
+        Will stop and remove previous inplace update container and
+        run container pointed to by image which is the last running
+        container.
+        """
+        self.deploy()
+
+        self.setup_nginx()
+        self.recover_sites()
+
+    @step("Enable Maintenance Mode")
+    def enable_maintenance_mode(self, sites: "list[Site]"):
+        for site in sites:
+            with suppress(Exception):
+                site._enable_maintenance_mode()
+
+    @step("Recover Sites")
+    def recover_sites(self, sites: "list[Site]"):
+        for site in sites:
+            site._restore_touched_tables()
+            with suppress(Exception):
+                site.generate_theme_files()
+            site._disable_maintenance_mode()
 
 
 def get_should_run_update_phase(

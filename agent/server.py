@@ -3,11 +3,13 @@ import os
 import shutil
 import tempfile
 import time
+from contextlib import suppress
 from datetime import datetime
 from typing import Dict, List
 
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
+
 from peewee import MySQLDatabase
 
 from agent.base import AgentException, Base
@@ -222,15 +224,8 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
-
-        try:
-            site.bench_execute(
-                "execute"
-                " frappe.website.doctype.website_theme.website_theme"
-                ".generate_theme_files_if_not_exist"
-            )
-        except Exception:
-            pass
+        with suppress(Exception):
+            site.generate_theme_files()
 
         if activate:
             site.disable_maintenance_mode()

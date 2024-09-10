@@ -545,6 +545,9 @@ class Site(Base):
 
     @step("Restore Touched Tables")
     def restore_touched_tables(self):
+        return self._restore_touched_tables()
+
+    def _restore_touched_tables(self):
         data = {"restored": {}}
         try:
             tables_to_restore = self.touched_tables
@@ -864,3 +867,10 @@ print(">>>" + frappe.session.sid + "<<<")
     @step_record.setter
     def step_record(self, value):
         self.bench.server.step_record = value
+
+    def generate_theme_files(self):
+        self.bench_execute(
+            "execute"
+            " frappe.website.doctype.website_theme.website_theme"
+            ".generate_theme_files_if_not_exist"
+        )
