@@ -613,13 +613,22 @@ class Bench(Base):
 
     @step("Update Bench Configuration")
     def update_config(self, common_site_config, bench_config):
-        new_common_site_config = self.config
-        new_common_site_config.update(common_site_config)
-        self.setconfig(new_common_site_config)
+        self._update_config(common_site_config, bench_config)
 
-        new_bench_config = self.bench_config
-        new_bench_config.update(bench_config)
-        self.set_bench_config(new_bench_config)
+    def _update_config(
+        self,
+        common_site_config: "dict | None" = None,
+        bench_config: "dict | None" = None,
+    ):
+        if common_site_config:
+            new_common_site_config = self.config
+            new_common_site_config.update(common_site_config)
+            self.setconfig(new_common_site_config)
+
+        if bench_config:
+            new_bench_config = self.bench_config
+            new_bench_config.update(bench_config)
+            self.set_bench_config(new_bench_config)
 
     @job("Update Bench Configuration", priority="high")
     def update_config_job(self, common_site_config, bench_config):
@@ -1127,7 +1136,9 @@ class Bench(Base):
         container_id = self.execute(f'docker ps -aqf "name={self.name}"')[
             "output"
         ]
-        return self.execute(f"docker commit {container_id} {image}")
+        res = self.execute(f"docker commit {container_id} {image}")
+        self._update_config(bench_config={"docker_image": image})
+        return res
 
 
 def get_should_run_update_phase(
