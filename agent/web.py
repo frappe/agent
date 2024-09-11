@@ -1100,17 +1100,43 @@ def to_dict(model):
 def jobs(id=None, ids=None, status=None):
     choices = [x[1] for x in JobModel._meta.fields["status"].choices]
     if id:
-        job = to_dict(JobModel.get(JobModel.id == id))
+        data = to_dict(JobModel.get(JobModel.id == id))
     elif ids:
         ids = ids.split(",")
-        job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
+        data = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
     elif status in choices:
-        job = to_dict(
+        data = to_dict(
             JobModel.select(JobModel.id, JobModel.name).where(
                 JobModel.status == status
             )
         )
-    return jsonify(json.loads(json.dumps(job, default=str)))
+    else:
+        data = get_jobs(limit=100)
+
+    return jsonify(json.loads(json.dumps(data, default=str)))
+
+
+def get_jobs(limit: int = 100):
+    jobs = (
+        JobModel.select(
+            JobModel.id,
+            JobModel.name,
+            JobModel.status,
+            JobModel.agent_job_id,
+            JobModel.start,
+            JobModel.end,
+        )
+        .order_by(JobModel.id.desc())
+        .limit(limit)
+    )
+
+    data = to_dict(jobs)
+    for job in data:
+        del job["duration"]
+        del job["enqueue"]
+        del job["data"]
+
+    return data
 
 
 @application.route("/agent-jobs")
