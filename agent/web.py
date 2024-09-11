@@ -153,6 +153,13 @@ def ping():
     return {"message": "pong"}
 
 
+@application.route("/ping_job")
+def ping_job():
+    return {
+        "job": Server().ping_job(),
+    }
+
+
 @application.route("/builder/upload/<string:dc_name>", methods=["POST"])
 def upload_build_context_for_image_builder(dc_name: str):
     filename = f"{dc_name}.tar.gz"

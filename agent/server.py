@@ -804,6 +804,14 @@ class Server(Base):
     ):
         return self.long_step()
 
+    @job("Ping Job")
+    def ping_job(self):
+        return self.ping_step()
+
+    @step("Ping Step")
+    def ping_step(self):
+        return {"message": "pong"}
+
     @property
     def wildcards(self) -> List[str]:
         wildcards = []
