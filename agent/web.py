@@ -153,7 +153,7 @@ def ping():
     return {"message": "pong"}
 
 
-@application.route("/ping_job")
+@application.route("/ping_job", methods=["POST"])
 def ping_job():
     return {
         "job": Server().ping_job(),
