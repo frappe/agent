@@ -12,6 +12,7 @@ from glob import glob
 from pathlib import Path, PurePath
 from random import choices
 from typing import TYPE_CHECKING, Dict, TypedDict
+from textwrap import indent
 
 import requests
 from filelock import FileLock
@@ -21,7 +22,12 @@ from agent.base import AgentException, Base
 from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, get_size
+from agent.utils import (
+    download_file,
+    get_size,
+    get_execution_result,
+    end_execution,
+)
 
 if TYPE_CHECKING:
     from agent.server import Server
@@ -1004,7 +1010,7 @@ class Bench(Base):
         image: str,
         apps: "list[BenchUpdateApp]",
     ):
-        if not (diff_dict := self.pull_app_changes(apps)):
+        if not (diff_dict := self.pull_app_changes(apps).get("diff")):
             return
 
         should_run = get_should_run_update_phase(diff_dict)
@@ -1028,11 +1034,23 @@ class Bench(Base):
 
     @step("Pull App Changes")
     def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
+        res = get_execution_result()
+
         diff: "dict[str, list[str]]" = {}
+        outputs: "list[str]" = []
         for app in apps:
-            if files := self._pull_app_change(app):
-                diff[app["app"]] = files
-        return diff
+            if not (files := self._pull_app_change(app)):
+                continue
+
+            app_name = app["app"]
+            diff[app_name] = files
+
+            file_list = indent("\n".join(files), "    ")
+            outputs.append("\n".join(app_name, file_list))
+
+        res = end_execution(res, "\n\n".join(outputs))
+        res["diff"] = diff
+        return res
 
     def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
         remote = "inplace"
@@ -1106,14 +1124,22 @@ class Bench(Base):
         skip_search_index: bool = False,
         skip_failing_patches: bool = False,
     ):
-        output = {}
+        res = get_execution_result()
+        outputs: "list[str]" = []
+
         for site_name in sites:
-            output[site_name] = self.migrate_site(
+            migrate_res = self.migrate_site(
                 self.sites[site_name],
                 skip_search_index,
                 skip_failing_patches,
             )
-        return output
+            output = indent(migrate_res["output"], "    ")
+            outputs.append("\n".join(site_name, output))
+
+        return end_execution(
+            res,
+            "\n\n".join(outputs),
+        )
 
     def migrate_site(
         self,
@@ -1121,14 +1147,13 @@ class Bench(Base):
         skip_search_index: bool = False,
         skip_failing_patches: bool = False,
     ):
-        return [
-            site._enable_maintenance_mode(),
-            site._migrate(
-                skip_search_index,
-                skip_failing_patches,
-            ),
-            site._disable_maintenance_mode(),
-        ]
+        site._enable_maintenance_mode()
+        res = site._migrate(
+            skip_search_index,
+            skip_failing_patches,
+        )
+        site._disable_maintenance_mode()
+        return res
 
     @step("Commit Container Changes")
     def commit_container_changes(self, image: str):

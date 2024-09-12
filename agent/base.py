@@ -2,33 +2,19 @@ import json
 import os
 import subprocess
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import partial
+from typing import TYPE_CHECKING
 
 import redis
 
 from agent.job import connection
-from typing import TYPE_CHECKING
+from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
-    from typing import Optional, Any, TypedDict, Literal
-    from agent.job import Job, Step
+    from typing import Any, Optional
 
-    class ExecutionResult(TypedDict):
-        command: str
-        directory: str
-        start: datetime
-        status: Literal[
-            "Pending",
-            "Running",
-            "Success",
-            "Failure",
-        ]
-        end: datetime | None
-        duration: timedelta | None
-        output: str | None
-        returncode: int | None
-        traceback: str | None
+    from agent.job import Job, Step
 
 
 class Base:
@@ -57,13 +43,7 @@ class Base:
         directory = directory or self.directory
         start = datetime.now()
         self.skip_output_log = skip_output_log
-        self.data: "ExecutionResult" = {
-            "command": command,
-            "directory": directory,
-            "start": start,
-            "status": "Running",
-            "output": "",
-        }
+        self.data = get_execution_result(command, directory, start)
         self.log()
         output = ""
         try:
