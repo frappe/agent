@@ -2,11 +2,11 @@ import os
 from math import ceil
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+from datetime import datetime, timedelta
 
 import requests
 
 if TYPE_CHECKING:
-    from datetime import datetime, timedelta
     from typing import Literal, TypedDict
 
     ExecutionStatus = Literal[
