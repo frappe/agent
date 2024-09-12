@@ -1045,8 +1045,13 @@ class Bench(Base):
             app_name = app["app"]
             diff[app_name] = files
 
-            file_list = indent("\n".join(files), "    ")
-            outputs.append("\n".join(app_name, file_list))
+            output = "\n".join(
+                [
+                    app_name,
+                    indent("\n".join(files), "    "),
+                ]
+            )
+            outputs.append(output)
 
         res = end_execution(res, "\n\n".join(outputs))
         res["diff"] = diff
@@ -1133,8 +1138,13 @@ class Bench(Base):
                 skip_search_index,
                 skip_failing_patches,
             )
-            output = indent(migrate_res["output"], "    ")
-            outputs.append("\n".join(site_name, output))
+            output = "\n".join(
+                [
+                    site_name,
+                    indent(migrate_res["output"], "    "),
+                ]
+            )
+            outputs.append(output)
 
         return end_execution(
             res,
