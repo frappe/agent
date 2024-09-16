@@ -241,7 +241,11 @@ class Bench(Base):
 
     @job("Rename Site", priority="high")
     def rename_site_job(
-        self, site: str, new_name: str, create_user: dict = None, config: dict = None
+        self,
+        site: str,
+        new_name: str,
+        create_user: dict = None,
+        config: dict = None,
     ):
         try:
             site = Site(site, self)
@@ -1062,7 +1066,7 @@ class Bench(Base):
         res["diff"] = diff
         return res
 
-    def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
+    def _pull_app_change(self, app: "BenchUpdateApp") -> "list[str]":
         remote = "inplace"
         app_path = os.path.join("apps", app["app"])
         exec = partial(self.docker_execute, subdir=app_path)
