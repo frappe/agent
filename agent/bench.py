@@ -1015,9 +1015,9 @@ class Bench(Base):
 
         should_run = get_should_run_update_phase(diff_dict)
 
-        if (node := should_run["setup_requirements_node"]) or (
-            python := should_run["setup_requirements_python"]
-        ):
+        node = should_run["setup_requirements_node"]
+        python = should_run["setup_requirements_python"]
+        if node or python:
             self.setup_requirements(node, python)
 
         if should_run["migrate_sites"]:
