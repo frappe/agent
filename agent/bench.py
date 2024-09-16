@@ -1193,7 +1193,7 @@ class Bench(Base):
         self.deploy()
 
         self.setup_nginx()
-        self.recover_sites()
+        self.recover_sites(sites)
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self, sites: "list[Site]"):
