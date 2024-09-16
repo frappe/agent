@@ -153,6 +153,13 @@ def ping():
     return {"message": "pong"}
 
 
+@application.route("/ping_job", methods=["POST"])
+def ping_job():
+    return {
+        "job": Server().ping_job(),
+    }
+
+
 @application.route("/builder/upload/<string:dc_name>", methods=["POST"])
 def upload_build_context_for_image_builder(dc_name: str):
     filename = f"{dc_name}.tar.gz"
@@ -480,18 +487,17 @@ def create_user(bench, site):
     )
     return {"job": job}
 
+
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/complete-setup-wizard", methods=["POST"]
+    "/benches/<string:bench>/sites/<string:site>/complete-setup-wizard",
+    methods=["POST"],
 )
 @validate_bench_and_site
 def complete_setup_wizard(bench, site):
     data = request.json
-    job = (
-        Server()
-        .benches[bench]
-        .complete_setup_wizard(site, data)
-    )
+    job = Server().benches[bench].complete_setup_wizard(site, data)
     return {"job": job}
+
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"]
@@ -1101,17 +1107,43 @@ def to_dict(model):
 def jobs(id=None, ids=None, status=None):
     choices = [x[1] for x in JobModel._meta.fields["status"].choices]
     if id:
-        job = to_dict(JobModel.get(JobModel.id == id))
+        data = to_dict(JobModel.get(JobModel.id == id))
     elif ids:
         ids = ids.split(",")
-        job = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
+        data = list(map(to_dict, JobModel.select().where(JobModel.id << ids)))
     elif status in choices:
-        job = to_dict(
+        data = to_dict(
             JobModel.select(JobModel.id, JobModel.name).where(
                 JobModel.status == status
             )
         )
-    return jsonify(json.loads(json.dumps(job, default=str)))
+    else:
+        data = get_jobs(limit=100)
+
+    return jsonify(json.loads(json.dumps(data, default=str)))
+
+
+def get_jobs(limit: int = 100):
+    jobs = (
+        JobModel.select(
+            JobModel.id,
+            JobModel.name,
+            JobModel.status,
+            JobModel.agent_job_id,
+            JobModel.start,
+            JobModel.end,
+        )
+        .order_by(JobModel.id.desc())
+        .limit(limit)
+    )
+
+    data = to_dict(jobs)
+    for job in data:
+        del job["duration"]
+        del job["enqueue"]
+        del job["data"]
+
+    return data
 
 
 @application.route("/agent-jobs")
@@ -1335,8 +1367,8 @@ def site_not_found(e):
 @application.route("/docker_cache_utils/<string:method>", methods=["POST"])
 def docker_cache_utils(method: str):
     from agent.docker_cache_utils import (
-        run_command_in_docker_cache,
         get_cached_apps,
+        run_command_in_docker_cache,
     )
 
     if method == "run_command_in_docker_cache":
@@ -1346,3 +1378,29 @@ def docker_cache_utils(method: str):
         return get_cached_apps()
 
     return None
+
+
+@application.route("/benches/<string:bench>/update_inplace", methods=["POST"])
+def update_inplace(bench: str):
+    sites = request.json.get("sites")
+    apps = request.json.get("apps")
+    image = request.json.get("image")
+    _bench = Server().benches[bench]
+    job = _bench.update_inplace(
+        sites,
+        image,
+        apps,
+    )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/recover_update_inplace", methods=["POST"]
+)
+def recover_update_inplace(bench: str):
+    _bench = Server().benches[bench]
+    job = _bench.recover_update_inplace(
+        request.json.get("sites"),
+        request.json.get("image"),
+    )
+    return {"job": job}

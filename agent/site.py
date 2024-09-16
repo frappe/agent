@@ -341,7 +341,7 @@ class Site(Base):
         first_name = quote(first_name)
         last_name = quote(last_name)
         if password:
-            password =  quote(password)
+            password = quote(password)
         command = f"add-system-manager {email} --first-name {first_name} --last-name {last_name}"
         if password:
             command += f" --password {password}"
@@ -349,9 +349,7 @@ class Site(Base):
 
     @step("Complete Setup Wizard")
     def complete_setup_wizard(self, data):
-        payload = {
-            "args" : data
-        }
+        payload = {"args": data}
         payload = quote(json.dumps(payload))
         command = f"execute frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs {payload}"
         return self.bench_execute(command)
@@ -431,6 +429,9 @@ class Site(Base):
 
     @step("Enable Maintenance Mode")
     def enable_maintenance_mode(self):
+        return self._enable_maintenance_mode()
+
+    def _enable_maintenance_mode(self):
         return self.bench_execute("set-maintenance-mode on")
 
     @step("Set Administrator Password")
@@ -491,6 +492,16 @@ class Site(Base):
 
     @step("Migrate Site")
     def migrate(self, skip_search_index=False, skip_failing_patches=False):
+        return self._migrate(
+            skip_search_index,
+            skip_failing_patches,
+        )
+
+    def _migrate(
+        self,
+        skip_search_index: bool = False,
+        skip_failing_patches: bool = False,
+    ):
         cmd = "migrate"
         if skip_search_index:
             cmd += " --skip-search-index"
@@ -527,10 +538,16 @@ class Site(Base):
 
     @step("Disable Maintenance Mode")
     def disable_maintenance_mode(self):
+        self._disable_maintenance_mode()
+
+    def _disable_maintenance_mode(self):
         return self.bench_execute("set-maintenance-mode off")
 
     @step("Restore Touched Tables")
     def restore_touched_tables(self):
+        return self._restore_touched_tables()
+
+    def _restore_touched_tables(self):
         data = {"restored": {}}
         try:
             tables_to_restore = self.touched_tables
@@ -850,3 +867,10 @@ print(">>>" + frappe.session.sid + "<<<")
     @step_record.setter
     def step_record(self, value):
         self.bench.server.step_record = value
+
+    def generate_theme_files(self):
+        self.bench_execute(
+            "execute"
+            " frappe.website.doctype.website_theme.website_theme"
+            ".generate_theme_files_if_not_exist"
+        )

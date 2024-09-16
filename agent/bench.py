@@ -5,26 +5,47 @@ import shutil
 import string
 import tempfile
 import traceback
-
-from filelock import FileLock
-from random import choices
-from glob import glob
+from contextlib import suppress
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict
+from functools import partial
+from glob import glob
+from pathlib import Path, PurePath
+from random import choices
+from typing import TYPE_CHECKING, Dict, TypedDict
+from textwrap import indent
 
 import requests
+from filelock import FileLock
 
 from agent.app import App
 from agent.base import AgentException, Base
 from agent.exceptions import SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, get_size
+from agent.utils import (
+    download_file,
+    get_size,
+    get_execution_result,
+    end_execution,
+)
+
+if TYPE_CHECKING:
+    from agent.server import Server
+
+    class BenchUpdateApp(TypedDict):
+        app: string
+        url: string
+        hash: string
+
+    class ShouldRunUpdatePhase(TypedDict):
+        setup_requirements_node: bool
+        setup_requirements_python: bool
+        rebuild_frontend: bool
+        migrate_sites: bool
 
 
 class Bench(Base):
-    def __init__(self, name, server, mounts=None):
+    def __init__(self, name: str, server: "Server", mounts=None):
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)
@@ -203,13 +224,18 @@ class Bench(Base):
 
     @job("Create User", priority="high")
     def create_user(
-        self, site: str, email: str, first_name: str, last_name: str, password: str = None
+        self,
+        site: str,
+        email: str,
+        first_name: str,
+        last_name: str,
+        password: str = None,
     ):
         _site = Site(site, self)
         _site.create_user(email, first_name, last_name, password)
 
     @job("Complete Setup Wizard")
-    def complete_setup_wizard(self, site:str, data: dict):
+    def complete_setup_wizard(self, site: str, data: dict):
         _site = Site(site, self)
         return _site.complete_setup_wizard(data)
 
@@ -379,7 +405,13 @@ class Bench(Base):
 
     @job("New Site", priority="high")
     def new_site(
-        self, name, config, apps, mariadb_root_password, admin_password, create_user: dict = None
+        self,
+        name,
+        config,
+        apps,
+        mariadb_root_password,
+        admin_password,
+        create_user: dict = None,
     ):
         self.bench_new_site(name, mariadb_root_password, admin_password)
         site = Site(name, self)
@@ -489,13 +521,13 @@ class Bench(Base):
     def setup_nginx(self):
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
-        self.server._reload_nginx()
+        return self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
-        self.server._reload_nginx()
+        return self.server._reload_nginx()
 
     def generate_nginx_config(self):
         domains = {}
@@ -573,7 +605,7 @@ class Bench(Base):
         return self.rebuild()
 
     @step("Rebuild Bench Assets")
-    def rebuild(self, web_only=False):
+    def rebuild(self):
         return self.docker_execute("bench build")
 
     @property
@@ -591,13 +623,22 @@ class Bench(Base):
 
     @step("Update Bench Configuration")
     def update_config(self, common_site_config, bench_config):
-        new_common_site_config = self.config
-        new_common_site_config.update(common_site_config)
-        self.setconfig(new_common_site_config)
+        self._update_config(common_site_config, bench_config)
 
-        new_bench_config = self.bench_config
-        new_bench_config.update(bench_config)
-        self.set_bench_config(new_bench_config)
+    def _update_config(
+        self,
+        common_site_config: "dict | None" = None,
+        bench_config: "dict | None" = None,
+    ):
+        if common_site_config:
+            new_common_site_config = self.config
+            new_common_site_config.update(common_site_config)
+            self.setconfig(new_common_site_config)
+
+        if bench_config:
+            new_bench_config = self.bench_config
+            new_bench_config.update(bench_config)
+            self.set_bench_config(new_bench_config)
 
     @job("Update Bench Configuration", priority="high")
     def update_config_job(self, common_site_config, bench_config):
@@ -966,3 +1007,314 @@ class Bench(Base):
         if len(programs) > 0:
             target = " ".join(programs)
         self.docker_execute(f"supervisorctl {command} {target}")
+
+    @job("Update Bench In Place")
+    def update_inplace(
+        self,
+        sites: "list[str]",
+        image: str,
+        apps: "list[BenchUpdateApp]",
+    ):
+        if not (diff_dict := self.pull_app_changes(apps).get("diff")):
+            return
+
+        should_run = get_should_run_update_phase(diff_dict)
+
+        node = should_run["setup_requirements_node"]
+        python = should_run["setup_requirements_python"]
+        if node or python:
+            self.setup_requirements(node, python)
+
+        if should_run["migrate_sites"]:
+            self.migrate_sites(sites)
+
+        if should_run["rebuild_frontend"]:
+            self.rebuild()
+
+        # commit container changes
+        self.commit_container_changes(image)
+
+        # restart site
+        self.restart(web_only=False)
+
+    @step("Pull App Changes")
+    def pull_app_changes(self, apps: "list[BenchUpdateApp]"):
+        res = get_execution_result()
+
+        diff: "dict[str, list[str]]" = {}
+        outputs: "list[str]" = []
+        for app in apps:
+            if not (files := self._pull_app_change(app)):
+                continue
+
+            app_name = app["app"]
+            diff[app_name] = files
+
+            output = "\n".join(
+                [
+                    app_name,
+                    indent("\n".join(files), "    "),
+                ]
+            )
+            outputs.append(output)
+
+        res = end_execution(res, "\n\n".join(outputs))
+        res["diff"] = diff
+        return res
+
+    def _pull_app_change(self, app: "BenchUpdateApp") -> list[str]:
+        remote = "inplace"
+        app_path = os.path.join("apps", app["app"])
+        exec = partial(self.docker_execute, subdir=app_path)
+
+        self.set_git_remote(app["app"], app["url"], remote)
+
+        app_path: str = os.path.join("apps", app["app"])
+        new_hash: str = app["hash"]
+        old_hash: str = exec("git rev-parse HEAD")["output"]
+
+        # Fetch new hash and get changed files
+        exec(f"git fetch --depth 1 {remote} {new_hash}")
+        diff: str = exec(f"git diff --name-only {old_hash} {new_hash}")[
+            "output"
+        ]
+
+        # Ensure repo is not dirty and checkout next_hash
+        exec(f"git reset --hard {old_hash}")
+        exec("git clean -fd")
+        exec(f"git checkout {new_hash}")
+
+        # Remove remote, url might be private
+        exec(f"git remote remove {remote}")
+        return [s for s in diff.split("\n") if s]
+
+    def set_git_remote(
+        self,
+        app: str,
+        url: str,
+        remote: str,
+    ):
+        app_path = os.path.join("apps", app)
+        res = self.docker_execute(
+            f"git remote get-url {remote}",
+            subdir=app_path,
+            non_zero_throw=False,
+        )
+
+        if res["output"] == url:
+            return
+
+        if res["returncode"] == 0:
+            self.docker_execute(
+                f"git remote remove {remote}",
+                subdir=app_path,
+            )
+
+        self.docker_execute(
+            f"git remote add {remote} {url}",
+            subdir=app_path,
+        )
+
+    @step("Setup Requirements")
+    def setup_requirements(self, node: bool = True, python: bool = True):
+        flag = ""
+
+        if node and not python:
+            flag = " --node"
+
+        if not node and python:
+            flag = " --python"
+
+        return self.docker_execute("bench setup requirements" + flag)
+
+    @step("Migrate Sites")
+    def migrate_sites(
+        self,
+        sites: "list[str]",
+        skip_search_index: bool = False,
+        skip_failing_patches: bool = False,
+    ):
+        res = get_execution_result()
+        outputs: "list[str]" = []
+
+        for site_name in sites:
+            migrate_res = self.migrate_site(
+                self.sites[site_name],
+                skip_search_index,
+                skip_failing_patches,
+            )
+            output = "\n".join(
+                [
+                    site_name,
+                    indent(migrate_res["output"], "    "),
+                ]
+            )
+            outputs.append(output)
+
+        return end_execution(
+            res,
+            "\n\n".join(outputs),
+        )
+
+    def migrate_site(
+        self,
+        site: "Site",
+        skip_search_index: bool = False,
+        skip_failing_patches: bool = False,
+    ):
+        site._enable_maintenance_mode()
+        res = site._migrate(
+            skip_search_index,
+            skip_failing_patches,
+        )
+        site._disable_maintenance_mode()
+        return res
+
+    @step("Commit Container Changes")
+    def commit_container_changes(self, image: str):
+        container_id = self.execute(f'docker ps -aqf "name={self.name}"')[
+            "output"
+        ]
+        res = self.execute(f"docker commit {container_id} {image}")
+        self._update_config(bench_config={"docker_image": image})
+        return res
+
+    @job("Recover Update In Place")
+    def recover_update_inplace(
+        self,
+        site_names: "list[str]",
+        image: str,
+    ):
+        self._update_config(bench_config={"docker_image": image})
+        sites = [Site(name, self) for name in site_names]
+
+        # Enable maintenance mode on sites if possible
+        self.enable_maintenance_mode(sites)
+
+        """
+        Will stop and remove failed inplace updated container and
+        start last running container pointed to by image.
+        """
+        self.deploy()
+
+        self.setup_nginx()
+        self.recover_sites(sites)
+
+    @step("Enable Maintenance Mode")
+    def enable_maintenance_mode(self, sites: "list[Site]"):
+        for site in sites:
+            with suppress(Exception):
+                site._enable_maintenance_mode()
+
+    @step("Recover Sites")
+    def recover_sites(self, sites: "list[Site]"):
+        for site in sites:
+            site._restore_touched_tables()
+            with suppress(Exception):
+                site.generate_theme_files()
+            site._disable_maintenance_mode()
+
+
+def get_should_run_update_phase(
+    diff_dict: "dict[str,list[str]]",
+) -> "ShouldRunUpdatePhase":
+    diff = []
+    for dl in diff_dict.values():
+        diff.extend(dl)
+
+    setup_node = False
+    setup_python = False
+    rebuild = False
+    migrate = False
+
+    for file in diff:
+        if all([setup_node, setup_python, rebuild, migrate]):
+            break
+
+        if not setup_node:
+            setup_node = should_setup_requirements_node(file)
+
+        if not setup_python:
+            setup_python = should_setup_requirements_py(file)
+
+        if not rebuild:
+            rebuild = should_rebuild_frontend(file)
+
+        if not migrate:
+            migrate = should_migrate_sites(file)
+
+    return dict(
+        setup_requirements_node=setup_node,
+        setup_requirements_python=setup_python,
+        rebuild_frontend=rebuild,
+        migrate_sites=migrate,
+    )
+
+
+def should_setup_requirements_node(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        [
+            "package.json",
+            "package-lock.json",
+            "yarn.lock",
+            ".lockb",
+            "pnpm-lock.yaml",
+        ],
+    )
+
+
+def should_setup_requirements_py(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        ["pyproject.toml", "setup.py", "requirements.txt"],
+    )
+
+
+def should_rebuild_frontend(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        [
+            ".js",
+            ".ts",
+            ".html",
+            ".vue",
+            ".jsx",
+            ".tsx",
+            ".css",
+            ".scss",
+            ".sass",
+        ],
+        ["www", "public", "frontend", "dashboard"],
+    )
+
+
+def should_migrate_sites(file: str) -> bool:
+    return _should_run_phase(
+        file,
+        ["hooks.py"],
+        ["patches"],
+        ["*/doctype/*/*.json"],
+    )
+
+
+def _should_run_phase(
+    file: str,
+    ends: "list[str] | None" = None,
+    subs: "list[str] | None" = None,
+    globs: "list[str] | None" = None,
+) -> bool:
+    ends = ends or []
+    subs = subs or []
+    globs = globs or []
+
+    if any([file.endswith(e) for e in ends]):
+        return True
+
+    if any([s in file for s in subs]):
+        return True
+
+    if any([PurePath(file).match(s) for s in globs]):
+        return True
+
+    return False
