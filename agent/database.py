@@ -1,3 +1,4 @@
+from decimal import Decimal
 import os
 from agent.server import Server
 from pathlib import Path
@@ -286,3 +287,69 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
+
+    def get_performance_report(self, private_ip, mariadb_root_password, reports=[]):
+        # `reports` is a list of reports to fetch. If empty, fetch all reports.
+        mariadb = MySQLDatabase(
+            "mysql",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        reports_sql = {
+            "total_allocated_memory": "select total_allocated from sys.`x$memory_global_total`",
+            "top_memory_by_event": "select * from sys.`x$memory_global_by_current_bytes`",
+            "top_memory_by_user": "select * from sys.`x$memory_by_user_by_current_bytes`",
+            "top_memory_by_host": "select * from sys.`x$memory_by_host_by_current_bytes`",
+            "top_memory_by_thread": "select * from sys.`x$memory_by_thread_by_current_bytes`",
+            "top_io_by_file_activity_report": "select * from sys.`x$io_global_by_file_by_bytes`",
+            "top_io_by_file_by_time": "select * from sys.`x$io_global_by_file_by_latency`",
+            "top_io_by_event_category": "select * from sys.`x$io_global_by_wait_by_bytes`",
+            "top_io_in_time_by_event_category": "select * from sys.`x$io_global_by_wait_by_latency`",
+            "top_io_by_user_or_thread": "select * from sys.`x$io_by_thread_by_latency`",
+            "statement_analysis": "select * from sys.`x$statement_analysis`",
+            "statements_in_highest_5_percentile": "select * from sys.`x$statements_with_runtimes_in_95th_percentile`",
+            "statements_using_temp_tables": "select * from sys.`statements_with_temp_tables`",
+            "statements_with_sorting": "select * from sys.`statements_with_sorting`",
+            "statements_with_full_table_scans": "select * from sys.`statements_with_full_table_scans`",
+            "statements_with_errors_or_warnings": "select * from sys.`statements_with_errors_or_warnings`",
+            "schema_index_statistics": "select * from sys.`x$schema_index_statistics`",
+            "schema_table_statistics": "select * from sys.`x$schema_table_statistics`",
+            "schema_table_statistics_with_innodb_buffer": "select * from sys.`x$schema_table_statistics_with_buffer`",
+            "schema_tables_with_full_table_scans": "select * from sys.`schema_tables_with_full_table_scans`",
+            "schema_unused_indexes": "select * from sys.`schema_unused_indexes`",
+            "global_waits_by_time": "select * from sys.`x$waits_global_by_latency`",
+            "waits_by_user_by_time": "select * from sys.`x$waits_by_user_by_latency`",
+            "wait_classes_by_time": "select * from sys.`x$wait_classes_global_by_latency`",
+            "waits_classes_by_avg_time": "select * from sys.`x$wait_classes_global_by_avg_latency`",
+            "innodb_buffer_stats_by_schema": "select * from sys.`x$innodb_buffer_stats_by_schema`",
+            "innodb_buffer_stats_by_table": "select * from sys.`x$innodb_buffer_stats_by_table`",
+            "user_resource_use_overview": "select * from sys.`x$user_summary`",
+            "user_resource_use_io_statistics": "select * from sys.`x$user_summary_by_file_io_type`",
+            "user_resource_use_statement_statistics": "select * from sys.`x$user_summary_by_statement_type`",
+        }
+
+        data = {}
+        for key, sql in reports_sql.items():
+            if key in reports:
+                data[key] = self.sql(mariadb, sql)
+                if key == "total_allocated_memory":
+                    data[key] = data[key][0]["total_allocated"]
+
+        # convert Decimal to float
+        for key, value in data.items():
+            if isinstance(value, list):
+                for row in value:
+                    for column in row:
+                        if isinstance(row[column], Decimal):
+                            row[column] = float(row[column])
+            elif isinstance(value, dict):
+                for column in value:
+                    if isinstance(value[column], Decimal):
+                        value[column] = float(value[column])
+            elif isinstance(value, Decimal):
+                data[key] = float(value)
+
+        return data
