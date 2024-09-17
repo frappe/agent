@@ -288,7 +288,7 @@ class DatabaseServer(Server):
                 )
         return sorted(stalks, key=lambda x: x["name"])
 
-    @job("Performance Report")
+    @job("Fetch Performance Report")
     def get_performance_report(self, private_ip, mariadb_root_password, reports=[]):
         # `reports` is a list of reports to fetch. If empty, fetch all reports.
         mariadb = MySQLDatabase(
