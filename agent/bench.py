@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Dict, TypedDict
 from textwrap import indent
 
 import requests
-from filelock import FileLock
 
 from agent.app import App
 from agent.base import AgentException, Base
@@ -523,12 +522,16 @@ class Bench(Base):
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
+        from filelock import FileLock
+
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
         return self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
+        from filelock import FileLock
+
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
             self.generate_nginx_config()
         return self.server._reload_nginx()
