@@ -1013,7 +1013,8 @@ def get_stalk(stalk):
 @application.route("/database/performance_report", methods=["POST"])
 def get_performance_report():
     data = request.json
-    return jsonify(DatabaseServer().get_performance_report(**data))
+    job = DatabaseServer().get_performance_report(**data)
+    return {"job": job}
 
 
 @application.route("/database/deadlocks", methods=["POST"])
