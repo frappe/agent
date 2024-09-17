@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import platform
 import tempfile
 import time
 from contextlib import suppress
@@ -552,6 +553,7 @@ class Server(Base):
                 "git remote get-url upstream", directory=directory
             )["output"],
             "show": self.execute("git show", directory=directory)["output"],
+            "python": platform.python_version(),
         }
 
     def status(self, mariadb_root_password):
