@@ -14,8 +14,7 @@ class PatchHandler:
     def executed_patches(self):
         if not self._executed_patches:
             self._executed_patches = set(self.retrieve_patches())
-            # self._executed_patches = set()
-            return self._executed_patches
+        return self._executed_patches
 
     def retrieve_patches(self):
         from agent.job import PatchLogModel

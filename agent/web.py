@@ -80,14 +80,14 @@ log.handlers = []
 def validate_access_token():
     try:
         if application.debug:
-            return
+            return None
         method, access_token = request.headers["Authorization"].split(" ")
         stored_hash = Server().config["access_token"]
         if method.lower() == "bearer" and pbkdf2.verify(access_token, stored_hash):
-            return
+            return None
         access_token = b64decode(access_token).decode().split(":")[1]
         if method.lower() == "basic" and pbkdf2.verify(access_token, stored_hash):
-            return
+            return None
     except Exception:
         pass
 
@@ -738,13 +738,12 @@ def get_site_apps(bench, site):
 @validate_bench_and_site
 def site_create_database_access_credentials(bench, site):
     data = request.json
-    credentials = (
+    return (
         Server()
         .benches[bench]
         .sites[site]
         .create_database_access_credentials(data["mode"], data["mariadb_root_password"])
     )
-    return credentials
 
 
 @application.route(
@@ -1064,10 +1063,15 @@ def agent_jobs(id=None, ids=None):
     if id:
         job = to_dict(JobModel.get(JobModel.agent_job_id == id))
         return jsonify(json.loads(json.dumps(job, default=str)))
-    elif ids:
+
+    if ids:
         ids = ids.split(",")
         job = list(map(to_dict, JobModel.select().where(JobModel.agent_job_id << ids)))
         return jsonify(json.loads(json.dumps(job, default=str)))
+
+    jobs = JobModel.select(JobModel.agent_job_id).order_by(JobModel.id.desc()).limit(100)
+    jobs = [j["agent_job_id"] for j in to_dict(jobs)]
+    return jsonify(jobs)
 
 
 @application.route("/update", methods=["POST"])

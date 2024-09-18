@@ -115,7 +115,7 @@ class Base:
         for char in iter(partial(process.stdout.read, 1), b""):
             if char == b"" and process.poll() is not None:
                 break
-            elif char == b"\r":
+            if char == b"\r":
                 # Publish output and then wipe current line.
                 # Include the overwritten line in the output
                 self.publish_lines([*lines, line.decode(errors="replace")])

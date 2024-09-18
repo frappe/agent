@@ -265,8 +265,7 @@ def bench():
 def start(bench):
     if bench:
         return Server().benches[bench].start()
-    else:
-        return Server().start_all_benches()
+    return Server().start_all_benches()
 
 
 @bench.command()
@@ -274,8 +273,7 @@ def start(bench):
 def stop(bench):
     if bench:
         return Server().benches[bench].stop()
-    else:
-        return Server().stop_all_benches()
+    return Server().stop_all_benches()
 
 
 @cli.command(help="Run iPython console.")

@@ -13,20 +13,18 @@ def cstr(text, encoding="utf-8"):
     """Similar to frappe.utils.cstr"""
     if isinstance(text, str):
         return text
-    elif text is None:
+    if text is None:
         return ""
-    elif isinstance(text, bytes):
+    if isinstance(text, bytes):
         return str(text, encoding)
-    else:
-        return str(text)
+    return str(text)
 
 
 def get_traceback():
     """Returns the traceback of the Exception"""
     exc_type, exc_value, exc_tb = sys.exc_info()
     trace_list = traceback.format_exception(exc_type, exc_value, exc_tb)
-    body = "".join(cstr(t) for t in trace_list)
-    return body
+    return "".join(cstr(t) for t in trace_list)
 
 
 if __name__ == "__main__":

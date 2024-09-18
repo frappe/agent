@@ -112,8 +112,7 @@ class ImageBuilder(Base):
         if self.no_cache:
             command = f"{command} --no-cache"
 
-        command = f"{command} - "
-        return command
+        return f"{command} - "
 
     def _get_build_environment(self) -> dict:
         environment = os.environ.copy()

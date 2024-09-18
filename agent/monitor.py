@@ -59,11 +59,10 @@ class Monitor(Server):
     def fetch_targets(self):
         press_url = self.config.get("press_url")
         press_token = self.config.get("press_token")
-        targets = requests.post(
+        return requests.post(
             f"{press_url}/api/method/press.api.monitoring.targets",
             data={"token": press_token},
         ).json()["message"]
-        return targets
 
     def generate_prometheus_sites_config(self, benches):
         prometheus_sites_config = os.path.join(self.prometheus_directory, "file_sd", "sites.yml")

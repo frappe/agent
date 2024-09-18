@@ -715,8 +715,7 @@ class Bench(Base):
         if self.bench_config.get("single_container"):
             self.execute(f"docker stop {self.name}")
             return self.execute(f"docker rm {self.name}")
-        else:
-            return self.execute(f"docker stack rm {self.name}")
+        return self.execute(f"docker stack rm {self.name}")
 
     @step("Stop Bench")
     def _stop(self):
@@ -763,8 +762,7 @@ class Bench(Base):
         import re
 
         output = re.sub(r'("db_name":.* ")(\w*)(")', r"\1********\3", output)
-        output = re.sub(r'("db_password":.* ")(\w*)(")', r"\1********\3", output)
-        return output
+        return re.sub(r'("db_password":.* ")(\w*)(")', r"\1********\3", output)
 
     @property
     def sites(self):

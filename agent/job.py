@@ -164,17 +164,16 @@ def job(name: str, priority="default"):
             else:
                 instance.job_record.success(result)
             return result
-        else:
-            agent_job_id = get_agent_job_id()
-            instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
-            queue(priority).enqueue_call(
-                wrapped,
-                args=args,
-                kwargs=kwargs,
-                timeout=4 * 3600,
-                result_ttl=24 * 3600,
-            )
-            return instance.job_record.model.id
+        agent_job_id = get_agent_job_id()
+        instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
+        queue(priority).enqueue_call(
+            wrapped,
+            args=args,
+            kwargs=kwargs,
+            timeout=4 * 3600,
+            result_ttl=24 * 3600,
+        )
+        return instance.job_record.model.id
 
     return wrapper
 

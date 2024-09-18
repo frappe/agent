@@ -8,7 +8,7 @@ indent-style = "space"
 
 
 [lint]
-select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90"]
+select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90", "RET"]
 ignore = [
    "UP015", # Unnecessary open mode parameters
 ]

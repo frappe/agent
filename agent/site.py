@@ -580,12 +580,11 @@ class Site(Base):
         return self.timezone
 
     def fetch_site_info(self):
-        data = {
+        return {
             "config": self.config,
             "timezone": self.get_timezone(),
             "usage": self.get_usage(),
         }
-        return data
 
     def fetch_site_analytics(self):
         if not os.path.exists(self.analytics_file):

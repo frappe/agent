@@ -53,7 +53,7 @@ class DatabaseServer(Server):
             else:
                 if any(line.startswith(skip) for skip in ["SET", "/*!"]):
                     continue
-                elif line and timestamp and re.search(search_pattern, line):
+                if line and timestamp and re.search(search_pattern, line):
                     events.append(
                         {
                             "query": line,
