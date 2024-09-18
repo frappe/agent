@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # Code below copied mostly verbatim from press, this is tentative and
 # will be removed once build code has been moved out of press.
 #
