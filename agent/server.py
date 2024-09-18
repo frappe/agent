@@ -2,25 +2,23 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import platform
+import shutil
 import tempfile
 import time
 from contextlib import suppress
 from datetime import datetime
-from typing import Dict, List
 
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
-
 from peewee import MySQLDatabase
 
 from agent.base import AgentException, Base
 from agent.bench import Bench
-from agent.job import Job, Step, job, step
-from agent.site import Site
-from agent.patch_handler import run_patches
 from agent.exceptions import BenchNotExistsException
+from agent.job import Job, Step, job, step
+from agent.patch_handler import run_patches
+from agent.site import Site
 
 
 class Server(Base):
@@ -29,15 +27,11 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
-        self.archived_directory = os.path.join(
-            os.path.dirname(self.benches_directory), "archived"
-        )
+        self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
 
-        self.error_pages_directory = os.path.join(
-            self.directory, "repo", "agent", "pages"
-        )
+        self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
         self.job = None
         self.step = None
 
@@ -61,9 +55,7 @@ class Server(Base):
 
         config.update({"directory": bench_directory, "name": name})
         docker_compose = os.path.join(bench_directory, "docker-compose.yml")
-        self._render_template(
-            "bench/docker-compose.yml.jinja2", config, docker_compose
-        )
+        self._render_template("bench/docker-compose.yml.jinja2", config, docker_compose)
 
         config_directory = os.path.join(bench_directory, "config")
         command = (
@@ -85,16 +77,12 @@ class Server(Base):
     def dump(self):
         return {
             "name": self.name,
-            "benches": {
-                name: bench.dump() for name, bench in self.benches.items()
-            },
+            "benches": {name: bench.dump() for name, bench in self.benches.items()},
             "config": self.config,
         }
 
     @job("New Bench", priority="low")
-    def new_bench(
-        self, name, bench_config, common_site_config, registry, mounts=None
-    ):
+    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
         bench = Bench(name, self, mounts=mounts)
@@ -109,9 +97,7 @@ class Server(Base):
         Throw if container exists
         """
         try:
-            self.execute(
-                f"""docker ps --filter "name=^{name}$" | grep {name}"""
-            )
+            self.execute(f"""docker ps --filter "name=^{name}$" | grep {name}""")
         except AgentException:
             pass  # container does not exist
         else:
@@ -142,7 +128,7 @@ class Server(Base):
         self.remove_temporary_files()
         self.remove_unused_docker_artefacts()
 
-    def remove_benches_without_container(self, benches: List[str]):
+    def remove_benches_without_container(self, benches: list[str]):
         for bench in benches:
             try:
                 self.execute(f"docker ps -a | grep {bench}")
@@ -182,9 +168,7 @@ class Server(Base):
                     continue
                 file_path = os.path.join(temp_directory, file)
                 if now - os.stat(file_path).st_mtime > 7200:
-                    removed.append(
-                        {"file": file, "size": self._get_tree_size(file_path)}
-                    )
+                    removed.append({"file": file, "size": self._get_tree_size(file_path)})
                     if os.path.isfile(file_path):
                         os.remove(file_path)
                     elif os.path.isdir(file_path):
@@ -242,9 +226,12 @@ class Server(Base):
         activate,
         skip_failing_patches,
         skip_backups,
-        before_migrate_scripts: Dict[str, str] = {},
-        skip_search_index=True,
+        before_migrate_scripts: dict[str, str] | None = None,
+        skip_search_index: bool = True,
     ):
+        if before_migrate_scripts is None:
+            before_migrate_scripts = {}
+
         source = Bench(source, self)
         target = Bench(target, self)
         site = Site(name, source)
@@ -291,9 +278,7 @@ class Server(Base):
             pass
 
     @job("Recover Failed Site Migrate", priority="high")
-    def update_site_recover_migrate_job(
-        self, name, source, target, activate, rollback_scripts
-    ):
+    def update_site_recover_migrate_job(self, name, source, target, activate, rollback_scripts):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -331,9 +316,7 @@ class Server(Base):
             site.disable_maintenance_mode()
 
     @job("Move Site to Bench")
-    def move_site_to_bench(
-        self, name, source, target, deactivate, activate, skip_failing_patches
-    ):
+    def move_site_to_bench(self, name, source, target, deactivate, activate, skip_failing_patches):
         # Dangerous method (no backup),
         # use update_site_migrate if you don't know what you're doing
         source = Bench(source, self)
@@ -375,16 +358,12 @@ class Server(Base):
     def move_site(self, site, target):
         destination = os.path.join(target.sites_directory, site.name)
         destination_site_config = os.path.join(destination, "site_config.json")
-        if os.path.exists(destination) and not os.path.exists(
-            destination_site_config
-        ):
+        if os.path.exists(destination) and not os.path.exists(destination_site_config):
             # If there's already a site directory in the destination bench
             # and it does not have a site_config.json file,
             # then it is an incomplete site directory.
             # Move it to the sites/archived directory
-            archived_sites_directory = os.path.join(
-                target.sites_directory, "archived"
-            )
+            archived_sites_directory = os.path.join(target.sites_directory, "archived")
             os.makedirs(archived_sites_directory, exist_ok=True)
             archived_site_path = os.path.join(
                 archived_sites_directory,
@@ -394,9 +373,7 @@ class Server(Base):
         shutil.move(site.directory, target.sites_directory)
 
     def execute(self, command, directory=None, skip_output_log=False):
-        return super().execute(
-            command, directory=directory, skip_output_log=skip_output_log
-        )
+        return super().execute(command, directory=directory, skip_output_log=skip_output_log)
 
     @job("Reload NGINX")
     def restart_nginx(self):
@@ -466,7 +443,7 @@ class Server(Base):
                 pass
 
     @property
-    def benches(self) -> Dict[str, Bench]:
+    def benches(self) -> dict[str, Bench]:
         benches = {}
         for directory in os.listdir(self.benches_directory):
             try:
@@ -478,8 +455,8 @@ class Server(Base):
     def get_bench(self, bench):
         try:
             return self.benches[bench]
-        except KeyError:
-            raise BenchNotExistsException(bench)
+        except KeyError as exc:
+            raise BenchNotExistsException(bench) from exc
 
     @property
     def job_record(self):
@@ -502,14 +479,10 @@ class Server(Base):
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         if url:
-            self.execute(
-                f"git remote set-url upstream {url}", directory=directory
-            )
+            self.execute(f"git remote set-url upstream {url}", directory=directory)
         self.execute("git fetch upstream", directory=directory)
         self.execute(f"git checkout {branch}", directory=directory)
-        self.execute(
-            f"git merge --ff-only upstream/{branch}", directory=directory
-        )
+        self.execute(f"git merge --ff-only upstream/{branch}", directory=directory)
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self._generate_redis_config()
@@ -530,9 +503,7 @@ class Server(Base):
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
-        self.execute(
-            "git merge --ff-only upstream/master", directory=directory
-        )
+        self.execute("git merge --ff-only upstream/master", directory=directory)
 
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
@@ -545,24 +516,16 @@ class Server(Base):
     def get_agent_version(self):
         directory = os.path.join(self.directory, "repo")
         return {
-            "commit": self.execute("git rev-parse HEAD", directory=directory)[
-                "output"
-            ],
-            "status": self.execute("git status --short", directory=directory)[
-                "output"
-            ],
-            "upstream": self.execute(
-                "git remote get-url upstream", directory=directory
-            )["output"],
+            "commit": self.execute("git rev-parse HEAD", directory=directory)["output"],
+            "status": self.execute("git status --short", directory=directory)["output"],
+            "upstream": self.execute("git remote get-url upstream", directory=directory)["output"],
             "show": self.execute("git show", directory=directory)["output"],
             "python": platform.python_version(),
         }
 
     def status(self, mariadb_root_password):
         return {
-            "mariadb": self.mariadb_processlist(
-                mariadb_root_password=mariadb_root_password
-            ),
+            "mariadb": self.mariadb_processlist(mariadb_root_password=mariadb_root_password),
             "supervisor": self.supervisor_status(),
             "nginx": self.nginx_status(),
             "stats": self.stats(),
@@ -576,9 +539,7 @@ class Server(Base):
         headers = free[0].split()
         for line in free[1:]:
             type, line = line.split(None, 1)
-            memory[type.lower()[:-1]] = dict(
-                zip(headers, list(map(int, line.split())))
-            )
+            memory[type.lower()[:-1]] = dict(zip(headers, list(map(int, line.split()))))
         return memory
 
     def _cpu_stats(self):
@@ -632,13 +593,9 @@ class Server(Base):
     def processes(self):
         processes = []
         try:
-            output = self.execute("ps --pid 2 --ppid 2 --deselect u")[
-                "output"
-            ].split("\n")
+            output = self.execute("ps --pid 2 --ppid 2 --deselect u")["output"].split("\n")
             headers = list(filter(None, output[0].split()))
-            rows = map(
-                lambda s: s.strip().split(None, len(headers) - 1), output[1:]
-            )
+            rows = map(lambda s: s.strip().split(None, len(headers) - 1), output[1:])
             processes = [dict(zip(headers, row)) for row in rows]
         except Exception:
             import traceback
@@ -713,9 +670,7 @@ class Server(Base):
             {
                 "proxy_ip": self.config.get("proxy_ip"),
                 "tls_protocols": self.config.get("tls_protocols"),
-                "nginx_vts_module_enabled": self.config.get(
-                    "nginx_vts_module_enabled", True
-                ),
+                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
             },
             nginx_config,
@@ -735,12 +690,8 @@ class Server(Base):
                 "trace": self.config.get("trace", False),
                 "tls_directory": self.config["tls_directory"],
                 "nginx_directory": self.nginx_directory,
-                "nginx_vts_module_enabled": self.config.get(
-                    "nginx_vts_module_enabled", True
-                ),
-                "pages_directory": os.path.join(
-                    self.directory, "repo", "agent", "pages"
-                ),
+                "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
+                "pages_directory": os.path.join(self.directory, "repo", "agent", "pages"),
                 "tls_protocols": self.config.get("tls_protocols"),
                 "press_url": self.config.get("press_url"),
             },
@@ -817,7 +768,7 @@ class Server(Base):
         return {"message": "pong"}
 
     @property
-    def wildcards(self) -> List[str]:
+    def wildcards(self) -> list[str]:
         wildcards = []
         for host in os.listdir(self.hosts_directory):
             if "*" in host:

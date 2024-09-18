@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import datetime
 import json
-import traceback
 import os
+import traceback
+from typing import TYPE_CHECKING
 
 import wrapt
 from peewee import (
+    AutoField,
     CharField,
     DateTimeField,
     ForeignKeyField,
@@ -14,15 +16,11 @@ from peewee import (
     SqliteDatabase,
     TextField,
     TimeField,
-    AutoField,
 )
 from redis import Redis
 from rq import Queue, get_current_job
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from typing import Optional
     from agent.base import Base
 
 
@@ -59,14 +57,14 @@ def queue(name):
 
 
 @wrapt.decorator
-def save(wrapped, instance: "Action", args, kwargs):
+def save(wrapped, instance: Action, args, kwargs):
     wrapped(*args, **kwargs)
     instance.model.save()
 
 
 class Action:
     if TYPE_CHECKING:
-        model: "Optional[Model]"
+        model: Model | None
 
     def success(self, data):
         self.model.status = "Success"
@@ -86,7 +84,7 @@ class Action:
 
 class Step(Action):
     if TYPE_CHECKING:
-        model: "Optional[StepModel]"
+        model: StepModel | None
 
     @save
     def start(self, name, job):
@@ -99,7 +97,7 @@ class Step(Action):
 
 class Job(Action):
     if TYPE_CHECKING:
-        model: "Optional[JobModel]"
+        model: JobModel | None
 
     @save
     def start(self):
@@ -127,7 +125,7 @@ class Job(Action):
 
 def step(name):
     @wrapt.decorator
-    def wrapper(wrapped, instance: "Base", args, kwargs):
+    def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
 
         instance.step_record.start(name, instance.job_record.model.id)
@@ -137,9 +135,7 @@ def step(name):
             instance.step_record.failure(e.data)
             raise e
         except Exception as e:
-            instance.step_record.failure(
-                {"traceback": "".join(traceback.format_exc())}
-            )
+            instance.step_record.failure({"traceback": "".join(traceback.format_exc())})
             raise e
         else:
             instance.step_record.success(result)
@@ -152,7 +148,7 @@ def step(name):
 
 def job(name: str, priority="default"):
     @wrapt.decorator
-    def wrapper(wrapped, instance: "Base", args, kwargs):
+    def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
 
         if get_current_job(connection=connection()):
@@ -163,18 +159,14 @@ def job(name: str, priority="default"):
                 instance.job_record.failure(e.data)
                 raise e
             except Exception as e:
-                instance.job_record.failure(
-                    {"traceback": "".join(traceback.format_exc())}
-                )
+                instance.job_record.failure({"traceback": "".join(traceback.format_exc())})
                 raise e
             else:
                 instance.job_record.success(result)
             return result
         else:
             agent_job_id = get_agent_job_id()
-            instance.job_record.enqueue(
-                name, wrapped, args, kwargs, agent_job_id
-            )
+            instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
             queue(priority).enqueue_call(
                 wrapped,
                 args=args,
@@ -219,9 +211,7 @@ class JobModel(Model):
 class StepModel(Model):
     name = CharField()
     job = ForeignKeyField(JobModel, backref="steps", lazy_load=False)
-    status = CharField(
-        choices=[(1, "Running"), (2, "Success"), (3, "Failure")]
-    )
+    status = CharField(choices=[(1, "Running"), (2, "Success"), (3, "Failure")])
     data = TextField(null=True, default="{}")
 
     start = DateTimeField()

@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+from datetime import datetime
 from subprocess import Popen
 from typing import TYPE_CHECKING
-from datetime import datetime
 
 import docker
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class ImageBuilder(Base):
-    output: "Output"
+    output: Output
 
     def __init__(
         self,
@@ -187,8 +187,7 @@ class ImageBuilder(Base):
                 universal_newlines=True,
             )
 
-        for line in process.stdout:
-            yield line
+        yield from process.stdout
 
         process.stdout.close()
         input_file.close()

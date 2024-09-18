@@ -6,8 +6,8 @@ import re
 import shutil
 import time
 from datetime import datetime
-from typing import Dict, TYPE_CHECKING
 from shlex import quote
+from typing import TYPE_CHECKING
 
 import requests
 
@@ -20,19 +20,15 @@ if TYPE_CHECKING:
 
 
 class Site(Base):
-    def __init__(self, name: str, bench: "Bench"):
+    def __init__(self, name: str, bench: Bench):
         self.name = name
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)
         self.backup_directory = os.path.join(self.directory, ".migrate")
         self.logs_directory = os.path.join(self.directory, "logs")
         self.config_file = os.path.join(self.directory, "site_config.json")
-        self.touched_tables_file = os.path.join(
-            self.directory, "touched_tables.json"
-        )
-        self.previous_tables_file = os.path.join(
-            self.directory, "previous_tables.json"
-        )
+        self.touched_tables_file = os.path.join(self.directory, "touched_tables.json")
+        self.previous_tables_file = os.path.join(self.directory, "previous_tables.json")
         self.analytics_file = os.path.join(
             self.directory,
             "analytics.json",
@@ -50,18 +46,14 @@ class Site(Base):
         self.host = self.config.get("db_host", self.bench.host)
 
     def bench_execute(self, command, input=None):
-        return self.bench.docker_execute(
-            f"bench --site {self.name} {command}", input=input
-        )
+        return self.bench.docker_execute(f"bench --site {self.name} {command}", input=input)
 
     def dump(self):
         return {"name": self.name}
 
     @step("Rename Site")
     def rename(self, new_name):
-        os.rename(
-            self.directory, os.path.join(self.bench.sites_directory, new_name)
-        )
+        os.rename(self.directory, os.path.join(self.bench.sites_directory, new_name))
         self.name = new_name
 
     @job("Run After Migrate Steps")
@@ -96,9 +88,7 @@ class Site(Base):
             return self.bench_execute(f"install-app {app} --force")
         except AgentException as e:
             if "Error: no such option: --force" in e.data["output"]:
-                return self.bench_execute(
-                    f"install-app {app}"
-                )  # not available in < v14
+                return self.bench_execute(f"install-app {app}")  # not available in < v14
             raise
 
     @step("Uninstall App from Site")
@@ -115,22 +105,12 @@ class Site(Base):
         private_file,
     ):
         sites_directory = self.bench.sites_directory
-        database_file = database_file.replace(
-            sites_directory, "/home/frappe/frappe-bench/sites"
-        )
-        public_file = public_file.replace(
-            sites_directory, "/home/frappe/frappe-bench/sites"
-        )
-        private_file = private_file.replace(
-            sites_directory, "/home/frappe/frappe-bench/sites"
-        )
+        database_file = database_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
+        public_file = public_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
+        private_file = private_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
 
-        public_file_option = (
-            f"--with-public-files {public_file}" if public_file else ""
-        )
-        private_file_option = (
-            f"--with-private-files {private_file} " if private_file else ""
-        )
+        public_file_option = f"--with-public-files {public_file}" if public_file else ""
+        private_file_option = f"--with-private-files {private_file} " if private_file else ""
 
         _, temp_user, temp_password = self.bench.create_mariadb_user(
             self.name, mariadb_root_password, self.database
@@ -146,9 +126,7 @@ class Site(Base):
                 f"{database_file}"
             )
         finally:
-            self.bench.drop_mariadb_user(
-                self.name, mariadb_root_password, self.database
-            )
+            self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
 
     @job("Restore Site")
     def restore_job(
@@ -205,9 +183,7 @@ class Site(Base):
                 f"--admin-password {admin_password}"
             )
         finally:
-            self.bench.drop_mariadb_user(
-                self.name, mariadb_root_password, self.database
-            )
+            self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
 
     @job("Reinstall Site")
     def reinstall_job(
@@ -273,10 +249,7 @@ class Site(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
-                f' -e "{query}"'
-            )
+            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
         return {"database": database, "user": user, "password": password}
 
@@ -289,10 +262,7 @@ class Site(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = (
-                f"mysql -h {self.host} -uroot -p{mariadb_root_password}"
-                f' -e "{query}"'
-            )
+            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
         return {}
 
@@ -372,9 +342,7 @@ class Site(Base):
         data = {"keys": keys, "get": [], "delete": []}
         for key in keys["output"].splitlines():
             get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
-            delete = self.bench.docker_execute(
-                f"redis-cli -p 13000 DEL '{key}'"
-            )
+            delete = self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
             data["get"].append(get)
             data["delete"].append(delete)
         return data
@@ -472,9 +440,7 @@ class Site(Base):
         )
         data = {"tables": {}}
         for table in tables:
-            backup_file = os.path.join(
-                self.backup_directory, f"{table}.sql.gz"
-            )
+            backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             output = self.execute(
                 "set -o pipefail && "
                 "mysqldump --single-transaction --quick --lock-tables=false "
@@ -487,7 +453,7 @@ class Site(Base):
         return data
 
     @step("Run App Specific Scripts")
-    def run_app_scripts(self, scripts: Dict[str, str]):
+    def run_app_scripts(self, scripts: dict[str, str]):
         for app_name in scripts:
             script = scripts[app_name]
             self.bench_execute("console", input=script)
@@ -530,9 +496,7 @@ class Site(Base):
 
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
-        installed_apps = json.loads(
-            self.bench_execute("execute frappe.get_installed_apps")["output"]
-        )
+        installed_apps = json.loads(self.bench_execute("execute frappe.get_installed_apps")["output"])
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
@@ -556,9 +520,7 @@ class Site(Base):
         except Exception:
             tables_to_restore = self.previous_tables
         for table in tables_to_restore:
-            backup_file = os.path.join(
-                self.backup_directory, f"{table}.sql.gz"
-            )
+            backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
                 output = self.execute(
                     "set -o pipefail && "
@@ -688,9 +650,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def backup_job(self, with_files=False, offsite=None):
         backup_files = self.backup(with_files)
         uploaded_files = (
-            self.upload_offsite_backup(backup_files, offsite)
-            if (offsite and backup_files)
-            else {}
+            self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
         )
         return {"backups": backup_files, "offsite": uploaded_files}
 
@@ -704,8 +664,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
-                f" {self.database} -e '{query}'"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" {self.database} -e '{query}'"
             )
 
     def fetch_latest_backup(self, with_files=True):
@@ -714,19 +673,13 @@ print(">>>" + frappe.session.sid + "<<<")
 
         for file in os.listdir(backup_directory):
             path = os.path.join(backup_directory, file)
-            if file.endswith("database.sql.gz") or file.endswith(
-                "database-enc.sql.gz"
-            ):
+            if file.endswith("database.sql.gz") or file.endswith("database-enc.sql.gz"):
                 databases.append(path)
-            elif file.endswith("private-files.tar") or file.endswith(
-                "private-files-enc.tar"
-            ):
+            elif file.endswith("private-files.tar") or file.endswith("private-files-enc.tar"):
                 privates.append(path)
             elif file.endswith("files.tar") or file.endswith("files-enc.tar"):
                 publics.append(path)
-            elif file.endswith("site_config_backup.json") or file.endswith(
-                "site_config_backup-enc.json"
-            ):
+            elif file.endswith("site_config_backup.json") or file.endswith("site_config_backup-enc.json"):
                 site_configs.append(path)
 
         backups = {
@@ -758,16 +711,12 @@ print(">>>" + frappe.session.sid + "<<<")
             "database_free_tables": self.get_database_free_tables(),
             "database_free": b2mb(self.get_database_free_size()),
             "public": b2mb(get_size(public_directory)),
-            "private": b2mb(
-                get_size(private_directory) - backup_directory_size
-            ),
+            "private": b2mb(get_size(private_directory) - backup_directory_size),
             "backups": b2mb(backup_directory_size),
         }
 
     def get_analytics(self):
-        analytics = self.bench_execute("execute frappe.utils.get_site_info")[
-            "output"
-        ]
+        analytics = self.bench_execute("execute frappe.utils.get_site_info")["output"]
         return json.loads(analytics)
 
     def get_database_size(self):
@@ -779,10 +728,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
-            f" -e '{query}'"
-        )
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -828,10 +774,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = (
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
-            f" -e '{query}'"
-        )
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -849,10 +792,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
-            command = (
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}"
-                f" -e '{query}'"
-            )
+            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
             output = self.execute(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:
