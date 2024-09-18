@@ -5,7 +5,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import click
 import requests
@@ -77,7 +77,8 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     if sentry_dsn:
         config["sentry_dsn"] = sentry_dsn
 
-    json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)
+    with open("config.json", "w") as f:
+        json.dump(config, f, sort_keys=True, indent=4)
 
 
 @setup.command()
@@ -146,10 +147,7 @@ def site_analytics():
     stderr = os.path.join(logs_directory, "analytics.error.log")
 
     cron = CronTab(user=True)
-    command = (
-        f"cd {agent_directory} && {sys.executable} {script}"
-        f" 1>> {stdout} 2>> {stderr}"
-    )
+    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
 
     if command in str(cron):
         cron.remove_all(command=command)
@@ -172,10 +170,7 @@ def usage():
     stderr = os.path.join(logs_directory, "usage.error.log")
 
     cron = CronTab(user=True)
-    command = (
-        f"cd {agent_directory} && {sys.executable} {script}"
-        f" 1>> {stdout} 2>> {stderr}"
-    )
+    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
 
     if command not in str(cron):
         job = cron.new(command=command)
@@ -196,9 +191,7 @@ def monitor(url, token):
     from agent.monitor import Monitor
 
     server = Monitor()
-    server.update_config(
-        {"monitor": True, "press_url": url, "press_token": token}
-    )
+    server.update_config({"monitor": True, "press_url": url, "press_token": token})
     server.discover_targets()
 
 
@@ -273,8 +266,7 @@ def bench():
 def start(bench):
     if bench:
         return Server().benches[bench].start()
-    else:
-        return Server().start_all_benches()
+    return Server().start_all_benches()
 
 
 @bench.command()
@@ -282,8 +274,7 @@ def start(bench):
 def stop(bench):
     if bench:
         return Server().benches[bench].stop()
-    else:
-        return Server().stop_all_benches()
+    return Server().stop_all_benches()
 
 
 @cli.command(help="Run iPython console.")
@@ -304,9 +295,7 @@ def console(config_path):
     if config_dir:
         try:
             locals()["server"] = Server(config_dir)
-            print(
-                f"In namespace:\nserver = agent.server.Server('{config_dir}')"
-            )
+            print(f"In namespace:\nserver = agent.server.Server('{config_dir}')")
         except Exception:
             print(f"Could not initialize agent.server.Server('{config_dir}')")
 
@@ -330,7 +319,7 @@ def console(config_path):
     terminal()
 
 
-def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
+def get_config_dir(config_path: str | None = None) -> str | None:
     cwd = os.getcwd()
     if config_path is None:
         config_path = cwd
@@ -359,9 +348,7 @@ def get_config_dir(config_path: "Optional[str]" = None) -> "Optional[str]":
     return None
 
 
-def store_ipython_logs(
-    terminal: "InteractiveShellEmbed", config_dir: "Optional[str]"
-):
+def store_ipython_logs(terminal: InteractiveShellEmbed, config_dir: str | None):
     if not config_dir:
         config_dir = os.getcwd()
 

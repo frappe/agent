@@ -1,0 +1,20 @@
+line-length = 110
+indent-width = 4
+target-version = "py38"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+
+
+[lint]
+select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90", "RET", "SIM"]
+ignore = [
+   "UP015", # Unnecessary open mode parameters
+   "SIM108", # Use ternary operator {contents} instead of if-else-block
+]
+
+
+[lint.mccabe]
+# Flag errors (`C901`) whenever the complexity level exceeds 8
+max-complexity = 8

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import requests
 import tempfile
 
+import requests
 
 from agent.server import Server
 
@@ -15,9 +15,7 @@ class Monitor(Server):
         self.alertmanager_directory = "/home/frappe/alertmanager"
 
     def update_rules(self, rules):
-        rules_file = os.path.join(
-            self.prometheus_directory, "rules", "agent.yml"
-        )
+        rules_file = os.path.join(self.prometheus_directory, "rules", "agent.yml")
         self._render_template(
             "prometheus/rules.yml",
             {"rules": rules},
@@ -34,9 +32,7 @@ class Monitor(Server):
         self.execute("sudo systemctl reload prometheus")
 
     def update_routes(self, routes):
-        config_file = os.path.join(
-            self.alertmanager_directory, "alertmanager.yml"
-        )
+        config_file = os.path.join(self.alertmanager_directory, "alertmanager.yml")
         self._render_template(
             "alertmanager/routes.yml",
             {"routes": routes},
@@ -63,19 +59,14 @@ class Monitor(Server):
     def fetch_targets(self):
         press_url = self.config.get("press_url")
         press_token = self.config.get("press_token")
-        targets = requests.post(
+        return requests.post(
             f"{press_url}/api/method/press.api.monitoring.targets",
             data={"token": press_token},
         ).json()["message"]
-        return targets
 
     def generate_prometheus_sites_config(self, benches):
-        prometheus_sites_config = os.path.join(
-            self.prometheus_directory, "file_sd", "sites.yml"
-        )
-        temp_sites_config = tempfile.mkstemp(
-            prefix="agent-prometheus-sites-", suffix=".yml"
-        )[1]
+        prometheus_sites_config = os.path.join(self.prometheus_directory, "file_sd", "sites.yml")
+        temp_sites_config = tempfile.mkstemp(prefix="agent-prometheus-sites-", suffix=".yml")[1]
         self._render_template(
             "prometheus/sites.yml",
             {"benches": benches},
@@ -85,12 +76,8 @@ class Monitor(Server):
         os.rename(temp_sites_config, prometheus_sites_config)
 
     def generate_prometheus_tls_config(self, servers):
-        prometheus_tls_config = os.path.join(
-            self.prometheus_directory, "file_sd", "tls.yml"
-        )
-        temp_tls_config = tempfile.mkstemp(
-            prefix="agent-prometheus-tls-", suffix=".yml"
-        )[1]
+        prometheus_tls_config = os.path.join(self.prometheus_directory, "file_sd", "tls.yml")
+        temp_tls_config = tempfile.mkstemp(prefix="agent-prometheus-tls-", suffix=".yml")[1]
         self._render_template(
             "prometheus/tls.yml",
             {"servers": servers},
@@ -100,12 +87,8 @@ class Monitor(Server):
         os.rename(temp_tls_config, prometheus_tls_config)
 
     def generate_prometheus_domains_config(self, domains):
-        prometheus_domains_config = os.path.join(
-            self.prometheus_directory, "file_sd", "domains.yml"
-        )
-        temp_domains_config = tempfile.mkstemp(
-            prefix="agent-prometheus-domains-", suffix=".yml"
-        )[1]
+        prometheus_domains_config = os.path.join(self.prometheus_directory, "file_sd", "domains.yml")
+        temp_domains_config = tempfile.mkstemp(prefix="agent-prometheus-domains-", suffix=".yml")[1]
         self._render_template(
             "prometheus/domains.yml",
             {"domains": domains},
@@ -121,9 +104,7 @@ class Monitor(Server):
             f"cluster.{cluster['name']}.yml",
         )
 
-        temp_cluster_config = tempfile.mkstemp(
-            prefix="agent-prometheus-cluster-", suffix=".yml"
-        )[1]
+        temp_cluster_config = tempfile.mkstemp(prefix="agent-prometheus-cluster-", suffix=".yml")[1]
         self._render_template(
             "prometheus/servers.yml",
             {"cluster": cluster},

@@ -12,9 +12,7 @@ class ProxySQL(Server):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
 
-        self.proxysql_admin_password = self.config.get(
-            "proxysql_admin_password"
-        )
+        self.proxysql_admin_password = self.config.get("proxysql_admin_password")
         self.job = None
         self.step = None
 
@@ -39,15 +37,10 @@ class ProxySQL(Server):
     def add_backend(self, backend):
         backend_id = backend["id"]
         backend_ip = backend["ip"]
-        if self.proxysql_execute(
-            f"SELECT 1 from mysql_servers where hostgroup_id = {backend_id}"
-        )["output"]:
+        if self.proxysql_execute(f"SELECT 1 from mysql_servers where hostgroup_id = {backend_id}")["output"]:
             return
         commands = [
-            (
-                "INSERT INTO mysql_servers (hostgroup_id, hostname) "
-                f'VALUES ({backend_id}, "{backend_ip}")'
-            ),
+            ("INSERT INTO mysql_servers (hostgroup_id, hostname) " f'VALUES ({backend_id}, "{backend_ip}")'),
             "LOAD MYSQL SERVERS TO RUNTIME",
             "SAVE MYSQL SERVERS TO DISK",
         ]

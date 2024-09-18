@@ -5,11 +5,11 @@ import os
 import shutil
 import unittest
 from unittest.mock import patch
-from agent.base import AgentException
 
-from agent.site import Site
+from agent.base import AgentException
 from agent.bench import Bench
 from agent.server import Server
+from agent.site import Site
 
 
 class TestSite(unittest.TestCase):
@@ -27,14 +27,10 @@ class TestSite(unittest.TestCase):
             a.write("frappe\n")
             a.write("erpnext\n")
 
-    def _make_site_config(self, site_name: str, content: str = None):
+    def _make_site_config(self, site_name: str, content: str | None = None):
         if not content:
-            content = json.dumps(
-                {"db_name": "fake_db_name", "db_password": "fake_db_password"}
-            )
-        site_config = os.path.join(
-            self.sites_directory, site_name, "site_config.json"
-        )
+            content = json.dumps({"db_name": "fake_db_name", "db_password": "fake_db_password"})
+        site_config = os.path.join(self.sites_directory, site_name, "site_config.json")
         with open(site_config, "w") as s:
             s.write(content)
 
@@ -54,9 +50,7 @@ class TestSite(unittest.TestCase):
 
         self.sites_directory = os.path.join(self.bench_dir, "sites")
         self.apps_directory = os.path.join(self.bench_dir, "apps")
-        self.common_site_config = os.path.join(
-            self.sites_directory, "common_site_config.json"
-        )
+        self.common_site_config = os.path.join(self.sites_directory, "common_site_config.json")
         self.bench_config = os.path.join(self.bench_dir, "config.json")
         self.apps_txt = os.path.join(self.sites_directory, "apps.txt")
         self.assets_dir = os.path.join(self.sites_directory, "assets")
@@ -91,12 +85,8 @@ class TestSite(unittest.TestCase):
         with patch.object(Site, "rename", new=Site.rename.__wrapped__):
             site.rename(new_name)
 
-        self.assertTrue(
-            os.path.exists(os.path.join(self.sites_directory, new_name))
-        )
-        self.assertFalse(
-            os.path.exists(os.path.join(self.sites_directory, old_name))
-        )
+        self.assertTrue(os.path.exists(os.path.join(self.sites_directory, new_name)))
+        self.assertFalse(os.path.exists(os.path.join(self.sites_directory, old_name)))
 
     def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
         self,
@@ -115,7 +105,7 @@ class TestSite(unittest.TestCase):
 """,  # missing comma above
         )
         with self.assertRaises(AgentException):
-            bench.valid_sites
+            bench._sites(validate_configs=True)
 
     def test_valid_sites_property_of_bench_doesnt_throw_for_assets_apps_txt(
         self,
@@ -125,11 +115,9 @@ class TestSite(unittest.TestCase):
         self._create_test_site(site_name)
         self._make_site_config(site_name)
         try:
-            bench.sites
+            bench._sites()
         except AgentException:
-            self.fail(
-                "sites property of bench threw error for assets and apps.txt"
-            )
+            self.fail("sites property of bench threw error for assets and apps.txt")
         self.assertEqual(len(bench.sites), 1)
         try:
             bench.valid_sites[site_name]

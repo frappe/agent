@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections import defaultdict
 from hashlib import sha512 as sha
 from pathlib import Path
-from typing import Dict, List
-from collections import defaultdict
 
 from agent.job import job, step
 from agent.server import Server
@@ -20,13 +19,9 @@ class Proxy(Server):
         self.domain = self.config.get("domain")
 
         self.nginx_directory = self.config["nginx_directory"]
-        self.upstreams_directory = os.path.join(
-            self.nginx_directory, "upstreams"
-        )
+        self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
-        self.error_pages_directory = os.path.join(
-            self.directory, "repo", "agent", "pages"
-        )
+        self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
 
         self.job = None
         self.step = None
@@ -144,7 +139,7 @@ class Proxy(Server):
     def rename_site_on_upstream_job(
         self,
         upstream: str,
-        hosts: List[str],
+        hosts: list[str],
         site: str,
         new_name: str,
         skip_reload=False,
@@ -198,9 +193,7 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(
-        self, upstream, site, status, skip_reload=False
-    ):
+    def update_site_status_job(self, upstream, site, status, skip_reload=False):
         self.update_site_status(upstream, site, status)
         if skip_reload:
             return
@@ -291,12 +284,11 @@ class Proxy(Server):
 
     def _create_default_host(self):
         default_host = f"*.{self.config['domain']}"
-        default_host_directory = os.path.join(
-            self.hosts_directory, default_host
-        )
+        default_host_directory = os.path.join(self.hosts_directory, default_host)
         os.makedirs(default_host_directory, exist_ok=True)
         map_file = os.path.join(default_host_directory, "map.json")
-        json.dump({"default": "$host"}, open(map_file, "w"), indent=4)
+        with open(map_file, "w") as mf:
+            json.dump({"default": "$host"}, mf, indent=4)
 
         tls_directory = self.config["tls_directory"]
         for f in ["chain.pem", "fullchain.pem", "privkey.pem"]:
@@ -310,9 +302,7 @@ class Proxy(Server):
     def upstreams(self):
         upstreams = {}
         for upstream in os.listdir(self.upstreams_directory):
-            upstream_directory = os.path.join(
-                self.upstreams_directory, upstream
-            )
+            upstream_directory = os.path.join(self.upstreams_directory, upstream)
             if os.path.isdir(upstream_directory):
                 hashed_upstream = sha(upstream.encode()).hexdigest()[:16]
                 upstreams[upstream] = {"sites": [], "hash": hashed_upstream}
@@ -327,13 +317,11 @@ class Proxy(Server):
                         actual_upstream = status
                     else:
                         actual_upstream = hashed_upstream
-                    upstreams[upstream]["sites"].append(
-                        {"name": site, "upstream": actual_upstream}
-                    )
+                    upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
         return upstreams
 
     @property
-    def hosts(self) -> Dict[str, Dict[str, str]]:
+    def hosts(self) -> dict[str, dict[str, str]]:
         hosts = defaultdict(lambda: defaultdict(str))
         for host in os.listdir(self.hosts_directory):
             host_directory = os.path.join(self.hosts_directory, host)
@@ -352,16 +340,12 @@ class Proxy(Server):
                     if "*" in host:
                         hosts[_from] = {_from: _from}
                     hosts[_from]["redirect"] = to
-            hosts[host]["codeserver"] = (
-                True
-                if os.path.exists(os.path.join(host_directory, "codeserver"))
-                else False
-            )
+            hosts[host]["codeserver"] = os.path.exists(os.path.join(host_directory, "codeserver"))
 
         return hosts
 
     @property
-    def wildcards(self) -> List[str]:
+    def wildcards(self) -> list[str]:
         wildcards = []
         for host in os.listdir(self.hosts_directory):
             if "*" in host:

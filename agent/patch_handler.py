@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 import importlib
+import os
 
 
 class PatchHandler:
@@ -14,8 +14,7 @@ class PatchHandler:
     def executed_patches(self):
         if not self._executed_patches:
             self._executed_patches = set(self.retrieve_patches())
-            # self._executed_patches = set()
-            return self._executed_patches
+        return self._executed_patches
 
     def retrieve_patches(self):
         from agent.job import PatchLogModel
@@ -69,11 +68,7 @@ def _patch_log_exists():
     from agent.job import agent_database as database
 
     tables = database.get_tables()
-
-    if "patchlogmodel" in tables:
-        return True
-
-    return False
+    return "patchlogmodel" in tables
 
 
 def _create_patch_log():

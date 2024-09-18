@@ -14,12 +14,8 @@ class TestProxy(unittest.TestCase):
 
     def _create_needed_files(self):
         """Create host dirs for 2 domains test json files."""
-        os.makedirs(
-            os.path.join(self.hosts_directory, self.domain_1), exist_ok=True
-        )
-        os.makedirs(
-            os.path.join(self.hosts_directory, self.domain_2), exist_ok=True
-        )
+        os.makedirs(os.path.join(self.hosts_directory, self.domain_1), exist_ok=True)
+        os.makedirs(os.path.join(self.hosts_directory, self.domain_2), exist_ok=True)
         os.makedirs(self.upstreams_directory, exist_ok=True)
 
         map_1 = os.path.join(self.hosts_directory, self.domain_1, "map.json")
@@ -46,9 +42,7 @@ class TestProxy(unittest.TestCase):
         self.tld = "frappe.cloud"
 
         self.hosts_directory = os.path.join(self.test_dir, "nginx/hosts")
-        self.upstreams_directory = os.path.join(
-            self.test_dir, "nginx/upstreams"
-        )
+        self.upstreams_directory = os.path.join(self.test_dir, "nginx/upstreams")
         self._create_needed_files()
 
     def tearDown(self):
@@ -68,9 +62,7 @@ class TestProxy(unittest.TestCase):
         """
         proxy = self._get_fake_proxy()
         os.makedirs(os.path.join(self.hosts_directory, self.default_domain))
-        redirect_file = os.path.join(
-            self.hosts_directory, self.default_domain, "redirect.json"
-        )
+        redirect_file = os.path.join(self.hosts_directory, self.default_domain, "redirect.json")
         with open(redirect_file, "w") as r:
             json.dump({self.default_domain: self.domain_1}, r)
 
@@ -90,11 +82,7 @@ class TestProxy(unittest.TestCase):
             # get undecorated method with __wrapped__
             proxy.add_host(host, "www.test.com", {})
 
-        self.assertTrue(
-            os.path.exists(
-                os.path.join(proxy.hosts_directory, host, "map.json")
-            )
-        )
+        self.assertTrue(os.path.exists(os.path.join(proxy.hosts_directory, host, "map.json")))
 
     def test_add_hosts_works_without_hosts_dir(self):
         """Ensure add_host works when hosts directory doesn't exist."""
@@ -117,9 +105,7 @@ class TestProxy(unittest.TestCase):
 
     def _test_add_upstream(self, proxy, upstream):
         upstream_dir = os.path.join(proxy.upstreams_directory, upstream)
-        with patch.object(
-            Proxy, "add_upstream", new=Proxy.add_upstream.__wrapped__
-        ):
+        with patch.object(Proxy, "add_upstream", new=Proxy.add_upstream.__wrapped__):
             # get undecorated method with __wrapped__
             proxy.add_upstream(upstream)
         self.assertTrue(os.path.exists(upstream_dir))
@@ -147,9 +133,7 @@ class TestProxy(unittest.TestCase):
         with open(redir_file, "w") as r:
             json.dump({self.default_domain: self.domain_1}, r)
 
-        with patch.object(
-            Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__
-        ):
+        with patch.object(Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__):
             proxy.remove_redirect(self.default_domain)
         self.assertFalse(os.path.exists(redir_file))
         self.assertFalse(os.path.exists(host_dir))
@@ -160,9 +144,7 @@ class TestProxy(unittest.TestCase):
         proxy.domain = self.tld
         host = self.domain_2
         target = self.domain_1
-        with patch.object(
-            Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__
-        ):
+        with patch.object(Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__):
             proxy.setup_redirect(host, target)
         host_dir = os.path.join(proxy.hosts_directory, host)
         redir_file = os.path.join(host_dir, "redirect.json")
@@ -174,14 +156,10 @@ class TestProxy(unittest.TestCase):
         proxy.domain = self.tld
         host = self.domain_2
         target = self.domain_1
-        with patch.object(
-            Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__
-        ):
+        with patch.object(Proxy, "setup_redirect", new=Proxy.setup_redirect.__wrapped__):
             proxy.setup_redirect(host, target)
             # assume that setup redirects works properly based on previous test
-        with patch.object(
-            Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__
-        ):
+        with patch.object(Proxy, "remove_redirect", new=Proxy.remove_redirect.__wrapped__):
             proxy.remove_redirect(host)
         host_dir = os.path.join(proxy.hosts_directory, host)
         redir_file = os.path.join(host_dir, "redirect.json")
@@ -221,15 +199,11 @@ class TestProxy(unittest.TestCase):
             "rename_site_in_host_dir",
             new=Proxy.rename_site_in_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_host_dir(
-                "yyy.frappe.cloud", self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_site_in_host_dir("yyy.frappe.cloud", self.default_domain, "yyy.frappe.cloud")
         new_host_dir = os.path.join(proxy.hosts_directory, "yyy.frappe.cloud")
         redirect_file = os.path.join(new_host_dir, "redirect.json")
         with open(redirect_file) as r:
-            self.assertDictEqual(
-                json.load(r), {"yyy.frappe.cloud": self.domain_1}
-            )
+            self.assertDictEqual(json.load(r), {"yyy.frappe.cloud": self.domain_1})
 
     def test_rename_updates_map_json_of_custom(self):
         """Ensure custom domains have map.json updated on site rename."""
@@ -239,15 +213,11 @@ class TestProxy(unittest.TestCase):
             "rename_site_in_host_dir",
             new=Proxy.rename_site_in_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_host_dir(
-                self.domain_1, self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_site_in_host_dir(self.domain_1, self.default_domain, "yyy.frappe.cloud")
         host_directory = os.path.join(proxy.hosts_directory, self.domain_1)
         map_file = os.path.join(host_directory, "map.json")
         with open(map_file) as m:
-            self.assertDictEqual(
-                json.load(m), {self.domain_1: "yyy.frappe.cloud"}
-            )
+            self.assertDictEqual(json.load(m), {self.domain_1: "yyy.frappe.cloud"})
 
     def test_rename_updates_redirect_json_of_custom(self):
         """Ensure redirect.json updated for domains redirected to default."""
@@ -261,14 +231,10 @@ class TestProxy(unittest.TestCase):
             "rename_site_in_host_dir",
             new=Proxy.rename_site_in_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_host_dir(
-                self.domain_1, self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_site_in_host_dir(self.domain_1, self.default_domain, "yyy.frappe.cloud")
         redirect_file = os.path.join(host_directory, "redirect.json")
         with open(redirect_file) as r:
-            self.assertDictEqual(
-                json.load(r), {self.domain_1: "yyy.frappe.cloud"}
-            )
+            self.assertDictEqual(json.load(r), {self.domain_1: "yyy.frappe.cloud"})
 
     def test_rename_does_not_update_redirect_json_of_custom(self):
         """Test redirects not updated for domains not redirected to default."""
@@ -283,9 +249,7 @@ class TestProxy(unittest.TestCase):
             "rename_site_in_host_dir",
             new=Proxy.rename_site_in_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_host_dir(
-                self.domain_1, self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_site_in_host_dir(self.domain_1, self.default_domain, "yyy.frappe.cloud")
         with open(redirect_file) as r:
             self.assertDictEqual(json.load(r), original_dict)
 
@@ -300,12 +264,8 @@ class TestProxy(unittest.TestCase):
             "rename_site_in_host_dir",
             new=Proxy.rename_site_in_host_dir.__wrapped__,
         ):
-            proxy.rename_site_in_host_dir(
-                self.domain_1, self.default_domain, "yyy.frappe.cloud"
-            )
+            proxy.rename_site_in_host_dir(self.domain_1, self.default_domain, "yyy.frappe.cloud")
         host_dir = os.path.join(self.hosts_directory, self.domain_1)
         map_file = os.path.join(host_dir, "map.json")
         with open(map_file) as m:
-            self.assertDictEqual(
-                json.load(m), {self.domain_1: "yyy.frappe.cloud"}
-            )
+            self.assertDictEqual(json.load(m), {self.domain_1: "yyy.frappe.cloud"})
