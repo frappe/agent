@@ -1,0 +1,36 @@
+name: Agent Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+
+jobs:
+  lint-and-format:
+    name: 'Ruff'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+
+      - name: Lint Check
+        run: |
+          ruff check --output-format github
+
+      - name: Format Check
+        run: |
+          ruff format --check
