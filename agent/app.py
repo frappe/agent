@@ -24,16 +24,12 @@ class App(Base):
 
     def fetch(self):
         # Automatically unshallow repository while fetching
-        shallow = self.execute("git rev-parse --is-shallow-repository")[
-            "output"
-        ]
+        shallow = self.execute("git rev-parse --is-shallow-repository")["output"]
         unshallow = "--unshallow" if shallow == "true" else ""
         return self.execute(f"git fetch {self.remote} {unshallow}")
 
     def fetch_ref(self, ref):
-        return self.execute(
-            f"git fetch --progress --depth 1 {self.remote} {ref}"
-        )
+        return self.execute(f"git fetch --progress --depth 1 {self.remote} {ref}")
 
     def checkout(self, ref):
         return self.execute(f"git checkout {ref}")

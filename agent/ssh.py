@@ -48,9 +48,7 @@ class SSHProxy(Server):
     @step("Add Principal to User")
     def add_principal(self, name, principal, ssh):
         cd_command = "cd frappe-bench; exec bash --login"
-        force_command = (
-            f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t '{cd_command}'"
-        )
+        force_command = f"ssh frappe@{ssh['ip']} -p {ssh['port']} -t '{cd_command}'"
         principal_line = f'restrict,pty,command="{force_command}" {principal}'
         source = tempfile.mkstemp()[1]
         with open(source, "w") as f:
