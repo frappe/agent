@@ -1,12 +1,14 @@
-line-length = 88
+line-length = 110
 indent-width = 4
 target-version = "py38"
 
 [format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 
 
 [lint]
 select = ["F", "E", "W", "I", "UP", "B", "RUF"]
-ignore = []
+ignore = [
+   "UP015" # Unnecessary open mode parameters
+]
