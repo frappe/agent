@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def execute():
     """add a new fc_agent_job_id field to JobModel"""
     from agent.job import agent_database as database

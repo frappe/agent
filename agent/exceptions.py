@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 class BenchNotExistsException(Exception):
     def __init__(self, bench):
         self.bench = bench

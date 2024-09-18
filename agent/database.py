@@ -1,4 +1,5 @@
 from decimal import Decimal
+from __future__ import annotations
 import os
 from agent.server import Server
 from pathlib import Path
