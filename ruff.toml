@@ -1,0 +1,12 @@
+line-length = 88
+indent-width = 4
+target-version = "py38"
+
+[format]
+quote-style = "double"
+indent-style = "tab"
+
+
+[lint]
+select = ["F", "E", "W", "I", "UP", "B", "RUF"]
+ignore = []
