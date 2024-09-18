@@ -314,38 +314,6 @@ class Bench(Base):
         return lines
 
     def status(self):
-        def _touch_currentsite_file(bench):
-            file = os.path.join(bench.sites_directory, "currentsite.txt")
-            open(file, "w").close()
-
-        def _inactive_scheduler_sites(bench):
-            inactive = []
-            _touch_currentsite_file(bench)
-            try:
-                doctor = bench.docker_execute("bench doctor")["output"].split("\n")
-            except AgentException as e:
-                doctor = e.data["output"]
-
-            for line in doctor:
-                if "inactive" in line:
-                    site = line.split(" ")[-1]
-                    inactive.append(site)
-            return inactive
-
-        def _inactive_web_sites(bench):
-            inactive = []
-            session = requests.Session()
-            for site in bench.sites.keys():
-                url = f"https://{site}/api/method/ping"
-                try:
-                    result = session.get(url)
-                except Exception as e:
-                    result = None
-                    print("Ping Failed", url, e)
-                if not result or result.status_code != 200:
-                    inactive.append(site)
-            return inactive
-
         status = {
             "sites": {site: {"scheduler": True, "web": True} for site in self.sites.keys()},
             "timestamp": str(datetime.now()),
@@ -483,32 +451,20 @@ class Bench(Base):
             self.generate_nginx_config()
         return self.server._reload_nginx()
 
+    def _set_sites_host(self, sites: list[Site]):
+        for site in sites:
+            for wildcard_domain in self.server.wildcards:
+                if site.name.endswith("." + wildcard_domain):
+                    site.host = "*." + wildcard_domain
+
     def generate_nginx_config(self):
-        domains = {}
-        sites = []
-        for site in self.valid_sites.values():
-            sites.append(site)
-            for domain in site.config.get("domains", []):
-                domains[domain] = site.name
+        sites = [s for s in self.valid_sites.values()]
+        domains = _get_domains(sites)
 
-        standalone = self.server.config.get("standalone")
-        if standalone:
-            for site in sites:
-                for wildcard_domain in self.server.wildcards:
-                    if site.name.endswith("." + wildcard_domain):
-                        site.host = "*." + wildcard_domain
+        if standalone := self.server.config.get("standalone"):
+            self._set_sites_host(sites)
 
-        codeserver_directory = os.path.join(self.directory, "codeserver")
-        if os.path.exists(codeserver_directory):
-            codeservers = os.listdir(codeserver_directory)
-            if codeservers:
-                with open(os.path.join(codeserver_directory, codeservers[0])) as file:
-                    port = file.read()
-                codeserver = {"name": codeservers[0], "port": port}
-            else:
-                codeserver = {}
-        else:
-            codeserver = {}
+        codeserver = _get_codeserver_config(self.directory)
 
         config = {
             "bench_name": self.name,
@@ -1239,3 +1195,62 @@ def get_site_from_name(name: str, new_name: str, bench: Bench):
         return Site(new_name, bench)
     except OSError:
         raise Exception(f"Neither {name} nor {new_name} exists") from None
+
+
+def _touch_currentsite_file(bench: Bench):
+    file = os.path.join(bench.sites_directory, "currentsite.txt")
+    open(file, "w").close()
+
+
+def _inactive_scheduler_sites(bench: Bench):
+    inactive = []
+    _touch_currentsite_file(bench)
+    try:
+        doctor = bench.docker_execute("bench doctor")["output"].split("\n")
+    except AgentException as e:
+        doctor = e.data["output"]
+
+    for line in doctor:
+        if "inactive" in line:
+            site = line.split(" ")[-1]
+            inactive.append(site)
+    return inactive
+
+
+def _inactive_web_sites(bench: Bench):
+    inactive = []
+    session = requests.Session()
+    for site in bench.sites.keys():
+        url = f"https://{site}/api/method/ping"
+        try:
+            result = session.get(url)
+        except Exception as e:
+            result = None
+            print("Ping Failed", url, e)
+        if not result or result.status_code != 200:
+            inactive.append(site)
+    return inactive
+
+
+def _get_domains(sites: list[Site]):
+    domains: dict[str, str] = {}
+    for site in sites:
+        for domain in site.config.get("domains", []):
+            domains[domain] = site.name
+    return domains
+
+
+def _get_codeserver_config(bench_directory: str):
+    codeserver_directory = os.path.join(bench_directory, "codeserver")
+
+    if not os.path.exists(codeserver_directory):
+        return {}
+
+    codeservers = os.listdir(codeserver_directory)
+    if not codeservers:
+        return {}
+
+    with open(os.path.join(codeserver_directory, codeservers[0])) as file:
+        port = file.read()
+
+    return {"name": codeservers[0], "port": port}

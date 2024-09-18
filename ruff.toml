@@ -8,7 +8,12 @@ indent-style = "space"
 
 
 [lint]
-select = ["F", "E", "W", "I", "UP", "B", "RUF"]
+select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90"]
 ignore = [
-   "UP015" # Unnecessary open mode parameters
+   "UP015", # Unnecessary open mode parameters
 ]
+
+
+[lint.mccabe]
+# Flag errors (`C901`) whenever the complexity level exceeds 8
+max-complexity = 8
