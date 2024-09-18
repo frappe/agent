@@ -1,5 +1,5 @@
 [program:web]
-command=bash -c "{{ directory }}/repo/wait-for-it.sh {{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application"
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application"
 environment=PYTHONUNBUFFERED=1{% if sentry_dsn %}, SENTRY_DSN="{{ sentry_dsn }}"{% endif %}
 autostart=true
 autorestart=true
