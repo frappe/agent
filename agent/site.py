@@ -432,12 +432,9 @@ class Site(Base):
     @step("Backup Site Tables")
     def tablewise_backup(self):
         tables = self.tables
-        json.dump(
-            tables,
-            open(self.previous_tables_file, "w"),
-            indent=4,
-            sort_keys=True,
-        )
+        with open(self.previous_tables_file, "w") as ptf:
+            json.dump(tables, ptf, indent=4, sort_keys=True)
+
         data = {"tables": {}}
         for table in tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
@@ -589,7 +586,8 @@ class Site(Base):
     def fetch_site_analytics(self):
         if not os.path.exists(self.analytics_file):
             return {}
-        return json.load(open(self.analytics_file))
+        with open(self.analytics_file) as af:
+            return json.load(af)
 
     def sid(self, user="Administrator"):
         code = f"""from frappe.auth import CookieManager, LoginManager

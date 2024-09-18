@@ -68,11 +68,7 @@ def _patch_log_exists():
     from agent.job import agent_database as database
 
     tables = database.get_tables()
-
-    if "patchlogmodel" in tables:
-        return True
-
-    return False
+    return "patchlogmodel" in tables
 
 
 def _create_patch_log():

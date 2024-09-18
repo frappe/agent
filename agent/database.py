@@ -247,13 +247,14 @@ class DatabaseServer(Server):
                 # Skip files larger than 16 MB
                 continue
             if re.match(name, file.name):
+                pt_stalk_path = (os.path.join(self.pt_stalk_directory, file.name),)
+                with open(pt_stalk_path, errors="replace") as f:
+                    output = f.read()
+
                 diagnostics.append(
                     {
                         "type": file.name.replace(name, "").strip("-"),
-                        "output": open(
-                            os.path.join(self.pt_stalk_directory, file.name),
-                            errors="replace",
-                        ).read(),
+                        "output": output,
                     }
                 )
         return sorted(diagnostics, key=lambda x: x["type"])

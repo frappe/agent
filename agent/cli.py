@@ -77,7 +77,8 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     if sentry_dsn:
         config["sentry_dsn"] = sentry_dsn
 
-    json.dump(config, open("config.json", "w"), sort_keys=True, indent=4)
+    with open("config.json", "w") as f:
+        json.dump(config, f, sort_keys=True, indent=4)
 
 
 @setup.command()

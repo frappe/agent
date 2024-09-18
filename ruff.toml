@@ -8,9 +8,10 @@ indent-style = "space"
 
 
 [lint]
-select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90", "RET"]
+select = ["F", "E", "W", "I", "UP", "B", "RUF", "FA", "TCH", "C90", "RET", "SIM"]
 ignore = [
    "UP015", # Unnecessary open mode parameters
+   "SIM108", # Use ternary operator {contents} instead of if-else-block
 ]
 
 

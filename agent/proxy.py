@@ -287,7 +287,8 @@ class Proxy(Server):
         default_host_directory = os.path.join(self.hosts_directory, default_host)
         os.makedirs(default_host_directory, exist_ok=True)
         map_file = os.path.join(default_host_directory, "map.json")
-        json.dump({"default": "$host"}, open(map_file, "w"), indent=4)
+        with open(map_file, "w") as mf:
+            json.dump({"default": "$host"}, mf, indent=4)
 
         tls_directory = self.config["tls_directory"]
         for f in ["chain.pem", "fullchain.pem", "privkey.pem"]:
@@ -339,9 +340,7 @@ class Proxy(Server):
                     if "*" in host:
                         hosts[_from] = {_from: _from}
                     hosts[_from]["redirect"] = to
-            hosts[host]["codeserver"] = (
-                True if os.path.exists(os.path.join(host_directory, "codeserver")) else False
-            )
+            hosts[host]["codeserver"] = os.path.exists(os.path.join(host_directory, "codeserver"))
 
         return hosts
 

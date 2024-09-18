@@ -231,7 +231,8 @@ class Base:
         if name not in {x["name"] for x in self.logs}:
             return ""
         log_file = os.path.join(self.logs_directory, name)
-        return open(log_file).read()
+        with open(log_file) as lf:
+            return lf.read()
 
 
 class AgentException(Exception):

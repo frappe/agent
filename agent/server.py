@@ -259,23 +259,20 @@ class Server(Base):
             skip_failing_patches=skip_failing_patches,
         )
 
-        try:
+        with suppress(Exception):
             site.bench_execute(
                 "execute"
                 " frappe.website.doctype.website_theme.website_theme"
                 ".generate_theme_files_if_not_exist"
             )
-        except Exception:
-            pass
 
         if activate:
             site.disable_maintenance_mode()
-        try:
-            site.build_search_index()
-        except Exception:
+
+        with suppress(Exception):
             # Don't fail job on failure
             # v12 does not have build_search_index command
-            pass
+            site.build_search_index()
 
     @job("Recover Failed Site Migrate", priority="high")
     def update_site_recover_migrate_job(self, name, source, target, activate, rollback_scripts):
@@ -337,14 +334,12 @@ class Server(Base):
 
         site.migrate(skip_failing_patches=skip_failing_patches)
 
-        try:
+        with suppress(Exception):
             site.bench_execute(
                 "execute"
                 " frappe.website.doctype.website_theme.website_theme"
                 ".generate_theme_files_if_not_exist"
             )
-        except Exception:
-            pass
 
         if activate:
             site.disable_maintenance_mode()
@@ -430,26 +425,20 @@ class Server(Base):
 
     def start_all_benches(self):
         for bench in self.benches.values():
-            try:
+            with suppress(Exception):
                 bench.start()
-            except Exception:
-                pass
 
     def stop_all_benches(self):
         for bench in self.benches.values():
-            try:
+            with suppress(Exception):
                 bench.stop()
-            except Exception:
-                pass
 
     @property
     def benches(self) -> dict[str, Bench]:
         benches = {}
         for directory in os.listdir(self.benches_directory):
-            try:
+            with suppress(Exception):
                 benches[directory] = Bench(directory, self)
-            except Exception:
-                pass
         return benches
 
     def get_bench(self, bench):

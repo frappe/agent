@@ -107,9 +107,12 @@ class Bench(Base):
 
         for file in log_files:
             # Only load files that are newer than the since timestamp
-            if os.stat(file).st_mtime > since:
+            if os.stat(file).st_mtime <= since:
+                continue
+
+            with open(file) as f:
                 try:
-                    usage_data.extend(json.load(open(file)))
+                    usage_data.extend(json.load(f))
                 except json.decoder.JSONDecodeError:
                     print(f"Error loading JSON from {file}")
 
@@ -315,7 +318,7 @@ class Bench(Base):
 
     def status(self):
         status = {
-            "sites": {site: {"scheduler": True, "web": True} for site in self.sites.keys()},
+            "sites": {site: {"scheduler": True, "web": True} for site in self.sites},
             "timestamp": str(datetime.now()),
         }
 
@@ -519,10 +522,8 @@ class Bench(Base):
 
         apps = {}
         for directory in apps_list:
-            try:
+            with suppress(Exception):
                 apps[directory] = App(directory, self)
-            except Exception:
-                pass
         return apps
 
     @step("Update Bench Configuration")
@@ -1177,10 +1178,7 @@ def _should_run_phase(
     if any([s in file for s in subs]):
         return True
 
-    if any([PurePath(file).match(s) for s in globs]):
-        return True
-
-    return False
+    return any([PurePath(file).match(s) for s in globs])
 
 
 def get_site_from_name(name: str, new_name: str, bench: Bench):
@@ -1218,7 +1216,7 @@ def _inactive_scheduler_sites(bench: Bench):
 def _inactive_web_sites(bench: Bench):
     inactive = []
     session = requests.Session()
-    for site in bench.sites.keys():
+    for site in bench.sites:
         url = f"https://{site}/api/method/ping"
         try:
             result = session.get(url)
