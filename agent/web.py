@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -459,7 +461,9 @@ def rename_site(bench, site):
     job = (
         Server()
         .benches[bench]
-        .rename_site_job(site, data["new_name"], data.get("create_user"), data.get("config"))
+        .rename_site_job(
+            site, data["new_name"], data.get("create_user"), data.get("config")
+        )
     )
     return {"job": job}
 
