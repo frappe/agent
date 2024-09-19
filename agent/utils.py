@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta
 from math import ceil
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
-from datetime import datetime, timedelta
 
 import requests
 
@@ -90,9 +90,9 @@ def get_timestamp():
 def get_execution_result(
     command: str = "",
     directory: str = "",
-    start: "datetime | None" = None,
-    status: "ExecutionStatus | None" = None,
-) -> "ExecutionResult":
+    start: datetime | None = None,
+    status: ExecutionStatus | None = None,
+) -> ExecutionResult:
     """returns an ExecutionResult object to manage the output of a Job Step"""
     return {
         "command": command,
@@ -104,9 +104,9 @@ def get_execution_result(
 
 
 def end_execution(
-    res: "ExecutionResult",
+    res: ExecutionResult,
     output: str = "",
-    status: "ExecutionStatus | None" = None,
+    status: ExecutionStatus | None = None,
 ):
     """updates ExecutionResult object `res` fields and returns it"""
     assert res["start"] is not None

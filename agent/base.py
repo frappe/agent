@@ -14,15 +14,15 @@ from agent.job import connection
 from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any
 
     from agent.job import Job, Step
 
 
 class Base:
     if TYPE_CHECKING:
-        job_record: "Optional[Job]"
-        step_record: "Optional[Step]"
+        job_record: Job | None
+        step_record: Step | None
 
     def __init__(self):
         self.directory = None
@@ -65,7 +65,7 @@ class Base:
                     "traceback": "".join(traceback.format_exc()),
                 }
             )
-            raise AgentException(self.data)
+            raise AgentException(self.data) from e
         else:
             self.data.update({"status": "Success"})
         finally:
@@ -81,9 +81,7 @@ class Base:
             self.log()
         return self.data
 
-    def run_subprocess(
-        self, command, directory, input, executable, non_zero_throw=True
-    ):
+    def run_subprocess(self, command, directory, input, executable, non_zero_throw=True):
         # Start a child process and start reading output immediately
         with subprocess.Popen(
             command,
@@ -102,9 +100,7 @@ class Base:
             # This is equivalent of check=True
             # Raise an exception if the process returns a non-zero return code
             if non_zero_throw and returncode:
-                raise subprocess.CalledProcessError(
-                    returncode, command, output=output
-                )
+                raise subprocess.CalledProcessError(returncode, command, output=output)
         return output, returncode
 
     def parse_output(self, process) -> str:
@@ -119,10 +115,10 @@ class Base:
         for char in iter(partial(process.stdout.read, 1), b""):
             if char == b"" and process.poll() is not None:
                 break
-            elif char == b"\r":
+            if char == b"\r":
                 # Publish output and then wipe current line.
                 # Include the overwritten line in the output
-                self.publish_lines(lines + [line.decode(errors="replace")])
+                self.publish_lines([*lines, line.decode(errors="replace")])
                 line = b""
             elif char == b"\n":
                 lines.append(line.decode(errors="replace"))
@@ -136,12 +132,12 @@ class Base:
         self.publish_lines(lines)
         return "\n".join(lines)
 
-    def publish_lines(self, lines: "list[str]"):
+    def publish_lines(self, lines: list[str]):
         output = "\n".join(lines)
         self.data.update({"output": output})
         self.update_redis()
 
-    def publish_data(self, data: "Any"):
+    def publish_data(self, data: Any):
         if not isinstance(data, str):
             data = json.dumps(data, default=str)
 
@@ -222,9 +218,7 @@ class Base:
                         "name": x,
                         "size": stats.st_size / 1000,
                         "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(
-                            datetime.fromtimestamp(stats.st_mtime)
-                        ),
+                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
                     }
                 )
 
@@ -237,7 +231,8 @@ class Base:
         if name not in {x["name"] for x in self.logs}:
             return ""
         log_file = os.path.join(self.logs_directory, name)
-        return open(log_file).read()
+        with open(log_file) as lf:
+            return lf.read()
 
 
 class AgentException(Exception):
