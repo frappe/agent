@@ -48,15 +48,6 @@ jobs:
         with:
           python-version: '3.8'
 
-      - name: Setup supervisor
-        run: |
-          sudo apt update
-          sudo apt install supervisor
-      
-      - name: Setup custom hostname
-        run: |
-          echo "127.0.0.1 test.frappe.agent" sudo tee -a /etc/hosts
-
       - name: Install agent
         run: |
           python -m venv env
@@ -67,8 +58,6 @@ jobs:
           source env/bin/activate
           agent setup config --name test.frappe.agent --user abdul --workers 1
           agent setup authentication --password password
-          # agent setup supervisor
-          # agent ping-server --password password
 
       - name: Run Tests
         run: |
