@@ -941,6 +941,11 @@ class Bench(Base):
         new_hash: str = app["hash"]
         old_hash: str = exec("git rev-parse HEAD")["output"]
 
+        if old_hash == new_hash:
+            # Remove remote, url might be private
+            exec(f"git remote remove {remote}")
+            return []
+
         # Fetch new hash and get changed files
         exec(f"git fetch --depth 1 {remote} {new_hash}")
         diff: str = exec(f"git diff --name-only {old_hash} {new_hash}")["output"]
@@ -1156,9 +1161,8 @@ def should_rebuild_frontend(file: str) -> bool:
 def should_migrate_sites(file: str) -> bool:
     return _should_run_phase(
         file,
-        ["hooks.py"],
+        ["hooks.py", ".json"],
         ["patches"],
-        ["*/doctype/*/*.json"],
     )
 
 
