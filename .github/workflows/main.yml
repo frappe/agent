@@ -62,4 +62,5 @@ jobs:
       - name: Run Tests
         run: |
           source env/bin/activate
+          python --version
           python -m unittest discover
