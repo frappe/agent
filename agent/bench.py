@@ -1156,9 +1156,8 @@ def should_rebuild_frontend(file: str) -> bool:
 def should_migrate_sites(file: str) -> bool:
     return _should_run_phase(
         file,
-        ["hooks.py"],
+        ["hooks.py", ".json"],
         ["patches"],
-        ["*/doctype/*/*.json"],
     )
 
 
