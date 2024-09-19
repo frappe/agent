@@ -11,7 +11,7 @@ on:
 
 jobs:
   lint-and-format:
-    name: 'Ruff'
+    name: 'Lint and Format'
     runs-on: ubuntu-latest
 
     steps:
@@ -34,3 +34,43 @@ jobs:
       - name: Format Check
         run: |
           ruff format --check
+
+  unit-tests:
+    name: 'Unit Tests'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Setup supervisor
+        run: |
+          sudo apt update
+          sudo apt install supervisor
+      
+      - name: Setup custom hostname
+        run: |
+          echo "127.0.0.1 test.frappe.agent" sudo tee -a /etc/hosts
+
+      - name: Install agent
+        run: |
+          python -m venv env
+          env/bin/pip install -e .
+        
+      - name: Setup agent
+        run: |
+          source env/bin/activate
+          agent setup config --name test.frappe.agent --user abdul --workers 1
+          agent setup authentication --password password
+          # agent setup supervisor
+          # agent ping-server --password password
+
+      - name: Run Tests
+        run: |
+          source env/bin/activate
+          python -m unittest discover
