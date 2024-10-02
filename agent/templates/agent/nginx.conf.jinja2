@@ -187,7 +187,7 @@ server {
 		auth_basic "Monitoring";
 		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
 		proxy_pass http://127.0.0.1:9090/prometheus;
-		proxy_read_timeout 600;
+		proxy_read_timeout 1500;
 	}
 
 	location /alertmanager {
