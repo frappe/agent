@@ -1287,3 +1287,11 @@ def recover_update_inplace(bench: str):
         request.json.get("image"),
     )
     return {"job": job}
+
+
+@application.route("/devboxes", methods=["POST"])
+def new_devbox():
+    data = request.json
+    job = Server().new_devbox(**data)
+    return {"job": job}
+

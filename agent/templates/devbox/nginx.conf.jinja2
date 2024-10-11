@@ -1,0 +1,283 @@
+
+upstream {{ bench_name }}-web-server {
+	server 127.0.0.1:{{ web_port }} fail_timeout=0;
+}
+
+upstream {{ bench_name}}-socketio-server {
+	server 127.0.0.1:{{ socketio_port }} fail_timeout=0;
+}
+
+map $host $site_name_{{ bench_name_slug }} {
+
+	{% for (from, to) in domains.items() -%}
+		{{ from }} {{ to }};
+	{% endfor %}
+
+	default $host;
+}
+
+# server blocks
+{% if sites -%}
+
+{% if standalone %}
+{% for site in sites + ( domains.keys() | list ) %}
+server {
+	listen 443 http2 ssl;
+	server_name {{ site.name or site}};
+
+	ssl_certificate {{ nginx_directory }}/hosts/{{ site.host or site }}/fullchain.pem;
+	ssl_certificate_key {{ nginx_directory }}/hosts/{{ site.host or site }}/privkey.pem;
+	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ site.host or site }}/chain.pem;
+
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+	ssl_session_tickets off;
+
+	ssl_protocols {{ tls_protocols or 'TLSv1.2 TLSv1.3' }};
+	ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+	ssl_prefer_server_ciphers off;
+
+	ssl_stapling on;
+	ssl_stapling_verify on;
+
+	resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 208.67.222.222 208.67.220.220 valid=60s;
+	resolver_timeout 2s;
+
+	client_max_body_size 250M;
+	client_body_buffer_size 16K;
+	client_header_buffer_size 1k;
+
+	more_set_headers "X-Frame-Options: SAMEORIGIN";
+	more_set_headers "X-XSS-Protection: 1; mode=block";
+	more_set_headers "X-Content-Type-Options: nosniff";
+	more_set_headers "Referrer-Policy: no-referrer-when-downgrade";
+	more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+
+	root {{ sites_directory }};
+
+	location /assets {
+		try_files $uri =404;
+	}
+
+	location ~ ^/protected/(.*) {
+		internal;
+		try_files /$site_name_{{ bench_name_slug }}/$1 =404;
+	}
+
+	location /socket.io {
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header X-Frappe-Site-Name $site_name_{{ bench_name_slug }};
+		proxy_set_header Origin https://$http_host;
+		proxy_set_header Host $host;
+
+		proxy_pass http://{{ bench_name }}-socketio-server;
+	}
+
+	location / {
+
+		rewrite ^(.+)/$ https://$host$1 permanent;
+		rewrite ^(.+)/index\.html$ https://$host$1 permanent;
+		rewrite ^(.+)\.html$ https://$host$1 permanent;
+
+		location ~* ^/files/.*.(htm|html|svg|xml) {
+			add_header Content-disposition "attachment";
+			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+		}
+
+		try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+	}
+
+	location @webserver {
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header X-Frappe-Site-Name $site_name_{{ bench_name_slug }};
+		proxy_set_header Host $host;
+		proxy_set_header X-Use-X-Accel-Redirect True;
+		proxy_read_timeout {{ http_timeout }};
+		proxy_redirect off;
+
+		proxy_pass  http://{{ bench_name }}-web-server;
+	}
+
+	proxy_intercept_errors on;
+	error_page 429 /exceeded.html;
+	location /exceeded.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	# optimizations
+	sendfile on;
+	keepalive_timeout 15;
+
+	# enable gzip compresion
+	# based on https://mattstauffer.co/blog/enabling-gzip-on-nginx-servers-including-laravel-forge
+	gzip on;
+	gzip_http_version 1.1;
+	gzip_comp_level 5;
+	gzip_min_length 256;
+	gzip_proxied any;
+	gzip_vary on;
+	gzip_types
+		application/atom+xml
+		application/javascript
+		application/json
+		application/rss+xml
+		application/vnd.ms-fontobject
+		application/x-font-ttf
+		application/font-woff
+		application/x-web-app-manifest+json
+		application/xhtml+xml
+		application/xml
+		font/opentype
+		image/svg+xml
+		image/x-icon
+		text/css
+		text/plain
+		text/x-component
+		;
+		# text/html is always compressed by HttpGzipModule
+}
+
+{% endfor %}
+
+server {
+	listen 80;
+	server_name
+		{% for site in sites -%}
+			{{ site.name }}
+		{% endfor -%}
+		{% for domain in domains -%}
+			{{ domain }}
+		{% endfor -%}
+		;
+
+	location ^~ /.well-known/acme-challenge/ {
+		return 301 http://ssl.{{ domain }}$request_uri;
+	}
+	location / {
+		return 301 https://$host$request_uri;
+	}
+}
+{% else %}
+server {
+	listen 80;
+
+	server_name
+		{% for site in sites -%}
+			{{ site.name }}
+		{% endfor -%}
+		{% for domain in domains -%}
+			{{ domain }}
+		{% endfor -%}
+		;
+
+	root {{ sites_directory }};
+
+	add_header X-Frame-Options "SAMEORIGIN";
+	add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload";
+	add_header X-Content-Type-Options nosniff;
+	add_header X-XSS-Protection "1; mode=block";
+
+	location /assets {
+		try_files $uri =404;
+		add_header Cache-Control "max-age=31536000";
+	}
+
+	location ~ ^/protected/(.*) {
+		internal;
+		try_files /$site_name_{{ bench_name_slug }}/$1 =404;
+	}
+
+	location /socket.io {
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header X-Frappe-Site-Name $site_name_{{ bench_name_slug }};
+		proxy_set_header Origin https://$http_host;
+		proxy_set_header Host $host;
+
+		proxy_pass http://{{ bench_name }}-socketio-server;
+	}
+
+	location / {
+
+		rewrite ^(.+)/$ https://$host$1 permanent;
+		rewrite ^(.+)/index\.html$ https://$host$1 permanent;
+		rewrite ^(.+)\.html$ https://$host$1 permanent;
+
+		location ~* ^/files/.*.(htm|html|svg|xml) {
+			add_header Content-disposition "attachment";
+			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+		}
+
+		try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+	}
+
+	location @webserver {
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto https;
+		proxy_set_header X-Frappe-Site-Name $site_name_{{ bench_name_slug }};
+		proxy_set_header Host $host;
+		proxy_set_header X-Use-X-Accel-Redirect True;
+		proxy_read_timeout {{ http_timeout }};
+		proxy_redirect off;
+
+		proxy_pass  http://{{ bench_name }}-web-server;
+	}
+
+	# optimizations
+	sendfile on;
+	keepalive_timeout 15;
+	client_max_body_size 250M;
+	client_body_buffer_size 16K;
+	client_header_buffer_size 1k;
+
+	# enable gzip compresion
+	# based on https://mattstauffer.co/blog/enabling-gzip-on-nginx-servers-including-laravel-forge
+	gzip on;
+	gzip_http_version 1.1;
+	gzip_comp_level 5;
+	gzip_min_length 256;
+	gzip_proxied any;
+	gzip_vary on;
+	gzip_types
+		application/atom+xml
+		application/javascript
+		application/json
+		application/rss+xml
+		application/vnd.ms-fontobject
+		application/x-font-ttf
+		application/font-woff
+		application/x-web-app-manifest+json
+		application/xhtml+xml
+		application/xml
+		font/opentype
+		image/svg+xml
+		image/x-icon
+		text/css
+		text/plain
+		text/x-component
+		;
+		# text/html is always compressed by HttpGzipModule
+}
+
+{% endif %}
+{%- endif %}
+
+{% if code_server -%}
+server {
+    listen 80;
+	server_name {{ code_server.name }};
+
+    location / {
+      	proxy_set_header Host $host;
+      	proxy_set_header Upgrade $http_upgrade;
+      	proxy_set_header Connection upgrade;
+      	proxy_set_header Accept-Encoding gzip;
+		proxy_pass http://127.0.0.1:{{ code_server.port }}/;
+    }
+}
+{% endif %}

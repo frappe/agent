@@ -4,6 +4,7 @@ import json
 import os
 import platform
 import shutil
+import socket
 import tempfile
 import time
 from contextlib import suppress
@@ -27,6 +28,7 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
+        self.devboxes_directory = self.config["devboxes_directory"]
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
@@ -82,7 +84,7 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
+    def  new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
         bench = Bench(name, self, mounts=mounts)
@@ -763,3 +765,37 @@ class Server(Base):
             if "*" in host:
                 wildcards.append(host.strip("*."))
         return wildcards
+
+    def find_available_ports(num_ports, starting_port=49152, ending_port=65535):
+        reserved_ports = [22, 80, 443, 3306]  # List of reserved ports
+
+        available_ports = []
+        current_port = starting_port
+
+        while len(available_ports) < num_ports and current_port <= ending_port:
+            if current_port not in reserved_ports:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    try:
+                        s.bind(("0.0.0.0", current_port))
+                        available_ports.append(current_port)
+                    except:
+                        pass
+            current_port += 1
+
+        return available_ports
+
+    @job("New Devbox", priority="low")
+    def new_devbox(self,devbox_name):
+        websockify_port = self.find_available_ports(1)[0]
+        self.run_devbox(websockify_port=websockify_port,devbox_name=devbox_name)
+        self.setup_nginx()
+
+    @step("Run Devbox")
+    def run_devbox(self,websockify_port,devbox_name):
+        command = (
+            f"docker run -d --rm --name {devbox_name} -p {websockify_port}:6901 arunmathaisk/erpnext-15:latest"
+        )
+        self.execute(command)
+
+
+
