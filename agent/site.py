@@ -802,7 +802,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f"-h {self.host} -u {self.user} -p{self.password} "
             f"{self.database}",
             executable="/bin/bash",
-        )
+        ).get("output")
 
     @property
     def job_record(self):
