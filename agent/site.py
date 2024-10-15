@@ -795,14 +795,10 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return []
 
-    def get_database_schema_sql(self):
-        return self.execute(
-            "set -o pipefail && "
-            "mysqldump --single-transaction --quick --lock-tables=false --no-data "
-            f"-h {self.host} -u {self.user} -p{self.password} "
-            f"{self.database}",
-            executable="/bin/bash",
-        ).get("output")
+    def get_database_table_schemas(self):
+        command = f"SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`, DATA_TYPE AS `data_type`, IS_NULLABLE AS `is_nullable`, COLUMN_DEFAULT AS `default` FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_SCHEMA='{self.database}';"
+        command = quote(command)
+        return self.execute(f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch").get("output")
 
     @property
     def job_record(self):
@@ -822,3 +818,5 @@ print(">>>" + frappe.session.sid + "<<<")
             " frappe.website.doctype.website_theme.website_theme"
             ".generate_theme_files_if_not_exist"
         )
+
+

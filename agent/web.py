@@ -548,7 +548,7 @@ def backup_site(bench, site):
     job = Server().benches[bench].sites[site].backup_job(with_files, offsite)
     return {"job": job}
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/schema", methods=["GET"])
+@application.route("/benches/<string:bench>/sites/<string:site>/database/schemas", methods=["GET"])
 @validate_bench_and_site
 def fetch_database_schema(bench, site):
     return {"data": Server().benches[bench].sites[site].get_database_schema_sql()}
