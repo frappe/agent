@@ -801,7 +801,20 @@ print(">>>" + frappe.session.sid + "<<<")
         data = self.execute(f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch").get("output")
         data = data.split("\n")
         data = [line.split("\t") for line in data]
-        return data
+        tables = {} # <table_name>: [<column_1_info>, <column_2_info>, ...]
+        for row in data:
+            if len(row) != 5:
+                continue
+            table = row[0]
+            if table not in tables:
+                tables[table] = []
+            tables[table].append({
+                "column": row[1],
+                "data_type": row[2],
+                "is_nullable": row[3],
+                "default": row[4],
+            })
+        return tables
 
     @property
     def job_record(self):
