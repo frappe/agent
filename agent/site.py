@@ -811,7 +811,7 @@ print(">>>" + frappe.session.sid + "<<<")
             tables[table].append({
                 "column": row[1],
                 "data_type": row[2],
-                "is_nullable": row[3],
+                "is_nullable": True if row[3] == "YES" else False,
                 "default": row[4],
             })
         return tables
