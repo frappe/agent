@@ -798,7 +798,10 @@ print(">>>" + frappe.session.sid + "<<<")
     def get_database_table_schemas(self):
         command = f"SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`, DATA_TYPE AS `data_type`, IS_NULLABLE AS `is_nullable`, COLUMN_DEFAULT AS `default` FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_SCHEMA='{self.database}';"
         command = quote(command)
-        return self.execute(f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch").get("output")
+        data = self.execute(f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch").get("output")
+        data = data.split("\n")
+        data = [line.split("\t") for line in data]
+        return data
 
     @property
     def job_record(self):
