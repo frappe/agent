@@ -550,8 +550,8 @@ def backup_site(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/schemas", methods=["GET"])
 @validate_bench_and_site
-def fetch_database_schema(bench, site):
-    return {"data": Server().benches[bench].sites[site].get_database_schema_sql()}
+def fetch_database_schemas(bench, site):
+    return {"data": Server().benches[bench].sites[site].get_database_table_schemas()}
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/migrate",
