@@ -797,7 +797,17 @@ print(">>>" + frappe.session.sid + "<<<")
             return []
 
     def get_database_table_schemas(self):
-        command = f"SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`, DATA_TYPE AS `data_type`, IS_NULLABLE AS `is_nullable`, COLUMN_DEFAULT AS `default` FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_SCHEMA='{self.database}';"
+        command = f"""SELECT
+                            TABLE_NAME AS `table`,
+                            COLUMN_NAME AS `column`,
+                            DATA_TYPE AS `data_type`,
+                            IS_NULLABLE AS `is_nullable`,
+                            COLUMN_DEFAULT AS `default`
+                        FROM
+                            INFORMATION_SCHEMA.COLUMNS
+                        WHERE
+                            TABLE_SCHEMA='{self.database}';
+                    """
         command = quote(command)
         data = self.execute(
             f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
