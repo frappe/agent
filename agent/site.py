@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from agent.base import AgentException, Base
-from agent.database2 import Database
+from agent.database import Database
 from agent.job import job, step
 from agent.utils import b2mb, get_size
 
@@ -799,26 +799,32 @@ print(">>>" + frappe.session.sid + "<<<")
     def get_database_table_schemas(self):
         command = f"SELECT TABLE_NAME AS `table`, COLUMN_NAME AS `column`, DATA_TYPE AS `data_type`, IS_NULLABLE AS `is_nullable`, COLUMN_DEFAULT AS `default` FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_SCHEMA='{self.database}';"
         command = quote(command)
-        data = self.execute(f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch").get("output")
+        data = self.execute(
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
+        ).get("output")
         data = data.split("\n")
         data = [line.split("\t") for line in data]
-        tables = {} # <table_name>: [<column_1_info>, <column_2_info>, ...]
+        tables = {}  # <table_name>: [<column_1_info>, <column_2_info>, ...]
         for row in data:
             if len(row) != 5:
                 continue
             table = row[0]
             if table not in tables:
                 tables[table] = []
-            tables[table].append({
-                "column": row[1],
-                "data_type": row[2],
-                "is_nullable": True if row[3] == "YES" else False,
-                "default": row[4],
-            })
+            tables[table].append(
+                {
+                    "column": row[1],
+                    "data_type": row[2],
+                    "is_nullable": row[3] == "YES",
+                    "default": row[4],
+                }
+            )
         return tables
 
-    def run_sql_query(self, query:str, commit:bool=False, as_dict:bool=False):
-        return Database(self.host, 3306, self.user, self.password, self.database).execute_query(query, commit=commit, as_dict=as_dict)
+    def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
+        return Database(self.host, 3306, self.user, self.password, self.database).execute_query(
+            query, commit=commit, as_dict=as_dict
+        )
 
     @property
     def job_record(self):
@@ -838,5 +844,3 @@ print(">>>" + frappe.session.sid + "<<<")
             " frappe.website.doctype.website_theme.website_theme"
             ".generate_theme_files_if_not_exist"
         )
-
-
