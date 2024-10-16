@@ -553,6 +553,18 @@ def backup_site(bench, site):
 def fetch_database_schemas(bench, site):
     return Server().benches[bench].sites[site].get_database_table_schemas()
 
+@application.route("/benches/<string:bench>/sites/<string:site>/database/query/execute", methods=["POST"])
+@validate_bench_and_site
+def run_sql(bench, site):
+    query = request.json.get("query")
+    commit = request.json.get("commit") or False
+    as_dict = request.json.get("as_dict") or False
+    success, output = Server().benches[bench].sites[site].run_sql_query(query, commit, as_dict)
+    return {
+        "success": success,
+        "output": output
+    }
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/migrate",
     methods=["POST"],

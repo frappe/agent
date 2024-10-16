@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from agent.base import AgentException, Base
+from agent.database2 import Database
 from agent.job import job, step
 from agent.utils import b2mb, get_size
 
@@ -815,6 +816,9 @@ print(">>>" + frappe.session.sid + "<<<")
                 "default": row[4],
             })
         return tables
+
+    def run_sql_query(self, query:str, commit:bool=False, as_dict:bool=False):
+        return Database(self.host, 3306, self.user, self.password, self.database).execute_query(query, commit=commit, as_dict=as_dict)
 
     @property
     def job_record(self):
