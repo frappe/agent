@@ -767,7 +767,7 @@ class Server(Base):
                 wildcards.append(host.strip("*."))
         return wildcards
 
-    def find_available_ports(num_ports, starting_port=49152, ending_port=65535):
+    def find_available_ports(self, num_ports, starting_port=49152, ending_port=65535):
         reserved_ports = [22, 80, 443, 3306]  # List of reserved ports
 
         available_ports = []
