@@ -16,6 +16,7 @@ from peewee import MySQLDatabase
 
 from agent.base import AgentException, Base
 from agent.bench import Bench
+from agent.devbox import Devbox
 from agent.exceptions import BenchNotExistsException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
@@ -84,7 +85,7 @@ class Server(Base):
         }
 
     @job("New Bench", priority="low")
-    def  new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
+    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config)
         bench = Bench(name, self, mounts=mounts)
@@ -778,24 +779,15 @@ class Server(Base):
                     try:
                         s.bind(("0.0.0.0", current_port))
                         available_ports.append(current_port)
-                    except:
+                    except Exception:
                         pass
             current_port += 1
 
         return available_ports
 
     @job("New Devbox", priority="low")
-    def new_devbox(self,devbox_name):
-        websockify_port = self.find_available_ports(1)[0]
-        self.run_devbox(websockify_port=websockify_port,devbox_name=devbox_name)
-        self.setup_nginx()
-
-    @step("Run Devbox")
-    def run_devbox(self,websockify_port,devbox_name):
-        command = (
-            f"docker run -d --rm --name {devbox_name} -p {websockify_port}:6901 arunmathaisk/erpnext-15:latest"
-        )
-        self.execute(command)
-
-
-
+    def new_devbox(self, devbox_name):
+        websockify_port = self.find_available_ports(num_ports=1)[0]
+        devbox = Devbox(devbox_name=devbox_name, server=self, websockify_port=websockify_port)
+        devbox.run_devbox()
+        devbox.setup_nginx()

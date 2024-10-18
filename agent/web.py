@@ -1292,6 +1292,5 @@ def recover_update_inplace(bench: str):
 @application.route("/devboxes", methods=["POST"])
 def new_devbox():
     data = request.json
-    job = Server().new_devbox(**data)
+    job = Server().new_devbox(data.devbox_name)
     return {"job": job}
-
