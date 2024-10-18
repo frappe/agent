@@ -19,6 +19,14 @@ class Devbox(Base):
         self.job = None
         self.step = None
 
+    @property
+    def step_record(self):
+        return self.server.step_record
+
+    @step_record.setter
+    def step_record(self, value):
+        self.server.step_record = value
+
     @step("Devbox Setup NGINX")
     def setup_nginx(self, is_devbox=False):
         from filelock import FileLock
