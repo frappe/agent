@@ -26,9 +26,13 @@ class Database:
         try:
             return True, self._sql(query, commit=commit, as_dict=as_dict)
         except (ProgrammingError, InternalError) as e:
-            return False, "Error while executing query: " + str(e)
-        except Exception:
-            return False, "Failed to execute query. Please check the query and try again later."
+            return False, str(e)
+        except Exception as e:
+            print(f"Error executing SQL Query on {self.database} : {e}")
+            return (
+                False,
+                "Failed to execute query due to unknown error. Please check the query and try again later.",
+            )
 
     # Private helper methods
     def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None:
