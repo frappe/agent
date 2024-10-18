@@ -16,6 +16,8 @@ class Devbox(Base):
         self.server = server
         self.directory = os.path.join(self.server.devboxes_directory, devbox_name)
         self.websockify_port = websockify_port
+        self.job = None
+        self.step = None
 
     @step("Devbox Setup NGINX")
     def setup_nginx(self, is_devbox=False):
@@ -37,4 +39,4 @@ class Devbox(Base):
     @step("Run Devbox")
     def run_devbox(self):
         command = f"docker run -d --rm --name {self.devbox_name} -p {self.websockify_port}:6901 arunmathaisk/erpnext-15:latest"  # noqa: E501
-        self.execute(command)
+        return self.execute(command)
