@@ -35,7 +35,7 @@ class Database:
             )
 
     # Private helper methods
-    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None: # noqa: C901
+    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None:  # noqa: C901
         """
         Run sql query in database
         It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
@@ -106,11 +106,7 @@ class Database:
                         output = list(map(lambda x: dict(zip(columns, x)), rows))
                     else:
                         output = {"columns": columns, "data": rows}
-                results.append({
-                    "query": q,
-                    "output": output,
-                    "row_count": row_count
-                })
+                results.append({"query": q, "output": output, "row_count": row_count})
         except:
             # if query execution fails, rollback the transaction and raise the error
             self.db.rollback()
