@@ -12,9 +12,7 @@ class DatabaseTestInstance:
     # Test database instance with few utility functions
     def __init__(self) -> None:
         self.db_root_password = "123456"
-        self.db_container = MySqlContainer(
-            image="mysql:8.0", MYSQL_ROOT_PASSWORD=self.db_root_password
-        )
+        self.db_container = MySqlContainer(image="mysql:8.0", MYSQL_ROOT_PASSWORD=self.db_root_password)
         self.db_container.start()
 
     @property
@@ -46,9 +44,7 @@ class DatabaseTestInstance:
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = (
-                f'mysql -h 127.0.0.1 -uroot -p{self.db_root_password} -e "{query}"'
-            )
+            command = f'mysql -h 127.0.0.1 -uroot -p{self.db_root_password} -e "{query}"'
             self.execute_cmd(command)
 
 
@@ -94,15 +90,11 @@ class TestDatabase(unittest.TestCase):
         self.instance.destroy()
 
     def _db(self, db_name: str, username: str, password: str) -> Database:
-        return Database(
-            self.instance.host, self.instance.port, username, password, db_name
-        )
+        return Database(self.instance.host, self.instance.port, username, password, db_name)
 
     def test_execute_query(self):
         """Basic test for `execute_query` function"""
         db = self._db(self.db1__name, self.db1__username, self.db1__password)
-        success, data = db.execute_query(
-            "SELECT * FROM Person", commit=False, as_dict=True
-        )
+        success, data = db.execute_query("SELECT * FROM Person", commit=False, as_dict=True)
         self.assertEqual(success, True, "run sql query")
         self.assertEqual(data[0]["row_count"], 5)
