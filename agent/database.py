@@ -38,6 +38,7 @@ class Database:
     def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None:
         """
         Run sql query in database
+        It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
 
         Args:
         query: SQL query
@@ -51,38 +52,65 @@ class Database:
         For as_dict = True:
         [
             {
-                "name" : "Administrator",
-                "modified": "2019-01-01 00:00:00",
+                "output": [
+                    {
+                        "name" : "Administrator",
+                        "modified": "2019-01-01 00:00:00",
+                    },
+                    ...
+                ]
+                "query": "SELECT name, modified FROM `tabUser`",
+                "row_count": 10
             },
             ...
         ]
 
         For as_dict = False:
-        {
-            "columns": ["name", "modified"],
-            "data": [
-                ["Administrator", "2019-01-01 00:00:00"],
-                ...
-            ]
-        }
+        [
+            {
+                "output": {
+                    "columns": ["name", "modified"],
+                    "data": [
+                        ["Administrator", "2019-01-01 00:00:00"],
+                        ...
+                    ]
+                },
+                "query": "SELECT name, modified FROM `tabUser`",
+                "row_count": 10
+            },
+            ...
+        ]
         """
 
-        query = query.strip()
-        if not commit and self._is_restricted_query_for_no_commit_mode(query):
-            raise ProgrammingError("Provided query is not allowed in read only mode")
+        queries = [x.strip() for x in query.split(";\n")]
+        queries = [x for x in queries if x]
+
+        if len(queries) == 0:
+            raise ProgrammingError("No query provided")
 
         # Start transaction
         self.db.begin()
-        result = None
+        results = []
         try:
-            cursor = self.db.execute_sql(query, params)
-            if cursor.description:
-                rows = cursor.fetchall()
-                columns = [d[0] for d in cursor.description]
-                if as_dict:
-                    result = list(map(lambda x: dict(zip(columns, x)), rows))
-                else:
-                    result = {"columns": columns, "data": rows}
+            for q in queries:
+                if not commit and self._is_restricted_query_for_no_commit_mode(query):
+                    raise ProgrammingError("Provided query is not allowed in read only mode")
+                output = None
+                row_count = None
+                cursor = self.db.execute_sql(q, params)
+                row_count = cursor.rowcount
+                if cursor.description:
+                    rows = cursor.fetchall()
+                    columns = [d[0] for d in cursor.description]
+                    if as_dict:
+                        output = list(map(lambda x: dict(zip(columns, x)), rows))
+                    else:
+                        output = {"columns": columns, "data": rows}
+                results.append({
+                    "query": q,
+                    "output": output,
+                    "row_count": row_count
+                })
         except:
             # if query execution fails, rollback the transaction and raise the error
             self.db.rollback()
@@ -98,7 +126,7 @@ class Database:
             else:
                 # If commit is False, rollback the transaction to discard the changes
                 self.db.rollback()
-        return result
+        return results
 
     def _is_restricted_query_for_no_commit_mode(self, query: str) -> bool:
         return self._is_ddl_query(query) or self._is_dcl_query(query) or self._is_tcl_query(query)

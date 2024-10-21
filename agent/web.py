@@ -561,8 +561,8 @@ def run_sql(bench, site):
     query = request.json.get("query")
     commit = request.json.get("commit") or False
     as_dict = request.json.get("as_dict") or False
-    success, output = Server().benches[bench].sites[site].run_sql_query(query, commit, as_dict)
-    return {"success": success, "output": output}
+    success, data = Server().benches[bench].sites[site].run_sql_query(query, commit, as_dict)
+    return {"success": success, "data": data}
 
 
 @application.route(
