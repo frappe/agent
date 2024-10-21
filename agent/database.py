@@ -35,7 +35,7 @@ class Database:
             )
 
     # Private helper methods
-    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None:
+    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None: # noqa: C901
         """
         Run sql query in database
         It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
