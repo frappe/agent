@@ -85,7 +85,7 @@ class Database:
         """
 
         queries = [x.strip() for x in query.split(";\n")]
-        queries = [x for x in queries if x]
+        queries = [x for x in queries if x and not x.startswith("--")]
 
         if len(queries) == 0:
             raise ProgrammingError("No query provided")
@@ -98,7 +98,7 @@ class Database:
                 for q in queries:
                     self.last_executed_query = q
                     if not commit and self._is_restricted_query_for_no_commit_mode(q):
-                        raise ProgrammingError(f"Provided query is not allowed in read only mode")
+                        raise ProgrammingError("Provided query is not allowed in read only mode")
                     output = None
                     row_count = None
                     cursor = self.db.execute_sql(q, params)
