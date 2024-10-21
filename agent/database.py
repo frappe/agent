@@ -96,8 +96,9 @@ class Database:
         with self.db.atomic() as transaction:
             try:
                 for q in queries:
+                    self.last_executed_query = q
                     if not commit and self._is_restricted_query_for_no_commit_mode(q):
-                        raise ProgrammingError("Provided query is not allowed in read only mode")
+                        raise ProgrammingError(f"Provided query is not allowed in read only mode")
                     output = None
                     row_count = None
                     cursor = self.db.execute_sql(q, params)

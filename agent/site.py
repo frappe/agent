@@ -832,9 +832,15 @@ print(">>>" + frappe.session.sid + "<<<")
         return tables
 
     def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
-        return Database(self.host, 3306, self.user, self.password, self.database).execute_query(
-            query, commit=commit, as_dict=as_dict
-        )
+        database = Database(self.host, 3306, self.user, self.password, self.database)
+        success, output = database.execute_query(query, commit=commit, as_dict=as_dict)
+        response = {
+            "success": success,
+            "data": output
+        }
+        if not success and hasattr(database, "last_executed_query"):
+            response["failed_query"] = database.last_executed_query
+        return response
 
     @property
     def job_record(self):
