@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from peewee import InternalError, MySQLDatabase, ProgrammingError
 
@@ -17,7 +18,7 @@ class Database:
         )
 
     # Methods
-    def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> list[bool, str]:
+    def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> tuple[bool, Any]:
         """
         This function will take the query and run in database.
 
@@ -30,14 +31,14 @@ class Database:
         except (ProgrammingError, InternalError) as e:
             return False, str(e)
         except Exception as e:
-            print(f"Error executing SQL Query on {self.database} : {e}")
+            print(f"Error executing SQL Query on {self.db} : {e}")
             return (
                 False,
                 "Failed to execute query due to unknown error. Please check the query and try again later.",
             )
 
     # Private helper methods
-    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> dict | None:  # noqa: C901
+    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> list[dict]:  # noqa: C901
         """
         Run sql query in database
         It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
