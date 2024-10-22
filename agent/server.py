@@ -797,7 +797,7 @@ class Server(Base):
         devbox = Devbox(devbox_name=devbox_name, server=self, websockify_port=websockify_port)
         devbox.run_devbox()
         devbox.setup_nginx()
-        return devbox.websockify_port
+        return {"message": {"websockify_port":devbox.websockify_port }}
 
     @job("Start Devbox", priority="low")
     def start_devbox(self,devbox_name,websockify_port):
