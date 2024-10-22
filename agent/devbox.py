@@ -18,6 +18,7 @@ class Devbox(Base):
         self.websockify_port = websockify_port
         self.job = None
         self.step = None
+        self.status = None
 
     @property
     def job_record(self):
@@ -51,4 +52,8 @@ class Devbox(Base):
     @step("Run Devbox")
     def run_devbox(self):
         command = f"docker run -d --rm --name {self.devbox_name} -p {self.websockify_port}:6901 arunmathaisk/erpnext-15:latest"  # noqa: E501
+        return self.execute(command)
+
+    def get_devbox_status(self):
+        command = f"docker inspect --format='{{.State.Status}}' {self.devbox_name}"
         return self.execute(command)
