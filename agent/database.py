@@ -8,14 +8,7 @@ from peewee import InternalError, MySQLDatabase, ProgrammingError
 
 class Database:
     def __init__(self, host, port, user, password, database):
-        self.db: MySQLDatabase = MySQLDatabase(
-            database,
-            user=user,
-            password=password,
-            host=host,
-            port=port,
-            autocommit=False,
-        )
+        self.db: MySQLDatabase = MySQLDatabase(database, user=user, password=password, host=host, port=port)
 
     # Methods
     def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> tuple[bool, Any]:
@@ -27,18 +20,17 @@ class Database:
         str: The output of the query. It can be the output or error message as well
         """
         try:
-            return True, self._sql(query, commit=commit, as_dict=as_dict)
+            return True, self._run_sql(query, commit=commit, as_dict=as_dict)
         except (ProgrammingError, InternalError) as e:
             return False, str(e)
-        except Exception as e:
-            print(f"Error executing SQL Query on {self.db} : {e}")
+        except Exception:
             return (
                 False,
                 "Failed to execute query due to unknown error. Please check the query and try again later.",
             )
 
     # Private helper methods
-    def _sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> list[dict]:  # noqa: C901
+    def _run_sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> list[dict]:  # noqa: C901
         """
         Run sql query in database
         It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
@@ -98,8 +90,12 @@ class Database:
             try:
                 for q in queries:
                     self.last_executed_query = q
-                    if not commit and self._is_restricted_query_for_no_commit_mode(q):
-                        raise ProgrammingError("Provided query is not allowed in read only mode")
+                    if not commit and self._is_ddl_query(q):
+                        raise ProgrammingError("Provided DDL query is not allowed in read only mode")
+                    if self._is_dcl_query(q):
+                        raise ProgrammingError("DCL query is not allowed to execute")
+                    if self._is_tcl_query(q):
+                        raise ProgrammingError("TCL query is not allowed to execute")
                     output = None
                     row_count = None
                     cursor = self.db.execute_sql(q, params)
@@ -131,9 +127,6 @@ class Database:
         with contextlib.suppress(Exception):
             self.db.close()
         return results
-
-    def _is_restricted_query_for_no_commit_mode(self, query: str) -> bool:
-        return self._is_ddl_query(query) or self._is_dcl_query(query) or self._is_tcl_query(query)
 
     def _is_ddl_query(self, query: str) -> bool:
         return query.upper().startswith(("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "COMMENT"))
