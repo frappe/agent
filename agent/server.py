@@ -785,7 +785,7 @@ class Server(Base):
 
         return available_ports
 
-    @step("Initialize Bench")
+    @step("Initialize Devbox")
     def devbox_init(self, devbox_name):
         devboxes_directory = os.path.join(self.devboxes_directory, devbox_name)
         os.mkdir(devboxes_directory)
@@ -797,3 +797,9 @@ class Server(Base):
         devbox = Devbox(devbox_name=devbox_name, server=self, websockify_port=websockify_port)
         devbox.run_devbox()
         devbox.setup_nginx()
+        return devbox.websockify_port
+
+    @job("Start Devbox", priority="low")
+    def start_devbox(self,devbox_name,websockify_port):
+        devbox = Devbox(devbox_name=devbox_name,server=self,websockify_port=websockify_port)
+        devbox.run_devbox()

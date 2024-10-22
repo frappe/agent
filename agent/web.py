@@ -1294,3 +1294,8 @@ def new_devbox():
     data = request.json
     job = Server().new_devbox(data.get("devbox_name"))
     return {"job": job}
+
+@application.route("/devboxes/<string:devbox_name>/<int:websockify_port>/start", methods=["POST"])
+def start_devbox(devbox_name: str,websockify_port:int):
+    job = Server().start_devbox(devbox_name=devbox_name,websockify_port=websockify_port)
+    return {"job": job}
