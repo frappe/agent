@@ -1304,4 +1304,8 @@ def start_devbox(devbox_name: str, websockify_port: int):
 
 @application.route("/devboxes/<string:devbox_name>/status", methods=["POST"])
 def get_devbox_status(devbox_name: str):
-    return jsonify(Server().get_devbox_status(devbox_name=devbox_name))
+    result = Server().get_devbox_status(devbox_name=devbox_name)
+    result["start"] = result["start"].isoformat()
+    result["end"] = result["end"].isoformat()
+    result["duration"] = result["duration"].total_seconds()
+    return jsonify(result)
