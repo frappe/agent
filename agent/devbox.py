@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from agent.base import Base
 from agent.job import step
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class Devbox(Base):
-    def __init__(self, devbox_name: str, server: Server, websockify_port: int | None=None):
+    def __init__(self, devbox_name: str, server: Server, websockify_port: int | None = None):
         self.devbox_name = devbox_name
         self.server = server
         self.directory = os.path.join(self.server.devboxes_directory, devbox_name)
@@ -55,5 +55,5 @@ class Devbox(Base):
         return self.execute(command)
 
     def get_devbox_status(self):
-        command = f"docker inspect --format='{{.State.Status}}' {self.devbox_name}"
+        command = f"docker inspect --format='{{{{.State.Status}}}}' {self.devbox_name}"
         return self.execute(command)
