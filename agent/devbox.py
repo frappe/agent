@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from agent.base import Base
 from agent.job import step
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class Devbox(Base):
-    def __init__(self, devbox_name: str, server: Server, websockify_port: int):
+    def __init__(self, devbox_name: str, server: Server, websockify_port: int | None=None):
         self.devbox_name = devbox_name
         self.server = server
         self.directory = os.path.join(self.server.devboxes_directory, devbox_name)
