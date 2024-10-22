@@ -512,8 +512,14 @@ class Bench(Base):
         return self.rebuild()
 
     @step("Rebuild Bench Assets")
-    def rebuild(self):
-        return self.docker_execute("bench build")
+    def rebuild(self, apps: list[str] | None = None):
+        if not apps:
+            return self.docker_execute("bench build")
+
+        if len(apps) == 1:
+            return self.docker_execute(f"bench build --app {apps[0]}")
+
+        return self.docker_execute(f"bench build --apps {','.join(apps)}")
 
     @property
     def apps(self):
@@ -897,7 +903,7 @@ class Bench(Base):
             self.migrate_sites(sites)
 
         if should_run["rebuild_frontend"]:
-            self.rebuild()
+            self.rebuild(apps=[app["app"] for app in apps])
 
         # commit container changes
         self.commit_container_changes(image)
