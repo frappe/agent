@@ -804,6 +804,11 @@ class Server(Base):
         devbox = Devbox(devbox_name=devbox_name, server=self, websockify_port=websockify_port)
         devbox.run_devbox()
 
+    @job("Stop Devbox", priority="low")
+    def stop_devbox(self, devbox_name):
+        devbox = Devbox(devbox_name=devbox_name, server=self)
+        devbox.stop_devbox()
+
     def get_devbox_status(self, devbox_name):
         devbox = Devbox(devbox_name=devbox_name, server=self)
         return devbox.get_devbox_status()

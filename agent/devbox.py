@@ -58,6 +58,11 @@ class Devbox(Base):
         )
         return self.execute(command)
 
+    @step("Stop Devbox")
+    def stop_devbox(self):
+        self.execute(command=f"docker stop {self.devbox_name}")
+        return self.execute(f"docker rm -f {self.devbox_name}")
+
     def get_devbox_status(self):
         command = f"docker inspect --format='{{{{.State.Status}}}}' {self.devbox_name}"
         # We pass the --rm flag thus cant do inspect on non existing container name or container id

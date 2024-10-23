@@ -1301,6 +1301,12 @@ def start_devbox(devbox_name: str, websockify_port: int):
     job = Server().start_devbox(devbox_name=devbox_name, websockify_port=websockify_port)
     return {"job": job}
 
+@application.route("/devboxes/<string:devbox_name>/stop", methods=["POST"])
+def stop_devbox(devbox_name: str, websockify_port: int):
+    job = Server().stop_devbox(devbox_name=devbox_name)
+    return {"job": job}
+
+
 
 @application.route("/devboxes/<string:devbox_name>/status", methods=["POST"])
 def get_devbox_status(devbox_name: str):
