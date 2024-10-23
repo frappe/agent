@@ -51,9 +51,14 @@ class Devbox(Base):
 
     @step("Run Devbox")
     def run_devbox(self):
-        command = f"docker run -d --rm --name {self.devbox_name} -p {self.websockify_port}:6901 arunmathaisk/erpnext-15:latest"  # noqa: E501
+        command = (
+            f"docker run -d --init --rm --name {self.devbox_name} "
+            f"-p {self.websockify_port}:6901 "
+            "arunmathaisk/erpnext-15:latest"
+        )
         return self.execute(command)
 
     def get_devbox_status(self):
         command = f"docker inspect --format='{{{{.State.Status}}}}' {self.devbox_name}"
-        return self.execute(command)
+        # We pass the --rm flag thus cant do inspect on non existing container name or container id
+        return self.execute(command, non_zero_throw=False)
