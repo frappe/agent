@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import requests
 
 from agent.base import AgentException, Base
+from agent.database import Database
 from agent.job import job, step
 from agent.utils import b2mb, get_size
 
@@ -794,6 +795,80 @@ print(">>>" + frappe.session.sid + "<<<")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:
             return []
+
+    def get_database_table_schemas(self):
+        index_info = self.get_database_table_indexes()
+        command = f"""SELECT
+                            TABLE_NAME AS `table`,
+                            COLUMN_NAME AS `column`,
+                            DATA_TYPE AS `data_type`,
+                            IS_NULLABLE AS `is_nullable`,
+                            COLUMN_DEFAULT AS `default`
+                        FROM
+                            INFORMATION_SCHEMA.COLUMNS
+                        WHERE
+                            TABLE_SCHEMA='{self.database}';
+                    """
+        command = quote(command)
+        data = self.execute(
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
+        ).get("output")
+        data = data.split("\n")
+        data = [line.split("\t") for line in data]
+        tables = {}  # <table_name>: [<column_1_info>, <column_2_info>, ...]
+        for row in data:
+            if len(row) != 5:
+                continue
+            table = row[0]
+            if table not in tables:
+                tables[table] = []
+            tables[table].append(
+                {
+                    "column": row[1],
+                    "data_type": row[2],
+                    "is_nullable": row[3] == "YES",
+                    "default": row[4],
+                    "indexes": index_info.get(table, {}).get(row[1], []),
+                }
+            )
+        return tables
+
+    def get_database_table_indexes(self):
+        command = f"""
+        SELECT
+            TABLE_NAME AS `table`,
+            COLUMN_NAME AS `column`,
+            INDEX_NAME AS `index`
+        FROM
+            INFORMATION_SCHEMA.STATISTICS
+        WHERE
+            TABLE_SCHEMA='{self.database}'
+        """
+        command = quote(command)
+        data = self.execute(
+            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
+        ).get("output")
+        data = data.split("\n")
+        data = [line.split("\t") for line in data]
+        tables = {}  # <table_name>: { <column_name> : [<index1>, <index2>, ...] }
+        for row in data:
+            if len(row) != 3:
+                continue
+            table = row[0]
+            if table not in tables:
+                tables[table] = {}
+            if row[1] not in tables[table]:
+                tables[table][row[1]] = []
+            tables[table][row[1]].append(row[2])
+        return tables
+
+    def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
+        database = Database(self.host, 3306, self.user, self.password, self.database)
+        success, output = database.execute_query(query, commit=commit, as_dict=as_dict)
+        response = {"success": success, "data": output}
+        if not success and hasattr(database, "last_executed_query"):
+            response["failed_query"] = database.last_executed_query
+        return response
 
     @property
     def job_record(self):
