@@ -9,7 +9,7 @@ from base64 import b64decode
 from functools import wraps
 from typing import TYPE_CHECKING
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 
@@ -562,9 +562,12 @@ def run_sql(bench, site):
     query = request.json.get("query")
     commit = request.json.get("commit") or False
     as_dict = request.json.get("as_dict") or False
-    return json.dumps(
-        Server().benches[bench].sites[site].run_sql_query(query, commit, as_dict),
-        cls=JSONEncoderForSQLQueryResult,
+    return Response(
+        json.dumps(
+            Server().benches[bench].sites[site].run_sql_query(query, commit, as_dict),
+            cls=JSONEncoderForSQLQueryResult,
+        ),
+        mimetype="application/json",
     )
 
 
