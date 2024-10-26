@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import contextlib
+import json
+from decimal import Decimal
 from typing import Any
 
 from peewee import InternalError, MySQLDatabase, ProgrammingError
@@ -137,3 +139,10 @@ class Database:
     def _is_tcl_query(self, query: str) -> bool:
         query = query.upper().replace(" ", "")
         return query.startswith(("COMMIT", "ROLLBACK", "SAVEPOINT", "BEGINTRANSACTION"))
+
+
+class JSONEncoderForSQLQueryResult(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return str(obj)
