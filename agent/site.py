@@ -796,7 +796,12 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return []
 
-    def get_database_table_schemas(self):
+    @job("Fetch Database Table Schema")
+    def fetch_database_table_schema(self):
+        return self._fetch_database_table_schema()
+
+    @step("Fetch Database Table Schema")
+    def _fetch_database_table_schema(self):
         index_info = self.get_database_table_indexes()
         command = f"""SELECT
                             TABLE_NAME AS `table`,
