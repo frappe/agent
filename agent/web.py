@@ -550,10 +550,10 @@ def backup_site(bench, site):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/schemas", methods=["POST"])
+@application.route("/benches/<string:bench>/sites/<string:site>/database/schema", methods=["POST"])
 @validate_bench_and_site
-def fetch_database_table_schemas(bench, site):
-    job = Server().benches[bench].sites[site].fetch_database_table_schemas()
+def fetch_database_table_schema(bench, site):
+    job = Server().benches[bench].sites[site].fetch_database_table_schema()
     return {"job": job}
 
 
