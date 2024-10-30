@@ -33,10 +33,10 @@ class Database:
             )
 
     """
-    NOTE: These methods requires root access to the database
+    NOTE: These methods require root access to the database
     - add_user
     - remove_user
-    - modify_access
+    - modify_user_access
     """
 
     def add_user(self, username: str, password: str):
