@@ -57,7 +57,7 @@ FLUSH PRIVILEGES;
             commit=True,
         )
 
-    def modify_user_access(self, username: str, mode: str, permissions: dict | None = None) -> None:  # noqa C901
+    def modify_user_permission(self, username: str, mode: str, permissions: dict | None = None) -> None:  # noqa C901
         """
         Args:
             username: username of the user, whos privileges are to be modified
@@ -93,7 +93,7 @@ FLUSH PRIVILEGES;
         records = self._run_sql(f"SHOW GRANTS FOR '{username}'@'%';", as_dict=False)
         granted_records: list[str] = []
         if len(records) > 0 and records[0]["output"]["data"] and len(records[0]["output"]["data"]) > 0:
-            granted_records = records[0]["output"]["data"][0]
+            granted_records = [x[0] for x in records[0]["output"]["data"] if len(x) > 0]
 
         queries = []
         """
@@ -113,7 +113,7 @@ FLUSH PRIVILEGES;
                 # dont revoke usage
                 continue
             queries.append(
-                record.replace("GRANT", "REVOKE").replace(f"TO `{username}`@`%", f"FROM `{username}`@`%`")
+                record.replace("GRANT", "REVOKE").replace(f"TO `{username}`@`%`", f"FROM `{username}`@`%`")
                 + ";"
             )
 
@@ -127,15 +127,22 @@ FLUSH PRIVILEGES;
                 if isinstance(permissions[table_name]["columns"], list):
                     if len(permissions[table_name]["columns"]) == 0:
                         raise ValueError(
-                            "columns cannot be an empty list. please specify '*' or [at least one column]"
+                            "columns cannot be an empty list. please specify '*' or at least one column"
                         )
-                    columns = ",".join(permissions[table_name]["columns"])
+                    requested_columns = permissions[table_name]["columns"]
+                    columns = ",".join([f"`{x}`" for x in requested_columns])
                     columns = f"({columns})"
 
                 privilege = privileges[permissions[table_name]["mode"]]
-                queries.append(
-                    f"GRANT {privilege} {columns} ON {self.database_name}.`{table_name}` TO `{username}`@`%`;"
-                )
+                if columns == "" or privilege == "SELECT":
+                    queries.append(
+                        f"GRANT {privilege} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
+                    )
+                else:
+                    for p in ["SELECT", "INSERT", "UPDATE", "REFERENCES"]:
+                        queries.append(
+                            f"GRANT {p} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
+                        )
 
         # flush privileges to apply changes
         queries.append("FLUSH PRIVILEGES;")
