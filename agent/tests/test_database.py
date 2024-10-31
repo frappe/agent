@@ -13,7 +13,7 @@ class DatabaseTestInstance:
 
     def __init__(self) -> None:
         self.db_root_password = "123456"
-        self.db_container = MySqlContainer(image="mysql:8.0", MYSQL_ROOT_PASSWORD=self.db_root_password)
+        self.db_container = MySqlContainer(image="mariadb:10.6", MYSQL_ROOT_PASSWORD=self.db_root_password)
         self.db_container.start()
 
     @property
@@ -228,3 +228,42 @@ class TestDatabase(unittest.TestCase):
             as_dict=True,
         )
         self.assertEqual(data[0]["row_count"], 0)
+
+    def test_add_user(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+
+        # add user
+        try:
+            db.add_user("test_user", "test_user_password")
+        except:
+            print(f"Failed query: {db.query}")
+            raise
+
+        # fetch users
+        success, output = db.execute_query("SELECT User FROM mysql.user;", commit=False, as_dict=False)
+        self.assertTrue(success)
+        self.assertIsInstance(output, list)
+
+        users = [x[0] for x in output[0].get("output", []).get("data", [])]
+        self.assertIn("test_user", users)
+
+    def test_remove_user(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+
+        # add a dummy user
+        db.add_user("test_user", "test_user_password")
+
+        # remove user
+        try:
+            db.remove_user("test_user")
+        except:
+            print(f"Failed query: {db.query}")
+            raise
+
+        # fetch users
+        success, output = db.execute_query("SELECT User FROM mysql.user;", commit=False, as_dict=False)
+        self.assertTrue(success)
+        self.assertIsInstance(output, list)
+
+        users = [x[0] for x in output[0].get("output", []).get("data", [])]
+        self.assertNotIn("test_user", users)
