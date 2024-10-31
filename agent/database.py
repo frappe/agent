@@ -40,9 +40,10 @@ class Database:
     """
 
     def add_user(self, username: str, password: str):
-        query = f"""CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
-FLUSH PRIVILEGES;
-"""
+        query = f"""
+            CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
+            FLUSH PRIVILEGES;
+        """
         self._run_sql(
             query,
             commit=True,
@@ -51,9 +52,9 @@ FLUSH PRIVILEGES;
     def remove_user(self, username: str):
         self._run_sql(
             f"""
-                      DROP USER IF EXISTS '{username}'@'%';
-                      FLUSH PRIVILEGES;
-                      """,
+                DROP USER IF EXISTS '{username}'@'%';
+                FLUSH PRIVILEGES;
+            """,
             commit=True,
         )
 
@@ -139,6 +140,8 @@ FLUSH PRIVILEGES;
                         f"GRANT {privilege} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
                     )
                 else:
+                    # while usisng column level privileges `ALL` doesnt work
+                    # So we need to provide all possible privileges for that columns
                     for p in ["SELECT", "INSERT", "UPDATE", "REFERENCES"]:
                         queries.append(
                             f"GRANT {p} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
