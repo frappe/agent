@@ -24,7 +24,7 @@ class Database:
         """
         try:
             return True, self._run_sql(query, commit=commit, as_dict=as_dict)
-        except (peewee.ProgrammingError, peewee.InternalError) as e:
+        except (peewee.ProgrammingError, peewee.InternalError, peewee.OperationalError) as e:
             return False, str(e)
         except Exception:
             return (
@@ -92,8 +92,8 @@ FLUSH PRIVILEGES;
         # fetch existing privileges
         records = self._run_sql(f"SHOW GRANTS FOR '{username}'@'%';", as_dict=False)
         granted_records: list[str] = []
-        if len(records) > 0 and records[0]["output"]["data"]:
-            granted_records = records[0]["output"]["data"]
+        if len(records) > 0 and records[0]["output"]["data"] and len(records[0]["output"]["data"]) > 0:
+            granted_records = records[0]["output"]["data"][0]
 
         queries = []
         """
@@ -109,6 +109,9 @@ FLUSH PRIVILEGES;
         REVOKE SELECT ON _cbace6eaa306751d.* FROM '_cbace6eaa306751d_read_only'@'%'
         """
         for record in granted_records:
+            if record.startswith("GRANT USAGE"):
+                # dont revoke usage
+                continue
             queries.append(
                 record.replace("GRANT", "REVOKE").replace(f"TO `{username}`@`%", f"FROM `{username}`@`%`")
                 + ";"

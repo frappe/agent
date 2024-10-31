@@ -267,3 +267,48 @@ class TestDatabase(unittest.TestCase):
 
         users = [x[0] for x in output[0].get("output", []).get("data", [])]
         self.assertNotIn("test_user", users)
+
+    def test_create_read_only_permission(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        db.add_user("user1", "test_password")  # add user
+
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        # try to access the database
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to the database")
+        self.assertIn("Access denied for user", str(output))
+
+        db.modify_user_access("user1", "read_only")
+
+        # try to access the database again
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to the database")
+        self.assertGreater(len(output), 0)
+
+        # user shouldnt have write access
+        success, output = user1_db.execute_query('INSERT INTO Person (id, name) VALUES (10, "Test Person");')
+        self.assertFalse(success, "User `user1` should not have write access to the database")
+        self.assertIn("INSERT command denied to user", str(output))
+
+    def test_create_read_write_permission(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        db.add_user("user1", "test_password")  # add user
+
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        # try to access the database
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to the database")
+        self.assertIn("Access denied for user", str(output))
+
+        db.modify_user_access("user1", "read_write")
+
+        # try to access the database again
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to the database")
+        self.assertGreater(len(output), 0)
+
+        # user should have write access
+        success, _ = user1_db.execute_query('INSERT INTO Person (id, name) VALUES (10, "Test Person");')
+        self.assertTrue(success, "User `user1` should have write access to the database")
