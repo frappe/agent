@@ -5,13 +5,13 @@ import json
 from decimal import Decimal
 from typing import Any
 
-from peewee import InternalError, MySQLDatabase, ProgrammingError
+import peewee
 
 
 class Database:
     def __init__(self, host, port, user, password, database):
         self.database_name = database
-        self.db: MySQLDatabase = MySQLDatabase(database, user=user, password=password, host=host, port=port)
+        self.db: CustomPeeweeDB = CustomPeeweeDB(database, user=user, password=password, host=host, port=port)
 
     # Methods
     def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> tuple[bool, Any]:
@@ -24,7 +24,7 @@ class Database:
         """
         try:
             return True, self._run_sql(query, commit=commit, as_dict=as_dict)
-        except (ProgrammingError, InternalError) as e:
+        except (peewee.ProgrammingError, peewee.InternalError) as e:
             return False, str(e)
         except Exception:
             return (
@@ -40,11 +40,11 @@ class Database:
     """
 
     def add_user(self, username: str, password: str):
+        query = f"""CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
+FLUSH PRIVILEGES;
+"""
         self._run_sql(
-            f"""
-                      CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
-                      FLUSH PRIVILEGES;
-                      """,
+            query,
             commit=True,
         )
 
@@ -195,7 +195,7 @@ class Database:
         queries = [x for x in queries if x and not x.startswith("--")]
 
         if len(queries) == 0:
-            raise ProgrammingError("No query provided")
+            raise peewee.ProgrammingError("No query provided")
 
         # Start transaction
         self.db.begin()
@@ -205,11 +205,11 @@ class Database:
                 for q in queries:
                     self.last_executed_query = q
                     if not commit and self._is_ddl_query(q):
-                        raise ProgrammingError("Provided DDL query is not allowed in read only mode")
+                        raise peewee.ProgrammingError("Provided DDL query is not allowed in read only mode")
                     if not allow_all_stmt_types and self._is_dcl_query(q):
-                        raise ProgrammingError("DCL query is not allowed to execute")
+                        raise peewee.ProgrammingError("DCL query is not allowed to execute")
                     if not allow_all_stmt_types and self._is_tcl_query(q):
-                        raise ProgrammingError("TCL query is not allowed to execute")
+                        raise peewee.ProgrammingError("TCL query is not allowed to execute")
                     output = None
                     row_count = None
                     cursor = self.db.execute_sql(q)
@@ -258,3 +258,54 @@ class JSONEncoderForSQLQueryResult(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         return str(obj)
+
+
+class CustomPeeweeDB(peewee.MySQLDatabase):
+    """
+    Override peewee.MySQLDatabase to modify `execute_sql` method
+
+    All queries coming from end-user has value inside query, so we can't pass the params seperately.
+    Peewee set `params` arg of `execute_sql` to `()` by default.
+
+    We are overriding `execute_sql` method to pass the params as None
+    So that, pymysql doesn't try to parse the query and insert params in the query
+    """
+
+    __exception_wrapper__ = peewee.ExceptionWrapper(
+        {
+            "ConstraintError": peewee.IntegrityError,
+            "DatabaseError": peewee.DatabaseError,
+            "DataError": peewee.DataError,
+            "IntegrityError": peewee.IntegrityError,
+            "InterfaceError": peewee.InterfaceError,
+            "InternalError": peewee.InternalError,
+            "NotSupportedError": peewee.NotSupportedError,
+            "OperationalError": peewee.OperationalError,
+            "ProgrammingError": peewee.ProgrammingError,
+            "TransactionRollbackError": peewee.OperationalError,
+        }
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def execute_sql(self, sql):
+        if self.in_transaction():
+            commit = False
+        elif self.commit_select:
+            commit = True
+        else:
+            commit = not sql[:6].lower().startswith("select")
+
+        with self.__exception_wrapper__:
+            cursor = self.cursor(commit)
+            try:
+                cursor.execute(sql, None)  # params passed as none
+            except Exception:
+                if self.autorollback and not self.in_transaction():
+                    self.rollback()
+                raise
+            else:
+                if commit and not self.in_transaction():
+                    self.commit()
+        return cursor
