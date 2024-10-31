@@ -34,12 +34,12 @@ class Database:
 
     """
     NOTE: These methods require root access to the database
-    - add_user
+    - create_user
     - remove_user
     - modify_user_access
     """
 
-    def add_user(self, username: str, password: str):
+    def create_user(self, username: str, password: str):
         query = f"""
             CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
             FLUSH PRIVILEGES;
@@ -58,7 +58,7 @@ class Database:
             commit=True,
         )
 
-    def modify_user_permission(self, username: str, mode: str, permissions: dict | None = None) -> None:  # noqa C901
+    def modify_user_permissions(self, username: str, mode: str, permissions: dict | None = None) -> None:  # noqa C901
         """
         Args:
             username: username of the user, whos privileges are to be modified
@@ -86,7 +86,7 @@ class Database:
 
         if mode not in ["read_only", "read_write", "granular"]:
             raise ValueError("mode must be read_only, read_write or granular")
-        privileges = {
+        privileges_map = {
             "read_only": "SELECT",
             "read_write": "ALL",
         }
@@ -120,7 +120,7 @@ class Database:
 
         # add new privileges
         if mode == "read_only" or mode == "read_write":
-            privilege = privileges[mode]
+            privilege = privileges_map[mode]
             queries.append(f"GRANT {privilege} ON {self.database_name}.* TO `{username}`@`%`;")
         elif mode == "granular":
             for table_name in permissions:
@@ -134,7 +134,7 @@ class Database:
                     columns = ",".join([f"`{x}`" for x in requested_columns])
                     columns = f"({columns})"
 
-                privilege = privileges[permissions[table_name]["mode"]]
+                privilege = privileges_map[permissions[table_name]["mode"]]
                 if columns == "" or privilege == "SELECT":
                     queries.append(
                         f"GRANT {privilege} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501

@@ -247,12 +247,12 @@ class TestDatabase(unittest.TestCase):
         )
         self.assertEqual(data[0]["row_count"], 0)
 
-    def test_add_user(self):
+    def test_create_user(self):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
 
-        # add user
+        # create user
         try:
-            db.add_user("test_user", "test_user_password")
+            db.create_user("test_user", "test_user_password")
         except:
             print(f"Failed query: {db.query}")
             raise
@@ -269,7 +269,7 @@ class TestDatabase(unittest.TestCase):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
 
         # add a dummy user
-        db.add_user("test_user", "test_user_password")
+        db.create_user("test_user", "test_user_password")
 
         # remove user
         try:
@@ -288,7 +288,7 @@ class TestDatabase(unittest.TestCase):
 
     def test_create_read_only_permission(self):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
-        db.add_user("user1", "test_password")  # add user
+        db.create_user("user1", "test_password")  # create user
 
         user1_db = self._db(self.db1__name, "user1", "test_password")
 
@@ -297,7 +297,7 @@ class TestDatabase(unittest.TestCase):
         self.assertFalse(success, "User `user1` should not have access to the database")
         self.assertIn("Access denied for user", str(output))
 
-        db.modify_user_permission("user1", "read_only")
+        db.modify_user_permissions("user1", "read_only")
 
         # try to access the database again
         success, output = user1_db.execute_query("SELECT * FROM Person;")
@@ -311,7 +311,7 @@ class TestDatabase(unittest.TestCase):
 
     def test_create_read_write_permission(self):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
-        db.add_user("user1", "test_password")  # add user
+        db.create_user("user1", "test_password")  # create user
 
         user1_db = self._db(self.db1__name, "user1", "test_password")
 
@@ -320,7 +320,7 @@ class TestDatabase(unittest.TestCase):
         self.assertFalse(success, "User `user1` should not have access to the database")
         self.assertIn("Access denied for user", str(output))
 
-        db.modify_user_permission("user1", "read_write")
+        db.modify_user_permissions("user1", "read_write")
 
         # try to access the database again
         success, output = user1_db.execute_query("SELECT * FROM Person;")
@@ -335,11 +335,11 @@ class TestDatabase(unittest.TestCase):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
         user1_db = self._db(self.db1__name, "user1", "test_password")
 
-        db.add_user("user1", "test_password")  # add user
+        db.create_user("user1", "test_password")  # create user
 
         # modify access
         try:
-            db.modify_user_permission(
+            db.modify_user_permissions(
                 "user1",
                 "granular",
                 permissions={
@@ -375,7 +375,7 @@ class TestDatabase(unittest.TestCase):
         self.assertIn("SELECT command denied to user", str(output))
 
         # purge access and verify
-        db.modify_user_permission("user1", "granular", permissions={})
+        db.modify_user_permissions("user1", "granular", permissions={})
 
         success, output = user1_db.execute_query("SELECT * FROM Person;")
         self.assertFalse(success, "User `user1` should not have access to `Person` table")
@@ -388,11 +388,11 @@ class TestDatabase(unittest.TestCase):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
         user1_db = self._db(self.db1__name, "user1", "test_password")
 
-        db.add_user("user1", "test_password")  # add user
+        db.create_user("user1", "test_password")  # create user
 
         # modify access [read_only]
         try:
-            db.modify_user_permission(
+            db.modify_user_permissions(
                 "user1", "granular", permissions={"Person": {"mode": "read_only", "columns": ["id"]}}
             )
         except Exception:
@@ -411,7 +411,7 @@ class TestDatabase(unittest.TestCase):
 
         # modify access [read_write]
         try:
-            db.modify_user_permission(
+            db.modify_user_permissions(
                 "user1", "granular", permissions={"Person": {"mode": "read_write", "columns": ["id"]}}
             )
         except Exception:
@@ -445,8 +445,8 @@ class TestDatabase(unittest.TestCase):
 
     def test_revoke_permission(self):
         db = self._db(self.db1__name, "root", self.instance.db_root_password)
-        db.add_user("user1", "test_password")  # add user
-        db.modify_user_permission("user1", "read_only")
+        db.create_user("user1", "test_password")  # create user
+        db.modify_user_permissions("user1", "read_only")
 
         user1_db = self._db(self.db1__name, "user1", "test_password")
 
@@ -456,7 +456,7 @@ class TestDatabase(unittest.TestCase):
 
         # revoke permission
         # setting no permission in granular mode, will revoke all existing permissions
-        db.modify_user_permission("user1", "granular", permissions={})
+        db.modify_user_permissions("user1", "granular", permissions={})
 
         # try to access the database again
         success, output = user1_db.execute_query("SELECT * FROM Person;")
