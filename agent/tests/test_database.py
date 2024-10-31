@@ -348,7 +348,8 @@ class TestDatabase(unittest.TestCase):
                 },
             )
         except Exception:
-            print("Failed query: ", db.last_executed_query)
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
             raise
 
         # verify access for `Person` table
@@ -395,7 +396,8 @@ class TestDatabase(unittest.TestCase):
                 "user1", "granular", permissions={"Person": {"mode": "read_only", "columns": ["id"]}}
             )
         except Exception:
-            print("Failed query: ", db.last_executed_query)
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
             raise
 
         # verify access for `Person` table
@@ -413,7 +415,8 @@ class TestDatabase(unittest.TestCase):
                 "user1", "granular", permissions={"Person": {"mode": "read_write", "columns": ["id"]}}
             )
         except Exception:
-            print("Failed query: ", db.last_executed_query)
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
             raise
 
         # verify access for `Person` table
