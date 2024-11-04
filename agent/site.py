@@ -261,13 +261,25 @@ class Site(Base):
         self.db_instance("root", mariadb_root_password).remove_user(user)
         return {}
 
+    @job("Create Database User", priority="high")
+    def create_database_user_job(self, user, password, mariadb_root_password):
+        return self.create_database_user(user, password, mariadb_root_password)
+
+    @step("Create Database User")
     def create_database_user(self, user, password, mariadb_root_password):
         if user == self.user:
             # Do not perform any operation for the main user
             return {}
         self.db_instance("root", mariadb_root_password).create_user(user, password)
-        return {}
+        return {
+            "database": self.database,
+        }
 
+    @job("Remove Database User", priority="high")
+    def remove_database_user_job(self, user, mariadb_root_password):
+        return self.remove_database_user(user, mariadb_root_password)
+
+    @step("Remove Database User")
     def remove_database_user(self, user, mariadb_root_password):
         if user == self.user:
             # Do not perform any operation for the main user
@@ -895,7 +907,7 @@ print(">>>" + frappe.session.sid + "<<<")
             username = self.user
         if not password:
             password = self.password
-        return Database(self.host, 3306, self.user, self.password, self.database)
+        return Database(self.host, 3306, username, password, self.database)
 
     @property
     def job_record(self):

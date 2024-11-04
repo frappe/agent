@@ -36,7 +36,7 @@ class Database:
     NOTE: These methods require root access to the database
     - create_user
     - remove_user
-    - modify_user_access
+    - modify_user_permissions
     """
 
     def create_user(self, username: str, password: str):

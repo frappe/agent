@@ -574,14 +574,15 @@ def run_sql(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
 @validate_bench_and_site
-def add_database_user(bench, site):
+def create_database_user(bench, site):
     data = request.json
-    return (
+    job = (
         Server()
         .benches[bench]
         .sites[site]
-        .create_database_user(data["user"], data["password"], data["mariadb_root_password"])
+        .create_database_user_job(data["username"], data["password"], data["mariadb_root_password"])
     )
+    return {"job": job}
 
 
 @application.route(
@@ -590,7 +591,8 @@ def add_database_user(bench, site):
 @validate_bench_and_site
 def remove_database_user(bench, site, db_user):
     data = request.json
-    return Server().benches[bench].sites[site].remove_database_user(db_user, data["mariadb_root_password"])
+    job = Server().benches[bench].sites[site].remove_database_user_job(db_user, data["mariadb_root_password"])
+    return {"job": job}
 
 
 @application.route(
