@@ -607,7 +607,7 @@ def update_database_permissions(bench, site, db_user):
         .benches[bench]
         .sites[site]
         .modify_database_user_permissions_job(
-            db_user, data["mode"], data.get("permissions", []), data["mariadb_root_password"]
+            db_user, data["mode"], data.get("permissions", {}), data["mariadb_root_password"]
         )
     )
     return {"job": job}
