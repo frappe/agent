@@ -600,16 +600,17 @@ def remove_database_user(bench, site, db_user):
     methods=["POST"],
 )
 @validate_bench_and_site
-def add_database_permissions(bench, site, db_user):
+def update_database_permissions(bench, site, db_user):
     data = request.json
-    return (
+    job = (
         Server()
         .benches[bench]
         .sites[site]
-        .modify_permissions_for_database_user(
+        .modify_database_user_permissions_job(
             db_user, data["mode"], data.get("permissions", []), data["mariadb_root_password"]
         )
     )
+    return {"job": job}
 
 
 @application.route(

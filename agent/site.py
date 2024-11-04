@@ -287,7 +287,12 @@ class Site(Base):
         self.db_instance("root", mariadb_root_password).remove_user(user)
         return {}
 
-    def modify_permissions_for_database_user(self, user, mode, permissions, mariadb_root_password):
+    @job("Modify Database User Permissions", priority="high")
+    def modify_database_user_permissions_job(self, user, mode, permissions, mariadb_root_password):
+        return self.modify_database_user_permissions(user, mode, permissions, mariadb_root_password)
+
+    @step("Modify Database User Permissions")
+    def modify_database_user_permissions(self, user, mode, permissions, mariadb_root_password):
         if user == self.user:
             # Do not perform any operation for the main user
             return {}
