@@ -81,13 +81,15 @@ class ImageBuilder(Base):
 
     @job("Run Remote Builder")
     def run_remote_builder(self):
-        self._build_image()
-        if self.build_failed:
-            return self.data
+        try:
+            return self._build_and_push()
+        finally:
+            self._cleanup_context()
 
-        if not self.no_push:
+    def _build_and_push(self):
+        self._build_image()
+        if not self.build_failed and not self.no_push:
             self._push_docker_image()
-        self._cleanup_context()
         return self.data
 
     @step("Build Image")

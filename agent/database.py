@@ -1,277 +1,148 @@
 from __future__ import annotations
 
+import contextlib
 import json
-import os
-import re
-from datetime import datetime, timezone
-from pathlib import Path
+from decimal import Decimal
+from typing import Any
 
-from peewee import MySQLDatabase
-
-from agent.job import job, step
-from agent.server import Server
+from peewee import InternalError, MySQLDatabase, ProgrammingError
 
 
-class DatabaseServer(Server):
-    def __init__(self, directory=None):
-        self.directory = directory or os.getcwd()
-        self.config_file = os.path.join(self.directory, "config.json")
-        self.name = self.config["name"]
+class Database:
+    def __init__(self, host, port, user, password, database):
+        self.db: MySQLDatabase = MySQLDatabase(database, user=user, password=password, host=host, port=port)
 
-        self.mariadb_directory = "/var/lib/mysql"
-        self.pt_stalk_directory = "/var/lib/pt-stalk"
-
-        self.job = None
-        self.step = None
-
-    def search_binary_log(
-        self,
-        log,
-        database,
-        start_datetime,
-        stop_datetime,
-        search_pattern,
-        max_lines,
-    ):
-        log = os.path.join(self.mariadb_directory, log)
-        LINES_TO_SKIP = r"^(USE|COMMIT|START TRANSACTION|DELIMITER|ROLLBACK|#)"
-        command = (
-            f"mysqlbinlog --short-form --database {database} "
-            f"--start-datetime '{start_datetime}' "
-            f"--stop-datetime '{stop_datetime}' "
-            f" {log} | grep -Piv '{LINES_TO_SKIP}'"
-        )
-
-        DELIMITER = "/*!*/;"
-
-        events = []
-        timestamp = 0
-        for line in self.execute(command, skip_output_log=True)["output"].split(DELIMITER):
-            line = line.strip()
-            if line.startswith("SET TIMESTAMP"):
-                timestamp = int(line.split("=")[-1].split(".")[0])
-            else:
-                if any(line.startswith(skip) for skip in ["SET", "/*!"]):
-                    continue
-                if line and timestamp and re.search(search_pattern, line):
-                    events.append(
-                        {
-                            "query": line,
-                            "timestamp": str(datetime.utcfromtimestamp(timestamp)),
-                        }
-                    )
-                    if len(events) > max_lines:
-                        break
-        return events
-
-    @property
-    def binary_logs(self):
-        BINARY_LOG_FILE_PATTERN = r"mysql-bin.\d+"
-        files = []
-        for file in Path(self.mariadb_directory).iterdir():
-            if re.match(BINARY_LOG_FILE_PATTERN, file.name):
-                unix_timestamp = int(file.stat().st_mtime)
-                files.append(
-                    {
-                        "name": file.name,
-                        "size": file.stat().st_size,
-                        "modified": str(datetime.utcfromtimestamp(unix_timestamp)),
-                    }
-                )
-        return sorted(files, key=lambda x: x["name"])
-
-    def processes(self, private_ip, mariadb_root_password):
-        try:
-            mariadb = MySQLDatabase(
-                "mysql",
-                user="root",
-                password=mariadb_root_password,
-                host=private_ip,
-                port=3306,
-            )
-            return self.sql(mariadb, "SHOW FULL PROCESSLIST")
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-        return []
-
-    def locks(self, private_ip, mariadb_root_password):
-        try:
-            mariadb = MySQLDatabase(
-                "mysql",
-                user="root",
-                password=mariadb_root_password,
-                host=private_ip,
-                port=3306,
-            )
-            return self.sql(
-                mariadb,
-                """
-                    SELECT l.*, t.*
-                    FROM information_schema.INNODB_LOCKS l
-                    JOIN information_schema.INNODB_TRX t ON l.lock_trx_id = t.trx_id
-            """,
-            )
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-        return []
-
-    def kill_processes(self, private_ip, mariadb_root_password, kill_threshold):
-        processes = self.processes(private_ip, mariadb_root_password)
-        try:
-            mariadb = MySQLDatabase(
-                "mysql",
-                user="root",
-                password=mariadb_root_password,
-                host=private_ip,
-                port=3306,
-            )
-            for process in processes:
-                if (process["Time"] or 0) >= kill_threshold:
-                    mariadb.execute_sql(f"KILL {process['Id']}")
-        except Exception:
-            import traceback
-
-            traceback.print_exc()
-
-    def get_deadlocks(
-        self,
-        database,
-        start_datetime,
-        stop_datetime,
-        max_lines,
-        private_ip,
-        mariadb_root_password,
-    ):
-        mariadb = MySQLDatabase(
-            "percona",
-            user="root",
-            password=mariadb_root_password,
-            host=private_ip,
-            port=3306,
-        )
-
-        return self.sql(
-            mariadb,
-            f"""
-            select *
-            from deadlock
-            where user = %s
-            and ts >= %s
-            and ts <= %s
-            order by ts
-            limit {int(max_lines)}""",
-            (database, start_datetime, stop_datetime),
-        )
-
-    @staticmethod
-    def sql(db, query, params=()):
-        """Similar to frappe.db.sql, get the results as dict."""
-
-        cursor = db.execute_sql(query, params)
-        rows = cursor.fetchall()
-        columns = [d[0] for d in cursor.description]
-        return list(map(lambda x: dict(zip(columns, x)), rows))
-
-    @job("Column Statistics")
-    def fetch_column_stats(self, schema, table, private_ip, mariadb_root_password, doc_name):
-        self._fetch_column_stats(schema, table, private_ip, mariadb_root_password)
-        return {"doc_name": doc_name}
-
-    @step("Fetch Column Statistics")
-    def _fetch_column_stats(self, schema, table, private_ip, mariadb_root_password):
-        """Get various stats about columns in a table.
-
-        Refer:
-            - https://mariadb.com/kb/en/engine-independent-table-statistics/
-            - https://mariadb.com/kb/en/mysqlcolumn_stats-table/
+    # Methods
+    def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> tuple[bool, Any]:
         """
-        mariadb = MySQLDatabase(
-            "mysql",
-            user="root",
-            password=mariadb_root_password,
-            host=private_ip,
-            port=3306,
-        )
+        This function will take the query and run in database.
 
+        It will return a tuple of (bool, str)
+        bool: Whether the query has been executed successfully
+        str: The output of the query. It can be the output or error message as well
+        """
         try:
-            self.sql(
-                mariadb,
-                f"ANALYZE TABLE `{schema}`.`{table}` PERSISTENT FOR ALL",
+            return True, self._run_sql(query, commit=commit, as_dict=as_dict)
+        except (ProgrammingError, InternalError) as e:
+            return False, str(e)
+        except Exception:
+            return (
+                False,
+                "Failed to execute query due to unknown error. Please check the query and try again later.",
             )
 
-            results = self.sql(
-                mariadb,
-                """
-                SELECT
-                    column_name, nulls_ratio, avg_length, avg_frequency,
-                    decode_histogram(hist_type,histogram) as histogram
-                from mysql.column_stats
-                WHERE db_name = %s
-                    and table_name = %s """,
-                (schema, table),
-            )
+    # Private helper methods
+    def _run_sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> list[dict]:  # noqa: C901
+        """
+        Run sql query in database
+        It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
 
-            for row in results:
-                for column in ["nulls_ratio", "avg_length", "avg_frequency"]:
-                    row[column] = float(row[column]) if row[column] else None
-        except Exception as e:
-            print(e)
+        Args:
+        query: SQL query
+        params: If you are using parameters in the query, you can pass them as a tuple
+        commit: True if you want to commit the changes. If commit is false, it will rollback the changes and
+                also wouldnt allow to run ddl, dcl or tcl queries
+        as_dict: True if you want to return the result as a dictionary (like frappe.db.sql).
+                 Otherwise it will return a dict of columns and data
 
-        return {"output": json.dumps(results)}
-
-    def explain_query(self, schema, query, private_ip, mariadb_root_password):
-        mariadb = MySQLDatabase(
-            schema,
-            user="root",
-            password=mariadb_root_password,
-            host=private_ip,
-            port=3306,
-        )
-
-        if not query.lower().startswith(("select", "update", "delete")):
-            return []
-
-        try:
-            return self.sql(mariadb, f"EXPLAIN {query}")
-        except Exception as e:
-            print(e)
-
-    def get_stalk(self, name):
-        diagnostics = []
-        for file in Path(self.pt_stalk_directory).iterdir():
-            if os.path.getsize(os.path.join(self.pt_stalk_directory, file.name)) > 16 * (1024**2):
-                # Skip files larger than 16 MB
-                continue
-            if re.match(name, file.name):
-                pt_stalk_path = (os.path.join(self.pt_stalk_directory, file.name),)
-                with open(pt_stalk_path, errors="replace") as f:
-                    output = f.read()
-
-                diagnostics.append(
+        Return Format:
+        For as_dict = True:
+        [
+            {
+                "output": [
                     {
-                        "type": file.name.replace(name, "").strip("-"),
-                        "output": output,
-                    }
-                )
-        return sorted(diagnostics, key=lambda x: x["type"])
+                        "name" : "Administrator",
+                        "modified": "2019-01-01 00:00:00",
+                    },
+                    ...
+                ]
+                "query": "SELECT name, modified FROM `tabUser`",
+                "row_count": 10
+            },
+            ...
+        ]
 
-    def get_stalks(self):
-        stalk_pattern = r"(\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2})-output"
-        stalks = []
-        for file in Path(self.pt_stalk_directory).iterdir():
-            matched = re.match(stalk_pattern, file.name)
-            if matched:
-                stalk = matched.group(1)
-                stalks.append(
-                    {
-                        "name": stalk,
-                        "timestamp": datetime.strptime(stalk, "%Y_%m_%d_%H_%M_%S")
-                        .replace(tzinfo=timezone.utc)
-                        .isoformat(),
-                    }
-                )
-        return sorted(stalks, key=lambda x: x["name"])
+        For as_dict = False:
+        [
+            {
+                "output": {
+                    "columns": ["name", "modified"],
+                    "data": [
+                        ["Administrator", "2019-01-01 00:00:00"],
+                        ...
+                    ]
+                },
+                "query": "SELECT name, modified FROM `tabUser`",
+                "row_count": 10
+            },
+            ...
+        ]
+        """
+
+        queries = [x.strip() for x in query.split(";\n")]
+        queries = [x for x in queries if x and not x.startswith("--")]
+
+        if len(queries) == 0:
+            raise ProgrammingError("No query provided")
+
+        # Start transaction
+        self.db.begin()
+        results = []
+        with self.db.atomic() as transaction:
+            try:
+                for q in queries:
+                    self.last_executed_query = q
+                    if not commit and self._is_ddl_query(q):
+                        raise ProgrammingError("Provided DDL query is not allowed in read only mode")
+                    if self._is_dcl_query(q):
+                        raise ProgrammingError("DCL query is not allowed to execute")
+                    if self._is_tcl_query(q):
+                        raise ProgrammingError("TCL query is not allowed to execute")
+                    output = None
+                    row_count = None
+                    cursor = self.db.execute_sql(q, params)
+                    row_count = cursor.rowcount
+                    if cursor.description:
+                        rows = cursor.fetchall()
+                        columns = [d[0] for d in cursor.description]
+                        if as_dict:
+                            output = list(map(lambda x: dict(zip(columns, x)), rows))
+                        else:
+                            output = {"columns": columns, "data": rows}
+                    results.append({"query": q, "output": output, "row_count": row_count})
+            except:
+                # if query execution fails, rollback the transaction and raise the error
+                transaction.rollback()
+                raise
+            else:
+                if commit:
+                    # If commit is True, try to commit the transaction
+                    try:
+                        transaction.commit()
+                    except:
+                        transaction.rollback()
+                        raise
+                else:
+                    # If commit is False, rollback the transaction to discard the changes
+                    transaction.rollback()
+
+        with contextlib.suppress(Exception):
+            self.db.close()
+        return results
+
+    def _is_ddl_query(self, query: str) -> bool:
+        return query.upper().startswith(("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME", "COMMENT"))
+
+    def _is_dcl_query(self, query: str) -> bool:
+        return query.upper().startswith(("GRANT", "REVOKE"))
+
+    def _is_tcl_query(self, query: str) -> bool:
+        query = query.upper().replace(" ", "")
+        return query.startswith(("COMMIT", "ROLLBACK", "SAVEPOINT", "BEGINTRANSACTION"))
+
+
+class JSONEncoderForSQLQueryResult(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return str(obj)

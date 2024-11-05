@@ -6,12 +6,12 @@ on:
       - master
   pull_request:
     branches:
-      - '*'
+      - "*"
   workflow_dispatch:
 
 jobs:
   lint-and-format:
-    name: 'Lint and Format'
+    name: "Lint and Format"
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: "3.8"
 
       - name: Install dependencies
         run: |
@@ -36,7 +36,7 @@ jobs:
           ruff format --check
 
   unit-tests:
-    name: 'Unit Tests'
+    name: "Unit Tests"
     runs-on: ubuntu-latest
 
     steps:
@@ -46,13 +46,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: "3.8"
 
       - name: Install agent
         run: |
           python -m venv env
           env/bin/pip install -e .
-        
+
+      - name: Install development packages
+        run: |
+          env/bin/pip install -r dev-requirements.txt
+
       - name: Setup agent
         run: |
           source env/bin/activate

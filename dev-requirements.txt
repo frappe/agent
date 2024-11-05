@@ -1,2 +1,4 @@
 pre-commit
 black
+testcontainers[mysql]==3.7.1
+cryptography
