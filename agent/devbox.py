@@ -11,11 +11,26 @@ if TYPE_CHECKING:
 
 
 class Devbox(Base):
-    def __init__(self, devbox_name: str, server: Server, websockify_port: int | None = None):
+    def __init__(
+        self,
+        devbox_name: str,
+        server: Server,
+        vnc_password: str,
+        codeserver_password: str,
+        websockify_port: int | None = None,
+        vnc_port: int | None = None,
+        codeserver_port: int | None = None,
+        browser_port: int | None = None,
+    ):
         self.devbox_name = devbox_name
         self.server = server
         self.directory = os.path.join(self.server.devboxes_directory, devbox_name)
         self.websockify_port = websockify_port
+        self.vnc_port = vnc_port
+        self.codeserver_port = codeserver_port
+        self.browser_port = browser_port
+        self.vnc_password = vnc_password
+        self.codeserver_password = codeserver_password
         self.job = None
         self.step = None
         self.status = None
@@ -44,17 +59,34 @@ class Devbox(Base):
         config = {
             "devbox_name": self.devbox_name,
             "websockify_port": self.websockify_port,
+            "codeserver_port": self.codeserver_port,
+            "browser_port": self.browser_port,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
         self.server._render_template("devbox/nginx.conf.jinja2", config, nginx_config)
 
+    @step("Create Devbox Database Volume")
+    def create_devbox_database_volume(self):
+        command = f"docker volume create {self.devbox_name}_db-data"
+        return self.execute(command)
+
+    @step("Create Devbox Home Volume")
+    def create_devbox_home_volume(self):
+        command = f"docker volume create {self.devbox_name}_home"
+        return self.execute(command)
+
     @step("Run Devbox")
     def run_devbox(self):
         command = (
-            f"docker run -d --init --rm --name {self.devbox_name} "
-            f"-p {self.websockify_port}:6901 "
-            "arunmathaisk/erpnext-15:latest"
+            f"docker run -d --rm --name {self.devbox_name} "
+            f"-p {self.websockify_port}:6969 "
+            f"-p {self.codeserver_port}:8443 "
+            f"-p {self.vnc_port}:5901 "
+            f"-p {self.browser_port}:8000 "
+            f"-v {self.devbox_name}_db-data:/var/lib/mysql "
+            f"-v {self.devbox_name}_home::/home/frappe "
+            "arunmathaisk/devbox-image:latest"
         )
         return self.execute(command)
 

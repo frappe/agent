@@ -1315,7 +1315,12 @@ def recover_update_inplace(bench: str):
 @application.route("/devboxes", methods=["POST"])
 def new_devbox():
     data = request.json
-    job = Server().new_devbox(data.get("devbox_name"))
+    devbox_name = data.get("devbox_name")
+    vnc_password = data.get("vnc_password")
+    codeserver_password = data.get("codeserver_password")
+    job = Server().new_devbox(
+        devbox_name=devbox_name, vnc_password=vnc_password, codeserver_password=codeserver_password
+    )
     return {"job": job}
 
 

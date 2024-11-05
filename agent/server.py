@@ -791,13 +791,30 @@ class Server(Base):
         os.mkdir(devboxes_directory)
 
     @job("New Devbox", priority="low")
-    def new_devbox(self, devbox_name):
-        websockify_port = self.find_available_ports(num_ports=1)[0]
+    def new_devbox(self, devbox_name, vnc_password, codeserver_password):
+        ports = self.find_available_ports(num_ports=4)
+        websockify_port, vnc_port, codeserver_port, browser_port = ports
         self.devbox_init(devbox_name=devbox_name)
-        devbox = Devbox(devbox_name=devbox_name, server=self, websockify_port=websockify_port)
+        devbox = Devbox(
+            devbox_name=devbox_name,
+            server=self,
+            vnc_password=vnc_password,
+            codeserver_password=codeserver_password,
+            websockify_port=websockify_port,
+            vnc_port=vnc_port,
+            codeserver_port=codeserver_port,
+            browser_port=browser_port,
+        )
         devbox.run_devbox()
         devbox.setup_nginx()
-        return {"message": {"websockify_port": devbox.websockify_port}}
+        return {
+            "message": {
+                "websockify_port": devbox.websockify_port,
+                "vnc_port": devbox.vnc_port,
+                "codeserver_port": devbox.codeserver_port,
+                "browser_port": devbox.browser_port,
+            }
+        }
 
     @job("Start Devbox", priority="low")
     def start_devbox(self, devbox_name, websockify_port):

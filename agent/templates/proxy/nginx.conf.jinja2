@@ -165,8 +165,46 @@ server {
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "upgrade";
-		
+
 		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location /code {
+		proxy_http_version 1.1;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "upgrade";
+
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location /browser {
+		proxy_http_version 1.1;
+
+		proxy_read_timeout 600;
+		proxy_buffering off;
+		proxy_buffer_size 128k;
+		proxy_buffers 100 128k;
+
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
+		more_set_headers "Access-Control-Allow-Origin: $access_control_allow_origin";
+		more_set_headers "Access-Control-Allow-Headers: $access_control_allow_headers";
+		more_set_headers "Access-Control-Allow-Credentials: $access_control_allow_credentials";
+		more_set_headers "Access-Control-Allow-Methods: $access_control_allow_methods";
 
 		proxy_pass $upstream_server_hash;
 	}
