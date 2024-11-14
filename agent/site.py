@@ -250,7 +250,7 @@ class Site(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f"mariadb -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
         return {"database": database, "user": user, "password": password}
 
@@ -263,7 +263,7 @@ class Site(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f"mariadb -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
             self.execute(command)
         return {}
 
@@ -291,7 +291,7 @@ class Site(Base):
             output = self.execute(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mariadb -h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -441,7 +441,7 @@ class Site(Base):
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             output = self.execute(
                 "set -o pipefail && "
-                "mysqldump --single-transaction --quick --lock-tables=false "
+                "mariadb-dump --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
                 f" | gzip > '{backup_file}'",
@@ -523,7 +523,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                    f"mariadb -h {self.host} -u {self.user} -p{self.password} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -538,7 +538,7 @@ class Site(Base):
         data = {"dropped": {}}
         for table in new_tables:
             output = self.execute(
-                f"mysql -h {self.host} -u {self.user} -p{self.password} "
+                f"mariadb -h {self.host} -u {self.user} -p{self.password} "
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -620,7 +620,7 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         try:
             timezone = self.execute(
-                f"mysql -h {self.host} -u{self.database} -p{self.password} "
+                f"mariadb -h {self.host} -u{self.database} -p{self.password} "
                 f'--connect-timeout 3 -sN -e "{query}"'
             )["output"].strip()
         except Exception:
@@ -630,7 +630,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def tables(self):
         return self.execute(
-            "mysql --disable-column-names -B -e 'SHOW TABLES' "
+            "mariadb --disable-column-names -B -e 'SHOW TABLES' "
             f"-h {self.host} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
@@ -662,7 +662,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" {self.database} -e '{query}'"
+                f"mariadb -sN -h {self.host} -u{self.user} -p{self.password}" f" {self.database} -e '{query}'"
             )
 
     def fetch_latest_backup(self, with_files=True):
@@ -726,7 +726,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+        command = f"mariadb -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -772,7 +772,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+        command = f"mariadb -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -790,7 +790,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
-            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+            command = f"mariadb -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
             output = self.execute(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:
