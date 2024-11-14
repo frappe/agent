@@ -79,7 +79,7 @@ class Devbox(Base):
     @step("Run Devbox")
     def run_devbox(self):
         command = (
-            f"docker run -d --rm --name {self.devbox_name} "
+            f"docker run --security-opt='no-new-privileges=false -d --rm --name {self.devbox_name}  "
             f"-p {self.websockify_port}:6969 "
             f"-p {self.codeserver_port}:8443 "
             f"-p {self.vnc_port}:5901 "
