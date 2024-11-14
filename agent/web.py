@@ -280,6 +280,7 @@ def get_bench_log(bench, log):
 def get_bench_log_for_log_browser(bench, log):
     return {log: Server().benches[bench].retrieve_merged_log(log)}
 
+
 @application.route("/benches/<string:bench>/sites/<string:site>")
 @validate_bench
 def get_site(bench, site):
