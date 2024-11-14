@@ -234,6 +234,20 @@ class Base:
         with open(log_file) as lf:
             return lf.read()
 
+    def retrieve_merged_log(self, name):
+        log_names = {x["name"] for x in self.logs}
+        log_files = list(filter(lambda log_name: log_name.startswith(name), log_names))
+        if not log_files:
+            return ""
+
+        log_file_contents = []
+        for log in log_files:
+            log_file = os.path.join(self.logs_directory, log)
+            with open(log_file) as lf:
+                log_file_contents.append(lf.read())
+
+        return "\n".join(log_file_contents)
+
 
 class AgentException(Exception):
     def __init__(self, data):

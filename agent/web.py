@@ -275,6 +275,11 @@ def get_bench_log(bench, log):
     return {log: Server().benches[bench].retrieve_log(log)}
 
 
+@application.route("/benches/<string:bench>/logs_v2/<string:log>")
+@validate_bench
+def get_bench_log_for_log_browser(bench, log):
+    return {log: Server().benches[bench].retrieve_merged_log(log)}
+
 @application.route("/benches/<string:bench>/sites/<string:site>")
 @validate_bench
 def get_site(bench, site):
@@ -291,6 +296,12 @@ def get_logs(bench, site):
 @validate_bench_and_site
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/logs_v2/<string:log>")
+@validate_bench_and_site
+def get_log_for_log_browser(bench, site, log):
+    return {log: Server().benches[bench].sites[site].retrieve_merged_log(log)}
 
 
 @application.route("/security/ssh_session_logs")
