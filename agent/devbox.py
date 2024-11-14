@@ -85,7 +85,7 @@ class Devbox(Base):
             f"-p {self.vnc_port}:5901 "
             f"-p {self.browser_port}:8000 "
             f"-v {self.devbox_name}_db-data:/var/lib/mysql "
-            f"-v {self.devbox_name}_home::/home/frappe "
+            f"-v {self.devbox_name}_home:/home/frappe "
             "arunmathaisk/devbox-image:latest"
         )
         return self.execute(command)
