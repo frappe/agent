@@ -1324,9 +1324,18 @@ def new_devbox():
     return {"job": job}
 
 
-@application.route("/devboxes/<string:devbox_name>/<int:websockify_port>/start", methods=["POST"])
-def start_devbox(devbox_name: str, websockify_port: int):
-    job = Server().start_devbox(devbox_name=devbox_name, websockify_port=websockify_port)
+@application.route("/devboxes/<string:devbox_name>/start", methods=["POST"])
+def start_devbox(devbox_name: str):
+    data = request.json
+    job = Server().start_devbox(
+        devbox_name=devbox_name,
+        vnc_password=data.get("vnc_password"),
+        codeserver_password=data.get("codeserver_password"),
+        websockify_port=data.get("websockify_port"),
+        vnc_port=data.get("vnc_port"),
+        codeserver_port=data.get("codeserver_port"),
+        browser_port=data.get("browser_port"),
+    )
     return {"job": job}
 
 
