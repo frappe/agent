@@ -805,6 +805,8 @@ class Server(Base):
             codeserver_port=codeserver_port,
             browser_port=browser_port,
         )
+        devbox.create_devbox_database_volume()
+        devbox.create_devbox_home_volume()
         devbox.run_devbox()
         devbox.setup_nginx()
         return {
