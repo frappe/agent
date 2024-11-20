@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import redis
 
 from agent.job import connection
+from agent.log_browser import LogBrowser
 from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
@@ -197,56 +198,20 @@ class Base:
 
     @property
     def logs(self):
-        def path(file):
-            return os.path.join(self.logs_directory, file)
-
-        def modified_time(file):
-            return os.path.getctime(path(file))
-
-        try:
-            log_files = sorted(
-                os.listdir(self.logs_directory),
-                key=modified_time,
-                reverse=True,
-            )
-            payload = []
-
-            for x in log_files:
-                stats = os.stat(path(x))
-                payload.append(
-                    {
-                        "name": x,
-                        "size": stats.st_size / 1000,
-                        "created": str(datetime.fromtimestamp(stats.st_ctime)),
-                        "modified": str(datetime.fromtimestamp(stats.st_mtime)),
-                    }
-                )
-
-            return payload
-
-        except FileNotFoundError:
-            return []
+        log_browser = LogBrowser(self.logs_directory)
+        return log_browser.logs
 
     def retrieve_log(self, name):
-        if name not in {x["name"] for x in self.logs}:
-            return ""
-        log_file = os.path.join(self.logs_directory, name)
-        with open(log_file) as lf:
-            return lf.read()
+        log_browser = LogBrowser(self.logs_directory)
+        return log_browser.retrieve_log(name)
 
-    def retrieve_merged_log(self, name):
-        log_names = {x["name"] for x in self.logs}
-        log_files = list(filter(lambda log_name: log_name.startswith(name), log_names))
-        if not log_files:
-            return ""
-
-        log_file_contents = []
-        for log in log_files:
-            log_file = os.path.join(self.logs_directory, log)
-            with open(log_file) as lf:
-                log_file_contents.append(lf.read())
-
-        return "\n".join(log_file_contents)
+    def retrieve_merged_log(
+        self, name, page_start=0, page_length=10, log_level=None, search_query=None, order_by=None
+    ):
+        log_browser = LogBrowser(self.logs_directory)
+        return log_browser.retrieve_merged_log(
+            name, page_start, page_length, log_level, search_query, order_by
+        )
 
 
 class AgentException(Exception):
