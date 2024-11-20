@@ -319,7 +319,25 @@ def get_log(bench, site, log):
 @application.route("/benches/<string:bench>/sites/<string:site>/logs_v2/<string:log>")
 @validate_bench_and_site
 def get_log_for_log_browser(bench, site, log):
-    return {log: Server().benches[bench].sites[site].retrieve_merged_log(log)}
+    page_start = int(request.args.get("page_start", "0"))
+    page_length = int(request.args.get("page_length", "10"))
+    log_level = request.args.get("log_level")
+    search_query = request.args.get("search_query")
+    order_by = request.args.get("order_by", "asc")
+
+    return jsonify(
+        Server()
+        .benches[bench]
+        .sites[site]
+        .retrieve_merged_log(
+            name=log,
+            page_start=page_start,
+            page_length=page_length,
+            log_level=log_level,
+            search_query=search_query,
+            order_by=order_by,
+        )
+    )
 
 
 @application.route("/security/ssh_session_logs")
