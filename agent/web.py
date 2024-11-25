@@ -572,6 +572,47 @@ def run_sql(bench, site):
     )
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
+@validate_bench_and_site
+def create_database_user(bench, site):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .create_database_user_job(data["username"], data["password"], data["mariadb_root_password"])
+    )
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>", methods=["DELETE"]
+)
+@validate_bench_and_site
+def remove_database_user(bench, site, db_user):
+    data = request.json
+    job = Server().benches[bench].sites[site].remove_database_user_job(db_user, data["mariadb_root_password"])
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>/permissions",
+    methods=["POST"],
+)
+@validate_bench_and_site
+def update_database_permissions(bench, site, db_user):
+    data = request.json
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .modify_database_user_permissions_job(
+            db_user, data["mode"], data.get("permissions", {}), data["mariadb_root_password"]
+        )
+    )
+    return {"job": job}
+
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/migrate",
     methods=["POST"],

@@ -258,13 +258,45 @@ class Site(Base):
         if user == self.user:
             # Do not revoke access for the main user
             return {}
-        queries = [
-            f"DROP USER IF EXISTS '{user}'@'%'",
-            "FLUSH PRIVILEGES",
-        ]
-        for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
-            self.execute(command)
+        self.db_instance("root", mariadb_root_password).remove_user(user)
+        return {}
+
+    @job("Create Database User", priority="high")
+    def create_database_user_job(self, user, password, mariadb_root_password):
+        return self.create_database_user(user, password, mariadb_root_password)
+
+    @step("Create Database User")
+    def create_database_user(self, user, password, mariadb_root_password):
+        if user == self.user:
+            # Do not perform any operation for the main user
+            return {}
+        self.db_instance("root", mariadb_root_password).create_user(user, password)
+        return {
+            "database": self.database,
+        }
+
+    @job("Remove Database User", priority="high")
+    def remove_database_user_job(self, user, mariadb_root_password):
+        return self.remove_database_user(user, mariadb_root_password)
+
+    @step("Remove Database User")
+    def remove_database_user(self, user, mariadb_root_password):
+        if user == self.user:
+            # Do not perform any operation for the main user
+            return {}
+        self.db_instance("root", mariadb_root_password).remove_user(user)
+        return {}
+
+    @job("Modify Database User Permissions", priority="high")
+    def modify_database_user_permissions_job(self, user, mode, permissions, mariadb_root_password):
+        return self.modify_database_user_permissions(user, mode, permissions, mariadb_root_password)
+
+    @step("Modify Database User Permissions")
+    def modify_database_user_permissions(self, user, mode, permissions, mariadb_root_password):
+        if user == self.user:
+            # Do not perform any operation for the main user
+            return {}
+        self.db_instance("root", mariadb_root_password).modify_user_permissions(user, mode, permissions)
         return {}
 
     @job("Setup ERPNext", priority="high")
@@ -868,12 +900,19 @@ print(">>>" + frappe.session.sid + "<<<")
         return tables
 
     def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
-        database = Database(self.host, 3306, self.user, self.password, self.database)
-        success, output = database.execute_query(query, commit=commit, as_dict=as_dict)
+        db = self.db_instance()
+        success, output = db.execute_query(query, commit=commit, as_dict=as_dict)
         response = {"success": success, "data": output}
-        if not success and hasattr(database, "last_executed_query"):
-            response["failed_query"] = database.last_executed_query
+        if not success and hasattr(db, "last_executed_query"):
+            response["failed_query"] = db.last_executed_query
         return response
+
+    def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
+        if not username:
+            username = self.user
+        if not password:
+            password = self.password
+        return Database(self.host, 3306, username, password, self.database)
 
     @property
     def job_record(self):

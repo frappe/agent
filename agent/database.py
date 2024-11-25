@@ -5,12 +5,13 @@ import json
 from decimal import Decimal
 from typing import Any
 
-from peewee import InternalError, MySQLDatabase, ProgrammingError
+import peewee
 
 
 class Database:
     def __init__(self, host, port, user, password, database):
-        self.db: MySQLDatabase = MySQLDatabase(database, user=user, password=password, host=host, port=port)
+        self.database_name = database
+        self.db: CustomPeeweeDB = CustomPeeweeDB(database, user=user, password=password, host=host, port=port)
 
     # Methods
     def execute_query(self, query: str, commit: bool = False, as_dict: bool = False) -> tuple[bool, Any]:
@@ -23,7 +24,7 @@ class Database:
         """
         try:
             return True, self._run_sql(query, commit=commit, as_dict=as_dict)
-        except (ProgrammingError, InternalError) as e:
+        except (peewee.ProgrammingError, peewee.InternalError, peewee.OperationalError) as e:
             return False, str(e)
         except Exception:
             return (
@@ -31,19 +32,143 @@ class Database:
                 "Failed to execute query due to unknown error. Please check the query and try again later.",
             )
 
+    """
+    NOTE: These methods require root access to the database
+    - create_user
+    - remove_user
+    - modify_user_permissions
+    """
+
+    def create_user(self, username: str, password: str):
+        query = f"""
+            CREATE OR REPLACE USER '{username}'@'%' IDENTIFIED BY '{password}';
+            FLUSH PRIVILEGES;
+        """
+        self._run_sql(
+            query,
+            commit=True,
+        )
+
+    def remove_user(self, username: str):
+        self._run_sql(
+            f"""
+                DROP USER IF EXISTS '{username}'@'%';
+                FLUSH PRIVILEGES;
+            """,
+            commit=True,
+        )
+
+    def modify_user_permissions(self, username: str, mode: str, permissions: dict | None = None) -> None:  # noqa C901
+        """
+        Args:
+            username: username of the user, whos privileges are to be modified
+            mode: permission mode
+                - read_only: read only access to all tables
+                - read_write: read write access to all tables
+                - granular: granular access to tables
+
+            permissions: list of permissions [only required if mode is granular]
+            {
+                "<table_name>": {
+                    "mode": "read_only" // read_only or read_write,
+                    "columns": "*" // "*" or ["column1", "column2", ...]
+                },
+                ...
+            }
+            all_read_only: True if you want to make all tables read only for the user
+            all_read_write: True if you want to make all tables read write for the user
+
+        Returns:
+            It will return nothing, if anything goes wrong it will raise an exception
+        """
+        if not permissions:
+            permissions = {}
+
+        if mode not in ["read_only", "read_write", "granular"]:
+            raise ValueError("mode must be read_only, read_write or granular")
+        privileges_map = {
+            "read_only": "SELECT",
+            "read_write": "ALL",
+        }
+        # fetch existing privileges
+        records = self._run_sql(f"SHOW GRANTS FOR '{username}'@'%';", as_dict=False)
+        granted_records: list[str] = []
+        if len(records) > 0 and records[0]["output"]["data"] and len(records[0]["output"]["data"]) > 0:
+            granted_records = [x[0] for x in records[0]["output"]["data"] if len(x) > 0]
+
+        queries = []
+        """
+        First revoke all existing privileges
+
+        Prepare revoke permission sql query
+
+        `Show Grants` output:
+        GRANT SELECT ON `_cbace6eaa306751d`.* TO `_cbace6eaa306751d_read_only`@`%`
+        ...
+
+        That need to be converted to this for revoke privileges
+        REVOKE SELECT ON _cbace6eaa306751d.* FROM '_cbace6eaa306751d_read_only'@'%'
+        """
+        for record in granted_records:
+            if record.startswith("GRANT USAGE"):
+                # dont revoke usage
+                continue
+            queries.append(
+                record.replace("GRANT", "REVOKE").replace(f"TO `{username}`@`%`", f"FROM `{username}`@`%`")
+                + ";"
+            )
+
+        # add new privileges
+        if mode == "read_only" or mode == "read_write":
+            privilege = privileges_map[mode]
+            queries.append(f"GRANT {privilege} ON {self.database_name}.* TO `{username}`@`%`;")
+        elif mode == "granular":
+            for table_name in permissions:
+                columns = ""
+                if isinstance(permissions[table_name]["columns"], list):
+                    if len(permissions[table_name]["columns"]) == 0:
+                        raise ValueError(
+                            "columns cannot be an empty list. please specify '*' or at least one column"
+                        )
+                    requested_columns = permissions[table_name]["columns"]
+                    columns = ",".join([f"`{x}`" for x in requested_columns])
+                    columns = f"({columns})"
+
+                privilege = privileges_map[permissions[table_name]["mode"]]
+                if columns == "" or privilege == "SELECT":
+                    queries.append(
+                        f"GRANT {privilege} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
+                    )
+                else:
+                    # while usisng column level privileges `ALL` doesnt work
+                    # So we need to provide all possible privileges for that columns
+                    for p in ["SELECT", "INSERT", "UPDATE", "REFERENCES"]:
+                        queries.append(
+                            f"GRANT {p} {columns} ON `{self.database_name}`.`{table_name}` TO `{username}`@`%`;"  # noqa: E501
+                        )
+
+        # flush privileges to apply changes
+        queries.append("FLUSH PRIVILEGES;")
+        queries_str = "\n".join(queries)
+
+        self._run_sql(queries_str, commit=True, allow_all_stmt_types=True)
+
     # Private helper methods
-    def _run_sql(self, query: str, params=(), commit: bool = False, as_dict: bool = False) -> list[dict]:  # noqa: C901
+    def _run_sql(  # noqa C901
+        self, query: str, commit: bool = False, as_dict: bool = False, allow_all_stmt_types: bool = False
+    ) -> list[dict]:
         """
         Run sql query in database
         It supports multi-line SQL queries. Each SQL Query should be terminated with `;\n`
 
         Args:
-        query: SQL query
-        params: If you are using parameters in the query, you can pass them as a tuple
+        query: SQL query string
         commit: True if you want to commit the changes. If commit is false, it will rollback the changes and
                 also wouldnt allow to run ddl, dcl or tcl queries
         as_dict: True if you want to return the result as a dictionary (like frappe.db.sql).
-                 Otherwise it will return a dict of columns and data
+                Otherwise it will return a dict of columns and data
+        allow_all_stmt_types: True if you want to allow all type of sql statements
+            Default: False
 
         Return Format:
         For as_dict = True:
@@ -83,7 +208,7 @@ class Database:
         queries = [x for x in queries if x and not x.startswith("--")]
 
         if len(queries) == 0:
-            raise ProgrammingError("No query provided")
+            raise peewee.ProgrammingError("No query provided")
 
         # Start transaction
         self.db.begin()
@@ -93,14 +218,14 @@ class Database:
                 for q in queries:
                     self.last_executed_query = q
                     if not commit and self._is_ddl_query(q):
-                        raise ProgrammingError("Provided DDL query is not allowed in read only mode")
-                    if self._is_dcl_query(q):
-                        raise ProgrammingError("DCL query is not allowed to execute")
-                    if self._is_tcl_query(q):
-                        raise ProgrammingError("TCL query is not allowed to execute")
+                        raise peewee.ProgrammingError("Provided DDL query is not allowed in read only mode")
+                    if not allow_all_stmt_types and self._is_dcl_query(q):
+                        raise peewee.ProgrammingError("DCL query is not allowed to execute")
+                    if not allow_all_stmt_types and self._is_tcl_query(q):
+                        raise peewee.ProgrammingError("TCL query is not allowed to execute")
                     output = None
                     row_count = None
-                    cursor = self.db.execute_sql(q, params)
+                    cursor = self.db.execute_sql(q)
                     row_count = cursor.rowcount
                     if cursor.description:
                         rows = cursor.fetchall()
@@ -146,3 +271,54 @@ class JSONEncoderForSQLQueryResult(json.JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         return str(obj)
+
+
+class CustomPeeweeDB(peewee.MySQLDatabase):
+    """
+    Override peewee.MySQLDatabase to modify `execute_sql` method
+
+    All queries coming from end-user has value inside query, so we can't pass the params seperately.
+    Peewee set `params` arg of `execute_sql` to `()` by default.
+
+    We are overriding `execute_sql` method to pass the params as None
+    So that, pymysql doesn't try to parse the query and insert params in the query
+    """
+
+    __exception_wrapper__ = peewee.ExceptionWrapper(
+        {
+            "ConstraintError": peewee.IntegrityError,
+            "DatabaseError": peewee.DatabaseError,
+            "DataError": peewee.DataError,
+            "IntegrityError": peewee.IntegrityError,
+            "InterfaceError": peewee.InterfaceError,
+            "InternalError": peewee.InternalError,
+            "NotSupportedError": peewee.NotSupportedError,
+            "OperationalError": peewee.OperationalError,
+            "ProgrammingError": peewee.ProgrammingError,
+            "TransactionRollbackError": peewee.OperationalError,
+        }
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def execute_sql(self, sql):
+        if self.in_transaction():
+            commit = False
+        elif self.commit_select:
+            commit = True
+        else:
+            commit = not sql[:6].lower().startswith("select")
+
+        with self.__exception_wrapper__:
+            cursor = self.cursor(commit)
+            try:
+                cursor.execute(sql, None)  # params passed as none
+            except Exception:
+                if self.autorollback and not self.in_transaction():
+                    self.rollback()
+                raise
+            else:
+                if commit and not self.in_transaction():
+                    self.commit()
+        return cursor
