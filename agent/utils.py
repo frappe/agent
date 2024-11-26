@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from datetime import datetime, timedelta
 from math import ceil
@@ -116,3 +117,15 @@ def end_execution(
     res["status"] = status or "Success"
     res["output"] = output or res["output"]
     return res
+
+
+def compute_file_hash(file_path, algorithm="sha256"):
+    """Compute the hash of a file using the specified algorithm."""
+    hash_func = hashlib.new(algorithm)
+
+    with open(file_path, "rb") as file:
+        # read in 10MB chunks
+        while chunk := file.read(10000000):
+            hash_func.update(chunk)
+
+    return hash_func.hexdigest()
