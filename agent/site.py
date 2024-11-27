@@ -133,14 +133,19 @@ class Site(Base):
     def calculate_checksum_of_backup_files(self, database_file, public_file, private_file):
         database_file_sha256 = compute_file_hash(database_file, algorithm="sha256", raise_exception=False)
 
-        data = "SHA256 File Checksums\n\n"
-        data += f"Database File > {database_file_sha256}"
+        data = f"""Database File
+> File Name - {os.path.basename(database_file)}
+> SHA256 Checksum - {database_file_sha256}\n"""
         if public_file:
             public_file_sha256 = compute_file_hash(public_file, algorithm="sha256", raise_exception=False)
-            data += f"\nPublic File > {public_file_sha256}"
+            data += f"""\nPublic File
+> File Name - {os.path.basename(public_file)}
+> SHA256 Checksum - {public_file_sha256}\n"""
         if private_file:
             private_file_sha256 = compute_file_hash(private_file, algorithm="sha256", raise_exception=False)
-            data += f"\nPrivate File > {private_file_sha256}"
+            data += f"""\nPrivate File
+> File Name - {os.path.basename(private_file)}
+> SHA256 Checksum - {private_file_sha256}\n"""
 
         return {"output": data}
 
