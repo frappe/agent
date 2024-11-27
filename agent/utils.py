@@ -130,7 +130,11 @@ def compute_file_hash(file_path, algorithm="sha256", raise_exception=True):
                 hash_func.update(chunk)
 
         return hash_func.hexdigest()
+    except FileNotFoundError:
+        if raise_exception:
+            raise
+        return "File does not exist"
     except Exception:
         if raise_exception:
             raise
-        return "FAILED"
+        return "Failed to compute hash"
