@@ -132,14 +132,14 @@ class Site(Base):
     @step("Checksum of Downloaded Backup Files")
     def calculate_checksum_of_backup_files(self, database_file, public_file, private_file):
         database_file_sha256 = compute_file_hash(database_file, algorithm="sha256", raise_exception=False)
-        public_file_sha256 = compute_file_hash(public_file, algorithm="sha256", raise_exception=False)
-        private_file_sha256 = compute_file_hash(private_file, algorithm="sha256", raise_exception=False)
 
         data = "SHA256 File Checksums\n\n"
         data += f"Database File > {database_file_sha256}"
         if public_file:
+            public_file_sha256 = compute_file_hash(public_file, algorithm="sha256", raise_exception=False)
             data += f"\nPublic File > {public_file_sha256}"
         if private_file:
+            private_file_sha256 = compute_file_hash(private_file, algorithm="sha256", raise_exception=False)
             data += f"\nPrivate File > {private_file_sha256}"
 
         return {"output": data}
