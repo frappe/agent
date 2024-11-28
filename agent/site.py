@@ -14,7 +14,7 @@ import requests
 from agent.base import AgentException, Base
 from agent.database import Database
 from agent.job import job, step
-from agent.utils import b2mb, get_size
+from agent.utils import b2mb, compute_file_hash, get_size
 
 if TYPE_CHECKING:
     from agent.bench import Bench
@@ -129,6 +129,26 @@ class Site(Base):
         finally:
             self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
 
+    @step("Checksum of Downloaded Backup Files")
+    def calculate_checksum_of_backup_files(self, database_file, public_file, private_file):
+        database_file_sha256 = compute_file_hash(database_file, algorithm="sha256", raise_exception=False)
+
+        data = f"""Database File
+> File Name - {os.path.basename(database_file)}
+> SHA256 Checksum - {database_file_sha256}\n"""
+        if public_file:
+            public_file_sha256 = compute_file_hash(public_file, algorithm="sha256", raise_exception=False)
+            data += f"""\nPublic File
+> File Name - {os.path.basename(public_file)}
+> SHA256 Checksum - {public_file_sha256}\n"""
+        if private_file:
+            private_file_sha256 = compute_file_hash(private_file, algorithm="sha256", raise_exception=False)
+            data += f"""\nPrivate File
+> File Name - {os.path.basename(private_file)}
+> SHA256 Checksum - {private_file_sha256}\n"""
+
+        return {"output": data}
+
     @job("Restore Site")
     def restore_job(
         self,
@@ -149,6 +169,9 @@ class Site(Base):
                 files["public"],
                 files["private"],
             )
+        except Exception:
+            self.calculate_checksum_of_backup_files(files["database"], files["public"], files["private"])
+            raise
         finally:
             self.bench.delete_downloaded_files(files["directory"])
         self.uninstall_unavailable_apps(apps)
