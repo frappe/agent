@@ -173,7 +173,6 @@ class Site(Base):
             self.calculate_checksum_of_backup_files(files["database"], files["public"], files["private"])
             raise
         finally:
-            pass
             self.bench.delete_downloaded_files(files["directory"])
         self.uninstall_unavailable_apps(apps)
         self.migrate(skip_failing_patches=skip_failing_patches)
