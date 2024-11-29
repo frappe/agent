@@ -30,8 +30,8 @@ class ProxySQL(Server):
         username: str,
         password: str,
         database: str,
+        max_connections: int,
         backend: dict,
-        max_connections: int = 4,
     ):
         self.add_backend(backend)
         self.add_user(username, password, database, max_connections, backend)
