@@ -25,9 +25,16 @@ class ProxySQL(Server):
         return self.execute(command)
 
     @job("Add User to ProxySQL")
-    def add_user_job(self, username, password, database, backend):
+    def add_user_job(
+        self,
+        username: str,
+        password: str,
+        database: str,
+        backend: dict,
+        max_connections: int = 4,
+    ):
         self.add_backend(backend)
-        self.add_user(username, password, database, backend)
+        self.add_user(username, password, database, max_connections, backend)
 
     @job("Add Backend to ProxySQL")
     def add_backend_job(self, backend):
@@ -48,7 +55,7 @@ class ProxySQL(Server):
             self.proxysql_execute(command)
 
     @step("Add User to ProxySQL")
-    def add_user(self, username, password, database, backend):
+    def add_user(self, username: str, password: str, database: str, max_connections: int, backend: dict):
         backend_id = backend["id"]
         commands = [
             (
@@ -57,7 +64,7 @@ class ProxySQL(Server):
                 "use_ssl, max_connections) "
                 "VALUES ( "
                 f'"{username}", "{password}", {backend_id}, "{database}", '
-                "1, 16)"
+                f"1, {max_connections})"
             ),
             "LOAD MYSQL USERS TO RUNTIME",
             "SAVE MYSQL USERS FROM RUNTIME",

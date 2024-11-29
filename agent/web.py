@@ -1037,6 +1037,7 @@ def proxysql_add_user():
         data["password"],
         data["database"],
         data["backend"],
+        max_connections=data["max_connections"],
     )
     return {"job": job}
 
