@@ -58,7 +58,7 @@ def ping_server(password: str):
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
-@click.option("--proxy-ip", required=False, type=str)
+@click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     config = {

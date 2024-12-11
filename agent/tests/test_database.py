@@ -13,7 +13,7 @@ class DatabaseTestInstance:
 
     def __init__(self) -> None:
         self.db_root_password = "123456"
-        self.db_container = MySqlContainer(image="mysql:8.0", MYSQL_ROOT_PASSWORD=self.db_root_password)
+        self.db_container = MySqlContainer(image="mariadb:10.6", MYSQL_ROOT_PASSWORD=self.db_root_password)
         self.db_container.start()
 
     @property
@@ -100,6 +100,24 @@ class TestDatabase(unittest.TestCase):
         INSERT INTO Person (id, name) VALUES (3, "Alice Johnson");
         INSERT INTO Person (id, name) VALUES (4, "Bob Brown");
         INSERT INTO Person (id, name) VALUES (5, "Charlie Davis");
+        CREATE TABLE Product (
+            id int,
+            name varchar(255)
+        );
+        INSERT INTO Product (id, name) VALUES (1, "Book");
+        INSERT INTO Product (id, name) VALUES (2, "Car");
+        INSERT INTO Product (id, name) VALUES (3, "House");
+        INSERT INTO Product (id, name) VALUES (4, "Computer");
+        INSERT INTO Product (id, name) VALUES (5, "Table");
+        CREATE TABLE Account (
+            id int,
+            name varchar(255)
+        );
+        INSERT INTO Account (id, name) VALUES (1, "John Doe");
+        INSERT INTO Account (id, name) VALUES (2, "Jane Smith");
+        INSERT INTO Account (id, name) VALUES (3, "Alice Johnson");
+        INSERT INTO Account (id, name) VALUES (4, "Bob Brown");
+        INSERT INTO Account (id, name) VALUES (5, "Charlie Davis");
         """,
             commit=True,
             as_dict=True,
@@ -228,3 +246,219 @@ class TestDatabase(unittest.TestCase):
             as_dict=True,
         )
         self.assertEqual(data[0]["row_count"], 0)
+
+    def test_create_user(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+
+        # create user
+        try:
+            db.create_user("test_user", "test_user_password")
+        except:
+            print(f"Failed query: {db.query}")
+            raise
+
+        # fetch users
+        success, output = db.execute_query("SELECT User FROM mysql.user;", commit=False, as_dict=False)
+        self.assertTrue(success)
+        self.assertIsInstance(output, list)
+
+        users = [x[0] for x in output[0].get("output", []).get("data", [])]
+        self.assertIn("test_user", users)
+
+    def test_remove_user(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+
+        # add a dummy user
+        db.create_user("test_user", "test_user_password")
+
+        # remove user
+        try:
+            db.remove_user("test_user")
+        except:
+            print(f"Failed query: {db.query}")
+            raise
+
+        # fetch users
+        success, output = db.execute_query("SELECT User FROM mysql.user;", commit=False, as_dict=False)
+        self.assertTrue(success)
+        self.assertIsInstance(output, list)
+
+        users = [x[0] for x in output[0].get("output", []).get("data", [])]
+        self.assertNotIn("test_user", users)
+
+    def test_create_read_only_permission(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        db.create_user("user1", "test_password")  # create user
+
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        # try to access the database
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to the database")
+        self.assertIn("Access denied for user", str(output))
+
+        db.modify_user_permissions("user1", "read_only")
+
+        # try to access the database again
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to the database")
+        self.assertGreater(len(output), 0)
+
+        # user shouldnt have write access
+        success, output = user1_db.execute_query('INSERT INTO Person (id, name) VALUES (10, "Test Person");')
+        self.assertFalse(success, "User `user1` should not have write access to the database")
+        self.assertIn("INSERT command denied to user", str(output))
+
+    def test_create_read_write_permission(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        db.create_user("user1", "test_password")  # create user
+
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        # try to access the database
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to the database")
+        self.assertIn("Access denied for user", str(output))
+
+        db.modify_user_permissions("user1", "read_write")
+
+        # try to access the database again
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to the database")
+        self.assertGreater(len(output), 0)
+
+        # user should have write access
+        success, _ = user1_db.execute_query('INSERT INTO Person (id, name) VALUES (10, "Test Person");')
+        self.assertTrue(success, "User `user1` should have write access to the database")
+
+    def test_granular_permission_table_level(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        db.create_user("user1", "test_password")  # create user
+
+        # modify access
+        try:
+            db.modify_user_permissions(
+                "user1",
+                "granular",
+                permissions={
+                    "Person": {"mode": "read_only", "columns": "*"},
+                    "Product": {"mode": "read_write", "columns": "*"},
+                },
+            )
+        except Exception:
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
+            raise
+
+        # verify access for `Person` table
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to `Person` table")
+        self.assertGreater(len(output), 0)
+
+        success, output = user1_db.execute_query('INSERT INTO Person (id, name) VALUES (10, "Test Person");')
+        self.assertFalse(success, "User `user1` should not have write access to `Person` table")
+        self.assertIn("INSERT command denied to user", str(output))
+
+        # verify access for `Product` table
+        success, output = user1_db.execute_query("SELECT * FROM Product;")
+        self.assertTrue(success, "User `user1` should have read access to `Product` table")
+        self.assertGreater(len(output), 0)
+
+        success, _ = user1_db.execute_query('INSERT INTO Product (id, name) VALUES (10, "Test Product");')
+        self.assertTrue(success, "User `user1` should have write access to `Product` table")
+
+        # verify access for `Account` table
+        success, output = user1_db.execute_query("SELECT * FROM Account;")
+        self.assertFalse(success, "User `user1` should not have access to `Account` table")
+        self.assertIn("SELECT command denied to user", str(output))
+
+        # purge access and verify
+        db.modify_user_permissions("user1", "granular", permissions={})
+
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to `Person` table")
+        success, output = user1_db.execute_query("SELECT * FROM Product;")
+        self.assertFalse(success, "User `user1` should not have access to `Product` table")
+        success, output = user1_db.execute_query("SELECT * FROM Account;")
+        self.assertFalse(success, "User `user1` should not have access to `Account` table")
+
+    def test_granular_permission_column_level(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        db.create_user("user1", "test_password")  # create user
+
+        # modify access [read_only]
+        try:
+            db.modify_user_permissions(
+                "user1", "granular", permissions={"Person": {"mode": "read_only", "columns": ["id"]}}
+            )
+        except Exception:
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
+            raise
+
+        # verify access for `Person` table
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have read access to all columns of `Person` table")
+        self.assertIn("SELECT command denied to user", str(output))
+
+        success, output = user1_db.execute_query("SELECT id FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to `id` column of `Person` table")
+        self.assertGreater(len(output), 0)
+
+        # modify access [read_write]
+        try:
+            db.modify_user_permissions(
+                "user1", "granular", permissions={"Person": {"mode": "read_write", "columns": ["id"]}}
+            )
+        except Exception:
+            if hasattr(db, "last_executed_query"):
+                print("Failed query: ", db.last_executed_query)
+            raise
+
+        # verify access for `Person` table
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have read access to all columns of `Person` table")
+        self.assertIn("SELECT command denied to user", str(output))
+
+        success, output = user1_db.execute_query("SELECT id FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to `id` column of `Person` table")
+        self.assertGreater(len(output), 0)
+
+        success, output = user1_db.execute_query("UPDATE Person SET name = 'Columbia' WHERE id = 1;")
+        self.assertFalse(success, "User `user1` should have write access to `name` col of `Person` table")
+        self.assertIn("UPDATE command denied to user", str(output))
+
+        success, output = user1_db.execute_query("UPDATE Person SET id = 2 WHERE name = 'Columbia';")
+        self.assertFalse(success, "User `user1` should have write access to `id` col of `Person` table")
+        self.assertIn("SELECT command denied to user", str(output))
+
+        success, output = user1_db.execute_query("UPDATE Person SET id = 50 WHERE id = 1;")
+        self.assertTrue(success, "User `user1` should have write access to `id` col of `Person` table")
+
+        success, output = user1_db.execute_query("DELETE FROM Person WHERE id = 2;")
+        self.assertFalse(success, "User `user1` should have write access to `id` col of `Person` table")
+        self.assertIn("DELETE command denied to user", str(output))
+
+    def test_revoke_permission(self):
+        db = self._db(self.db1__name, "root", self.instance.db_root_password)
+        db.create_user("user1", "test_password")  # create user
+        db.modify_user_permissions("user1", "read_only")
+
+        user1_db = self._db(self.db1__name, "user1", "test_password")
+
+        # try to access the database
+        success, _ = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertTrue(success, "User `user1` should have read access to the database")
+
+        # revoke permission
+        # setting no permission in granular mode, will revoke all existing permissions
+        db.modify_user_permissions("user1", "granular", permissions={})
+
+        # try to access the database again
+        success, output = user1_db.execute_query("SELECT * FROM Person;")
+        self.assertFalse(success, "User `user1` should not have access to the database")
+        self.assertIn("Access denied for user", str(output))
