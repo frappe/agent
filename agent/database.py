@@ -153,6 +153,21 @@ class Database:
 
         self._run_sql(queries_str, commit=True, allow_all_stmt_types=True)
 
+    def fetch_database_table_sizes(self) -> list[dict]:
+        """
+        SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESPACES
+        """
+        data = self._run_sql(
+            "SELECT table_name, data_length, index_length FROM INFORMATION_SCHEMA.TABLES", as_dict=True
+        )
+        if len(data) == 0:
+            return []
+        for d in data[0]["output"]:
+            d["data_length"] = int(d["data_length"])
+            d["index_length"] = int(d["index_length"])
+            d["total_size"] = d["data_length"] + d["index_length"]
+        return data
+
     # Private helper methods
     def _run_sql(  # noqa C901
         self, query: str, commit: bool = False, as_dict: bool = False, allow_all_stmt_types: bool = False
@@ -164,7 +179,7 @@ class Database:
         Args:
         query: SQL query string
         commit: True if you want to commit the changes. If commit is false, it will rollback the changes and
-                also wouldnt allow to run ddl, dcl or tcl queries
+                also wouldn't allow to run ddl, dcl or tcl queries
         as_dict: True if you want to return the result as a dictionary (like frappe.db.sql).
                 Otherwise it will return a dict of columns and data
         allow_all_stmt_types: True if you want to allow all type of sql statements

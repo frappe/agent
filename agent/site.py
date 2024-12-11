@@ -893,6 +893,9 @@ print(">>>" + frappe.session.sid + "<<<")
             )
         return tables
 
+    def fetch_database_table_sizes(self, root_password: str):
+        return Database(self.host, 3306, "root", root_password, self.database).fetch_database_table_sizes()
+
     def get_database_table_indexes(self):
         command = f"""
         SELECT

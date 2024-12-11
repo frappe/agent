@@ -14,7 +14,7 @@ from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 
 from agent.builder import ImageBuilder, get_image_build_context_directory
-from agent.database import JSONEncoderForSQLQueryResult
+from agent.database import Database, JSONEncoderForSQLQueryResult
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 from agent.job import JobModel, connection
@@ -556,6 +556,11 @@ def fetch_database_table_schema(bench, site):
     job = Server().benches[bench].sites[site].fetch_database_table_schema()
     return {"job": job}
 
+
+@application.route("/benches/<string:bench>/sites/<string:site>/database/size", methods=["POST"])
+@validate_bench_and_site
+def fetch_database_table_sizes(bench, site):
+    return Response(json.dumps(Server().benches[bench].sites[site].fetch_database_table_sizes()))
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/query/execute", methods=["POST"])
 @validate_bench_and_site
