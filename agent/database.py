@@ -175,8 +175,8 @@ class Database:
         return tables
 
     def fetch_database_table_schema(self, include_index_info: bool = True):
-        index_info = []
-        index_usage_info = []
+        index_info = {}
+        index_usage_info = {}
         data = self._run_sql(
             f"""SELECT
                             TABLE_NAME AS `table`,
