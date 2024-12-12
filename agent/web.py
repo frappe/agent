@@ -1394,3 +1394,8 @@ def get_devbox_status(devbox_name: str):
     result["end"] = result["end"].isoformat()
     result["duration"] = result["duration"].total_seconds()
     return jsonify(result)
+
+@application.route("/devboxes/<string:devbox_name>/docker_volumes_size", methods=["POST"])
+def get_devbox_docker_volumes_size(devbox_name: str):
+    result = Server().get_devbox_docker_volumes_size(devbox_name=devbox_name)
+    return {"message": result}

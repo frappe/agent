@@ -849,3 +849,8 @@ class Server(Base):
     def get_devbox_status(self, devbox_name):
         devbox = Devbox(devbox_name=devbox_name, server=self)
         return devbox.get_devbox_status()
+
+    def get_devbox_docker_volumes_size(self, devbox_name):
+        devbox = Devbox(devbox_name=devbox_name, server=self)
+        return devbox.get_devbox_docker_volumes_size()
+

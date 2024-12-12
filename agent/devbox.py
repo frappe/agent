@@ -101,3 +101,18 @@ class Devbox(Base):
         command = f"docker inspect --format='{{{{.State.Status}}}}' {self.devbox_name}"
         # We pass the --rm flag thus cant do inspect on non existing container name or container id
         return self.execute(command, non_zero_throw=False)
+
+    def get_devbox_docker_volumes_size(self):
+        database_volume_name = f"{self.devbox_name}_db-data"
+        command = (
+            f"sudo du -sh $(docker volume inspect --format '{{{{ .Mountpoint }}}}' "
+            f"{database_volume_name}) | cut -f1"
+        )
+        database_volume_size = self.execute(command).get("output")
+        home_volume_name = f"{self.devbox_name}_home"
+        command = (
+            f"sudo du -sh $(docker volume inspect --format '{{{{ .Mountpoint }}}}' "
+            f"{home_volume_name}) | cut -f1"
+        )
+        home_volume_size = self.execute(command).get("output")
+        return {"database_volume_size": database_volume_size, "home_volume_size": home_volume_size}
