@@ -852,78 +852,31 @@ print(">>>" + frappe.session.sid + "<<<")
             return []
 
     @job("Fetch Database Table Schema")
-    def fetch_database_table_schema(self):
-        return self._fetch_database_table_schema()
+    def fetch_database_table_schema(self, include_table_size: bool = True, include_index_info: bool = True):
+        database = Database(self.host, 3306, self.user, self.password, self.database)
+        tables = {}
+        table_schemas = self._fetch_database_table_schema(database, include_index_info=include_index_info)
+        for table_name in table_schemas:
+            tables[table_name] = {
+                "columns": table_schemas[table_name],
+            }
+
+        if include_table_size:
+            table_sizes = self._fetch_database_table_sizes(database)
+            for table_name in table_sizes:
+                if table_name not in tables:
+                    continue
+                tables[table_name]["size"] = table_sizes[table_name]
+
+        return tables
 
     @step("Fetch Database Table Schema")
-    def _fetch_database_table_schema(self):
-        index_info = self.get_database_table_indexes()
-        command = f"""SELECT
-                            TABLE_NAME AS `table`,
-                            COLUMN_NAME AS `column`,
-                            DATA_TYPE AS `data_type`,
-                            IS_NULLABLE AS `is_nullable`,
-                            COLUMN_DEFAULT AS `default`
-                        FROM
-                            INFORMATION_SCHEMA.COLUMNS
-                        WHERE
-                            TABLE_SCHEMA='{self.database}';
-                    """
-        command = quote(command)
-        data = self.execute(
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
-        ).get("output")
-        data = data.split("\n")
-        data = [line.split("\t") for line in data]
-        tables = {}  # <table_name>: [<column_1_info>, <column_2_info>, ...]
-        for row in data:
-            if len(row) != 5:
-                continue
-            table = row[0]
-            if table not in tables:
-                tables[table] = []
-            tables[table].append(
-                {
-                    "column": row[1],
-                    "data_type": row[2],
-                    "is_nullable": row[3] == "YES",
-                    "default": row[4],
-                    "indexes": index_info.get(table, {}).get(row[1], []),
-                }
-            )
-        return tables
+    def _fetch_database_table_schema(self, database: Database, include_index_info: bool = True):
+        return database.fetch_database_table_schema(include_index_info=include_index_info)
 
-    def fetch_database_table_sizes(self, root_password: str):
-        return Database(self.host, 3306, "root", root_password, self.database).fetch_database_table_sizes()
-
-    def get_database_table_indexes(self):
-        command = f"""
-        SELECT
-            TABLE_NAME AS `table`,
-            COLUMN_NAME AS `column`,
-            INDEX_NAME AS `index`
-        FROM
-            INFORMATION_SCHEMA.STATISTICS
-        WHERE
-            TABLE_SCHEMA='{self.database}'
-        """
-        command = quote(command)
-        data = self.execute(
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
-        ).get("output")
-        data = data.split("\n")
-        data = [line.split("\t") for line in data]
-        tables = {}  # <table_name>: { <column_name> : [<index1>, <index2>, ...] }
-        for row in data:
-            if len(row) != 3:
-                continue
-            table = row[0]
-            if table not in tables:
-                tables[table] = {}
-            if row[1] not in tables[table]:
-                tables[table][row[1]] = []
-            tables[table][row[1]].append(row[2])
-        return tables
+    @step("Fetch Database Table Sizes")
+    def _fetch_database_table_sizes(self, database: Database):
+        return database.fetch_database_table_sizes()
 
     def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
         db = self.db_instance()

@@ -153,20 +153,125 @@ class Database:
 
         self._run_sql(queries_str, commit=True, allow_all_stmt_types=True)
 
-    def fetch_database_table_sizes(self) -> list[dict]:
-        """
-        SELECT * FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESPACES
-        """
+    def fetch_database_table_sizes(self) -> dict:
         data = self._run_sql(
-            "SELECT table_name, data_length, index_length FROM INFORMATION_SCHEMA.TABLES", as_dict=True
+            f"SELECT table_name, data_length, index_length FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA"
+            f"='{self.database_name}'",
+            as_dict=True,
         )
         if len(data) == 0:
             return []
-        for d in data[0]["output"]:
+        data = data[0]["output"]
+        tables = {}
+        for d in data:
+            tables[d["table_name"]] = {
+                "data_length": int(d["data_length"]),
+                "index_length": int(d["index_length"]),
+                "total_size": int(d["data_length"]) + int(d["index_length"]),
+            }
             d["data_length"] = int(d["data_length"])
             d["index_length"] = int(d["index_length"])
             d["total_size"] = d["data_length"] + d["index_length"]
-        return data
+        return tables
+
+    def fetch_database_table_schema(self, include_index_info: bool = True):
+        index_info = []
+        index_usage_info = []
+        data = self._run_sql(
+            f"""SELECT
+                            TABLE_NAME AS `table`,
+                            COLUMN_NAME AS `column`,
+                            DATA_TYPE AS `data_type`,
+                            IS_NULLABLE AS `is_nullable`,
+                            COLUMN_DEFAULT AS `default`
+                        FROM
+                            INFORMATION_SCHEMA.COLUMNS
+                        WHERE
+                            TABLE_SCHEMA='{self.database_name}';
+                    """,
+            as_dict=True,
+        )
+        if len(data) == 0:
+            return {}
+        data = data[0]["output"]
+        tables = {}  # <table_name>: [<column_1_info>, <column_2_info>, ...]
+
+        if include_index_info:
+            index_info = self.fetch_database_table_indexes()
+            index_usage_info = self.fetch_database_table_index_usage()
+
+        for record in data:
+            if record["table"] not in tables:
+                tables[record["table"]] = []
+            indexes = index_info.get(record["table"], {}).get(record["column"], [])
+            column_index_usage = {}
+            for index in indexes:
+                column_index_usage[index] = index_usage_info.get(record["table"], {}).get(index, 0)
+
+            tables[record["table"]].append(
+                {
+                    "column": record["column"],
+                    "data_type": record["data_type"],
+                    "is_nullable": record["is_nullable"] == "YES",
+                    "default": record["default"],
+                    "index_info": {
+                        "is_indexed": len(indexes) > 0,
+                        "indexes": indexes,
+                        "index_usage": column_index_usage,
+                    },
+                }
+            )
+        return tables
+
+    def fetch_database_table_indexes(self):
+        data = self._run_sql(
+            f"""
+        SELECT
+            TABLE_NAME AS `table`,
+            COLUMN_NAME AS `column`,
+            INDEX_NAME AS `index`
+        FROM
+            INFORMATION_SCHEMA.STATISTICS
+        WHERE
+            TABLE_SCHEMA='{self.database_name}'
+        """,
+            as_dict=True,
+        )
+        if len(data) == 0:
+            return {}
+        data = data[0]["output"]
+        tables = {}  # <table_name>: { <column_name> : [<index1>, <index2>, ...] }
+        for record in data:
+            if record["table"] not in tables:
+                tables[record["table"]] = {}
+            if record["column"] not in tables[record["table"]]:
+                tables[record["table"]][record["column"]] = []
+            tables[record["table"]][record["column"]].append(record["index"])
+        return tables
+
+    def fetch_database_table_index_usage(self):
+        data = self._run_sql(
+            f"""
+        SELECT
+            TABLE_NAME AS `table`,
+            INDEX_NAME AS `index`,
+            ROWS_READ AS `rows_read`
+        FROM
+            INFORMATION_SCHEMA.INDEX_STATISTICS
+        WHERE
+            TABLE_SCHEMA='{self.database_name}'
+        """,
+            as_dict=True,
+        )
+        if len(data) == 0:
+            return {}
+        data = data[0]["output"]
+        tables = {}  # <table_name>: { <index_name> : <rows_read> }
+        for record in data:
+            if record["table"] not in tables:
+                tables[record["table"]] = {}
+            tables[record["table"]][record["index"]] = int(record["rows_read"])
+        return tables
 
     # Private helper methods
     def _run_sql(  # noqa C901
