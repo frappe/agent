@@ -861,8 +861,8 @@ class Server(Base):
 
     @job("Destroy Devbox", priority="low")
     def destroy_devbox(self, devbox_name):
-        self.destroy_devbox_directory(devbox_name=devbox_name)
         devbox = Devbox(devbox_name=devbox_name, server=self)
         devbox.stop_devbox()
         devbox.delete_devbox_database_volume()
         devbox.delete_devbox_home_volume()
+        self.destroy_devbox_directory(devbox_name=devbox_name)
