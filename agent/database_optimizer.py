@@ -8,9 +8,12 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sql_metadata import Parser
+
+if TYPE_CHECKING:
+    from agent.site import Site
 
 # Any index that reads more than 30% table on average is not "useful"
 INDEX_SCORE_THRESHOLD = 0.3
@@ -63,7 +66,7 @@ class DBExplain:
     extra: str | None = None
 
     @classmethod
-    def from_frappe_ouput(cls, data) -> DBExplain:
+    def from_frappe_output(cls, data) -> DBExplain:
         return cls(
             select_type=cstr(data["select_type"]).upper(),
             table=data["table"],
@@ -86,7 +89,7 @@ class DBColumn:
     data_type: str
 
     @classmethod
-    def from_frappe_ouput(cls, data) -> DBColumn:
+    def from_frappe_output(cls, data) -> DBColumn:
         "Parse DBColumn from output of describe-database-table command in Frappe"
         return cls(
             name=data["column"],
@@ -115,7 +118,7 @@ class DBIndex:
         return f"DBIndex(`{self.table}`.`{self.column}`)"
 
     @classmethod
-    def from_frappe_ouput(cls, data, table) -> DBIndex:
+    def from_frappe_output(cls, data, table) -> DBIndex:
         "Parse DBIndex from output of describe-database-table command in Frappe"
         return cls(
             name=data["name"],
@@ -141,7 +144,7 @@ class ColumnStat:
             self.histogram = []
 
     @classmethod
-    def from_frappe_ouput(cls, data) -> ColumnStat:
+    def from_frappe_output(cls, data) -> ColumnStat:
         return cls(
             column_name=data["column_name"],
             avg_frequency=data["avg_frequency"],
@@ -174,14 +177,14 @@ class DBTable:
                     col.cardinality = self.total_rows / column_stat.avg_frequency
 
     @classmethod
-    def from_frappe_ouput(cls, data) -> DBTable:
+    def from_frappe_output(cls, data) -> DBTable:
         "Parse DBTable from output of describe-database-table command in Frappe"
         table_name = data["table_name"]
         return cls(
             name=table_name,
             total_rows=data["total_rows"],
-            schema=[DBColumn.from_frappe_ouput(c) for c in data["schema"]],
-            indexes=[DBIndex.from_frappe_ouput(i, table_name) for i in data["indexes"]],
+            schema=[DBColumn.from_frappe_output(c) for c in data["schema"]],
+            indexes=[DBIndex.from_frappe_output(i, table_name) for i in data["indexes"]],
         )
 
     def has_column(self, column: str) -> bool:
@@ -357,3 +360,59 @@ class DBOptimizer:
                 if (explain.rows / table.total_rows) > OPTIMIZATION_THRESHOLD:
                     return True
         return False
+
+
+@dataclass
+class OptimizeDatabaseQueries:
+    site: Site
+    database_root_password: str
+    queries: list[str]
+    table_cache: dict[str, DBTable]
+    column_statistics_cache: dict[str, list[ColumnStat]]
+
+    def analyze(self) -> dict[str, list[DBIndex]] | None:
+        # generate explain output for all the queries at once
+        explain_output_of_queries_result = self.site.db_instance().explain_queries(self.queries)
+        explain_output_of_queries = {}
+        for query, explain_output in explain_output_of_queries_result.items():
+            explain_output_of_queries[query] = [DBExplain.from_frappe_output(e) for e in explain_output]
+
+        suggested_indexes_of_queries = {}
+
+        for query in self.queries:
+            if query not in explain_output_of_queries:
+                continue
+            explain_output = explain_output_of_queries[query]
+            optimizer = DBOptimizer(query=query, explain_plan=explain_output)
+            tables = optimizer.tables_examined
+
+            for table in tables:
+                db_table = self.describe_database_table(table)
+                column_stats = self.fetch_column_stats(table)
+                db_table.update_cardinality(column_stats)
+                optimizer.update_table_data(db_table)
+
+            index = optimizer.suggest_index()
+            if index:
+                if query not in suggested_indexes_of_queries:
+                    suggested_indexes_of_queries[query] = []
+                suggested_indexes_of_queries[query].append(index)
+
+        return suggested_indexes_of_queries
+
+    def describe_database_table(self, table_name: str) -> DBTable | None:
+        if table_name in self.table_cache:
+            return self.table_cache[table_name]
+        result = self.site.describe_database_table(table_name)
+        if result is None:
+            self.table_cache[table_name] = None
+            return None
+        table = DBTable.from_frappe_output(result)
+        self.table_cache[table_name] = table
+        return table
+
+    def fetch_column_stats(self, table_name: str) -> list[ColumnStat] | None:
+        if table_name in self.column_statistics_cache:
+            return self.column_statistics_cache[table_name]
+        db = self.site.db_instance("root", self.database_root_password)
+        return db.fetch_database_column_statistics(table_name)

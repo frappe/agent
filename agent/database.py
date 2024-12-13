@@ -273,6 +273,54 @@ class Database:
             tables[record["table"]][record["index"]] = int(record["rows_read"])
         return tables
 
+    def explain_query(self, query) -> list:
+        result = self._run_sql(query=query, as_dict=True)
+        return result[0]["output"]
+
+    def explain_queries(self, queries: list) -> list:
+        sql_query = ""
+        for query in queries:
+            sql_query += f"EXPLAIN {query};\n"
+        result = self._run_sql(query=sql_query, as_dict=True)
+        data = {}
+        for record in result:
+            data[record["query"]] = record["output"]
+        return data
+
+    def fetch_database_column_statistics(self, table):
+        """Get various stats about columns in a table.
+
+        Refer:
+            - https://mariadb.com/kb/en/engine-independent-table-statistics/
+            - https://mariadb.com/kb/en/mysqlcolumn_stats-table/
+        """
+        self._run_sql(
+            f"ANALYZE TABLE `{self.database_name}`.`{table}` PERSISTENT FOR ALL",
+        )
+
+        results = self._run_sql(
+            f"""
+            SELECT
+                column_name, nulls_ratio, avg_length, avg_frequency,
+                decode_histogram(hist_type,histogram) as histogram
+            FROM
+                mysql.column_stats
+            WHERE
+                db_name='{self.database_name}'
+                and table_name='{table}'
+            """,
+            as_dict=True,
+        )
+        if len(results) == 0:
+            raise Exception("Failed to fetch column stats")
+        result = results[0]["output"]
+
+        for row in results:
+            for column in ["nulls_ratio", "avg_length", "avg_frequency"]:
+                row[column] = float(row[column]) if row[column] else None
+
+        return result
+
     # Private helper methods
     def _run_sql(  # noqa C901
         self, query: str, commit: bool = False, as_dict: bool = False, allow_all_stmt_types: bool = False
