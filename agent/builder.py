@@ -30,6 +30,7 @@ class ImageBuilder(Base):
         no_cache: bool,
         no_push: bool,
         registry: dict,
+        platform: str,
     ) -> None:
         super().__init__()
 
@@ -37,6 +38,7 @@ class ImageBuilder(Base):
         self.image_repository = image_repository
         self.image_tag = image_tag
         self.registry = registry
+        self.platform = platform
 
         # Build context, params
         self.filename = filename
@@ -108,7 +110,7 @@ class ImageBuilder(Base):
         return {"output": self.output["build"]}
 
     def _get_build_command(self) -> str:
-        command = "docker buildx build --platform linux/amd64"
+        command = f"docker buildx build --platform {self.platform}"
         command = f"{command} -t {self._get_image_name()}"
 
         if self.no_cache:
