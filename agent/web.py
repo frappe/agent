@@ -603,9 +603,6 @@ def analyze_slow_queries(bench: str, site: str):
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
-    "/benches/<string:bench>/sites/<string:site>/database/users",
-    methods=["POST"],
-)
 @validate_bench_and_site
 def create_database_user(bench, site):
     data = request.json
