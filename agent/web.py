@@ -178,6 +178,7 @@ def build_image():
         no_cache=data.get("no_cache"),
         no_push=data.get("no_push"),
         registry=data.get("registry"),
+        platform=data.get("platform", "linux/amd64"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}
@@ -550,7 +551,10 @@ def backup_site(bench, site):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/schema", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/schema",
+    methods=["POST"],
+)
 @validate_bench_and_site
 def fetch_database_table_schema(bench, site):
     data = request.json or {}
@@ -568,7 +572,10 @@ def fetch_database_table_schema(bench, site):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/query/execute", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/query/execute",
+    methods=["POST"],
+)
 @validate_bench_and_site
 def run_sql(bench, site):
     query = request.json.get("query")
@@ -596,6 +603,9 @@ def analyze_slow_queries(bench: str, site: str):
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
+    "/benches/<string:bench>/sites/<string:site>/database/users",
+    methods=["POST"],
+)
 @validate_bench_and_site
 def create_database_user(bench, site):
     data = request.json
@@ -609,7 +619,8 @@ def create_database_user(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>", methods=["DELETE"]
+    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>",
+    methods=["DELETE"],
 )
 @validate_bench_and_site
 def remove_database_user(bench, site, db_user):
@@ -630,7 +641,10 @@ def update_database_permissions(bench, site, db_user):
         .benches[bench]
         .sites[site]
         .modify_database_user_permissions_job(
-            db_user, data["mode"], data.get("permissions", {}), data["mariadb_root_password"]
+            db_user,
+            data["mode"],
+            data.get("permissions", {}),
+            data["mariadb_root_password"],
         )
     )
     return {"job": job}
@@ -1344,7 +1358,10 @@ def site_not_found(e):
 
 @application.route("/docker_cache_utils/<string:method>", methods=["POST"])
 def docker_cache_utils(method: str):
-    from agent.docker_cache_utils import get_cached_apps, run_command_in_docker_cache
+    from agent.docker_cache_utils import (
+        get_cached_apps,
+        run_command_in_docker_cache,
+    )
 
     if method == "run_command_in_docker_cache":
         return run_command_in_docker_cache(**request.json)
