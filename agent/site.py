@@ -13,6 +13,7 @@ import requests
 
 from agent.base import AgentException, Base
 from agent.database import Database
+from agent.database_optimizer import OptimizeDatabaseQueries
 from agent.job import job, step
 from agent.utils import b2mb, compute_file_hash, get_size
 
@@ -853,7 +854,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @job("Fetch Database Table Schema")
     def fetch_database_table_schema(self, include_table_size: bool = True, include_index_info: bool = True):
-        database = Database(self.host, 3306, self.user, self.password, self.database)
+        database = self.db_instance()
         tables = {}
         table_schemas = self._fetch_database_table_schema(database, include_index_info=include_index_info)
         for table_name in table_schemas:
@@ -885,6 +886,33 @@ print(">>>" + frappe.session.sid + "<<<")
         if not success and hasattr(db, "last_executed_query"):
             response["failed_query"] = db.last_executed_query
         return response
+
+    @job("Analyze Slow Queries")
+    def analyze_slow_queries_job(self, queries: list[dict], database_root_password: str):
+        return self.analyze_slow_queries(queries, database_root_password)
+
+    @step("Analyze Slow Queries")
+    def analyze_slow_queries(self, queries: list[dict], database_root_password: str) -> list[dict]:
+        """
+        Args:
+            queries (list[dict]): List of queries to analyze
+                {
+                    "example": "<complete query>",
+                    "normalized": "<normalized query>",
+                }
+        """
+        example_queries = [query["example"] for query in queries]
+        optimizer = OptimizeDatabaseQueries(self, example_queries, database_root_password)
+        analysis = optimizer.analyze()
+        analysis_summary = {}  # map[query -> list[index_info_dict]
+        for query, indexes in analysis.items():
+            analysis_summary[query] = [index.to_dict() for index in indexes]
+
+        result = []  # list[{example, normalized, suggested_indexes}]
+        for query in queries:
+            query["suggested_indexes"] = analysis_summary.get(query["example"], [])
+            result.append(query)
+        return result
 
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:

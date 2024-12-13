@@ -130,6 +130,11 @@ class DBIndex:
             column=data["column"],
         )
 
+    def to_dict(self, fields: list[str] | None = None) -> dict:
+        if not fields:
+            fields = ["name", "column", "table", "unique", "cardinality", "sequence", "nullable"]
+        return {field: getattr(self, field) for field in fields}
+
 
 @dataclass
 class ColumnStat:
@@ -362,13 +367,13 @@ class DBOptimizer:
         return False
 
 
-@dataclass
 class OptimizeDatabaseQueries:
-    site: Site
-    database_root_password: str
-    queries: list[str]
-    table_cache: dict[str, DBTable]
-    column_statistics_cache: dict[str, list[ColumnStat]]
+    def __init__(self, site: Site, queries: list[str], database_root_password: str):
+        self.site = site
+        self.database_root_password = database_root_password
+        self.queries = queries
+        self.table_cache: dict[str, DBTable] = {}
+        self.column_statistics_cache: dict[str, list[ColumnStat]] = {}
 
     def analyze(self) -> dict[str, list[DBIndex]] | None:
         # generate explain output for all the queries at once

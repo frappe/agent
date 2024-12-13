@@ -583,6 +583,18 @@ def run_sql(bench, site):
     )
 
 
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/analyze_slow_queries", methods=["GET"]
+)
+@validate_bench_and_site
+def analyze_slow_queries(bench: str, site: str):
+    queries = request.json["queries"]
+    mariadb_root_password = request.json["mariadb_root_password"]
+
+    job = Server().benches[bench].sites[site].analyze_slow_queries_job(queries, mariadb_root_password)
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
 @validate_bench_and_site
 def create_database_user(bench, site):
@@ -1007,13 +1019,15 @@ def get_database_deadlocks():
     return jsonify(DatabaseServer().get_deadlocks(**data))
 
 
+# TODO can be removed
 @application.route("/database/column-stats", methods=["POST"])
 def fetch_column_statistics():
     data = request.json
-    job = DatabaseServer().fetch_column_stats(**data)
+    job = DatabaseServer().fetch_column_stats_job(**data)
     return {"job": job}
 
 
+# TODO can be removed
 @application.route("/database/explain", methods=["POST"])
 def explain():
     data = request.json
