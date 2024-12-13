@@ -76,6 +76,16 @@ class Devbox(Base):
         command = f"docker volume create {self.devbox_name}_home"
         return self.execute(command)
 
+    @step("Delete Devbox Database Volume")
+    def delete_devbox_database_volume(self):
+        command = f"docker volume rm {self.devbox_name}_db-data"
+        return self.execute(command)
+
+    @step("Delete Devbox Home Volume")
+    def delete_devbox_home_volume(self):
+        command = f"docker volume rm {self.devbox_name}_home"
+        return self.execute(command)
+
     @step("Run Devbox")
     def run_devbox(self):
         command = (

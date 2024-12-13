@@ -1395,7 +1395,14 @@ def get_devbox_status(devbox_name: str):
     result["duration"] = result["duration"].total_seconds()
     return jsonify(result)
 
+
 @application.route("/devboxes/<string:devbox_name>/docker_volumes_size", methods=["POST"])
 def get_devbox_docker_volumes_size(devbox_name: str):
     result = Server().get_devbox_docker_volumes_size(devbox_name=devbox_name)
     return {"message": result}
+
+
+@application.route("/devboxes/<string:devbox_name>/destroy", methods=["POST"])
+def destroy_devbox(devbox_name: str):
+    job = Server().destroy_devbox(devbox_name=devbox_name)
+    return {"job": job}

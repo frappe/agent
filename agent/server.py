@@ -854,3 +854,15 @@ class Server(Base):
         devbox = Devbox(devbox_name=devbox_name, server=self)
         return devbox.get_devbox_docker_volumes_size()
 
+    @step("Delete Devbox Directory")
+    def destroy_devbox_directory(self, devbox_name):
+        devboxes_directory = os.path.join(self.devboxes_directory, devbox_name)
+        shutil.rmtree(devboxes_directory)
+
+    @job("Destroy Devbox", priority="low")
+    def destroy_devbox(self, devbox_name):
+        self.destroy_devbox_directory(devbox_name=devbox_name)
+        devbox = Devbox(devbox_name=devbox_name, server=self)
+        devbox.stop_devbox()
+        devbox.delete_devbox_database_volume()
+        devbox.delete_devbox_home_volume()
