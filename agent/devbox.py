@@ -88,6 +88,11 @@ class Devbox(Base):
 
     @step("Run Devbox")
     def run_devbox(self):
+        try:
+            self.execute(f"docker stop {self.devbox_name}")
+            self.execute(f"docker rm {self.devbox_name}")
+        except Exception:
+            pass
         command = (
             f'docker run --security-opt="no-new-privileges=false" -d --rm --name {self.devbox_name} '
             f"-p {self.websockify_port}:6969 "
@@ -104,8 +109,11 @@ class Devbox(Base):
 
     @step("Stop Devbox")
     def stop_devbox(self):
-        self.execute(command=f"docker stop {self.devbox_name}")
-        return self.execute(f"docker rm -f {self.devbox_name}")
+        try:
+            self.execute(command=f"docker stop {self.devbox_name}")
+            return self.execute(f"docker rm -f {self.devbox_name}")
+        except Exception:
+            pass
 
     def get_devbox_status(self):
         command = f"docker inspect --format='{{{{.State.Status}}}}' {self.devbox_name}"
