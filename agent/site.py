@@ -914,6 +914,10 @@ print(">>>" + frappe.session.sid + "<<<")
             result.append(query)
         return result
 
+    def fetch_summarized_database_performance_report(self, mariadb_root_password: str):
+        database = self.db_instance(username="root", password=mariadb_root_password)
+        return database.fetch_summarized_performance_report()
+
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:
             username = self.user

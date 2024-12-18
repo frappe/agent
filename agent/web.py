@@ -591,7 +591,7 @@ def run_sql(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/database/analyze_slow_queries", methods=["GET"]
+    "/benches/<string:bench>/sites/<string:site>/database/analyze-slow-queries", methods=["GET"]
 )
 @validate_bench_and_site
 def analyze_slow_queries(bench: str, site: str):
@@ -600,6 +600,20 @@ def analyze_slow_queries(bench: str, site: str):
 
     job = Server().benches[bench].sites[site].analyze_slow_queries_job(queries, mariadb_root_password)
     return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/performance-report", methods=["POST"]
+)
+def database_performance_report(bench, site):
+    data = request.json
+    result = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .fetch_summarized_database_performance_report(data["mariadb_root_password"])
+    )
+    return jsonify(json.loads(json.dumps(result, cls=JSONEncoderForSQLQueryResult)))
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])

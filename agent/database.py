@@ -321,6 +321,64 @@ class Database:
 
         return result
 
+    def fetch_summarized_performance_report(self):
+        queries = f"""
+-- Top 10 time consuming queries;
+SELECT
+    (SUM_TIMER_WAIT / SUM(SUM_TIMER_WAIT) OVER() * 100) AS percent,
+    round(SUM_TIMER_WAIT/1000000000, 1) AS total_time_ms,
+    COUNT_STAR AS calls,
+    round(AVG_TIMER_WAIT/1000000000, 1) AS avg_time_ms,
+    DIGEST_TEXT AS query
+FROM performance_schema.events_statements_summary_by_digest
+    WHERE SCHEMA_NAME='{self.database_name}'
+    ORDER BY SUM_TIMER_WAIT DESC
+    LIMIT 10;
+
+-- Top 10 queries with full table scans;
+SELECT t1.exec_count AS calls,
+       t1.rows_examined AS rows_examined,
+       t1.rows_sent AS rows_sent,
+       t1.query AS query,
+       t2.DIGEST_TEXT AS example
+FROM sys.statements_with_full_table_scans AS t1
+LEFT JOIN (
+    SELECT DIGEST, FIRST_VALUE(DIGEST_TEXT) OVER (PARTITION BY DIGEST ORDER BY RAND()) AS DIGEST_TEXT
+    FROM performance_schema.events_statements_summary_by_digest
+) AS t2 ON t1.digest = t2.DIGEST
+ORDER BY rows_examined DESC
+LIMIT 10;
+
+-- Unused Indexes;
+SELECT
+    index_name,
+    object_name AS table_name
+FROM
+    sys.schema_unused_indexes
+WHERE
+    object_schema='{self.database_name}';
+
+-- Redundant Indexes;
+SELECT
+    table_name,
+    redundant_index_name,
+    redundant_index_columns,
+    dominant_index_name,
+    dominant_index_columns
+FROM
+    sys.schema_redundant_indexes
+WHERE
+    table_schema='{self.database_name}';
+"""
+
+        result = self._run_sql(queries, as_dict=True)
+        return {
+            "top_10_time_consuming_queries": result[0]["output"],
+            "top_10_queries_with_full_table_scan": result[1]["output"],
+            "unused_indexes": result[2]["output"],
+            "redundant_indexes": result[3]["output"],
+        }
+
     # Private helper methods
     def _run_sql(  # noqa C901
         self, query: str, commit: bool = False, as_dict: bool = False, allow_all_stmt_types: bool = False
