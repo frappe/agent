@@ -918,6 +918,12 @@ print(">>>" + frappe.session.sid + "<<<")
         database = self.db_instance(username="root", password=mariadb_root_password)
         return database.fetch_summarized_performance_report()
 
+    def fetch_database_process_list(self):
+        return self.db_instance().fetch_process_list()
+
+    def kill_database_process(self, pid: str):
+        return self.db_instance().kill_process(pid)
+
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:
             username = self.user

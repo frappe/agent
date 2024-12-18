@@ -379,6 +379,20 @@ WHERE
             "redundant_indexes": result[3]["output"],
         }
 
+    def fetch_process_list(self):
+        result = self._run_sql("SHOW FULL PROCESSLIST", as_dict=True)
+        return result[0]["output"] if len(result) > 0 else []
+
+    def kill_process(self, pid: str):
+        with contextlib.suppress(Exception):
+            """
+            The query can fail if the process is already killed.
+            Anyway we need to reload the process list after killing to verify if the process is killed.
+
+            We can safely ignore the exception
+            """
+            self._run_sql(f"KILL {pid}")
+
     # Private helper methods
     def _run_sql(  # noqa C901
         self, query: str, commit: bool = False, as_dict: bool = False, allow_all_stmt_types: bool = False

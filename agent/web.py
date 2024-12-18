@@ -616,6 +616,19 @@ def database_performance_report(bench, site):
     return jsonify(json.loads(json.dumps(result, cls=JSONEncoderForSQLQueryResult)))
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/database/processes", methods=["GET", "POST"])
+def database_process_list(bench, site):
+    return jsonify(Server().benches[bench].sites[site].fetch_database_process_list())
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/kill-process/<string:pid>", methods=["GET", "POST"]
+)
+def database_kill_process(bench, site, pid):
+    Server().benches[bench].sites[site].kill_database_process(pid)
+    return "killed"
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
 @validate_bench_and_site
 def create_database_user(bench, site):
