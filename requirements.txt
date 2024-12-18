@@ -24,3 +24,4 @@ wrapt==1.16.0
 docker==6.1.2
 filelock==3.13.1
 sentry-sdk[flask, rq]==2.1.1
+sql_metadata==2.15.0
