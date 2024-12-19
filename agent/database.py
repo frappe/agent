@@ -381,7 +381,20 @@ WHERE
 
     def fetch_process_list(self):
         result = self._run_sql("SHOW FULL PROCESSLIST", as_dict=True)
-        return result[0]["output"] if len(result) > 0 else []
+        if len(result) == 0:
+            return []
+        return [
+            {
+                "id": record["Id"],
+                "command": record["Command"],
+                "query": record["Info"],
+                "state": record["State"],
+                "time": record["Time"],
+                "db_user": record["User"],
+                "db_user_host": record["Host"].split(":")[0],
+            }
+            for record in result[0]["output"]
+        ]
 
     def kill_process(self, pid: str):
         with contextlib.suppress(Exception):
