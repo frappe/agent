@@ -110,7 +110,7 @@ class Devbox(Base):
     @step("Stop Devbox")
     def stop_devbox(self):
         try:
-            self.execute(command=f"docker stop {self.devbox_name}")
+            self.execute(f"docker stop {self.devbox_name}")
             return self.execute(f"docker rm -f {self.devbox_name}")
         except Exception:
             pass
