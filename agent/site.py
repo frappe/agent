@@ -887,11 +887,6 @@ print(">>>" + frappe.session.sid + "<<<")
             response["failed_query"] = db.last_executed_query
         return response
 
-    @job("Analyze Slow Queries")
-    def analyze_slow_queries_job(self, queries: list[dict], database_root_password: str):
-        return self.analyze_slow_queries(queries, database_root_password)
-
-    @step("Analyze Slow Queries")
     def analyze_slow_queries(self, queries: list[dict], database_root_password: str) -> list[dict]:
         """
         Args:
@@ -918,11 +913,11 @@ print(">>>" + frappe.session.sid + "<<<")
         database = self.db_instance(username="root", password=mariadb_root_password)
         return database.fetch_summarized_performance_report()
 
-    def fetch_database_process_list(self):
-        return self.db_instance().fetch_process_list()
+    def fetch_database_process_list(self, mariadb_root_password: str):
+        return self.db_instance(username="root", password=mariadb_root_password).fetch_process_list()
 
-    def kill_database_process(self, pid: str):
-        return self.db_instance().kill_process(pid)
+    def kill_database_process(self, pid: str, mariadb_root_password: str):
+        return self.db_instance(username="root", password=mariadb_root_password).kill_process(pid)
 
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:

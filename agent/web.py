@@ -591,15 +591,20 @@ def run_sql(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/database/analyze-slow-queries", methods=["GET"]
+    "/benches/<string:bench>/sites/<string:site>/database/analyze-slow-queries", methods=["POST"]
 )
 @validate_bench_and_site
 def analyze_slow_queries(bench: str, site: str):
     queries = request.json["queries"]
     mariadb_root_password = request.json["mariadb_root_password"]
 
-    job = Server().benches[bench].sites[site].analyze_slow_queries_job(queries, mariadb_root_password)
-    return {"job": job}
+    return Response(
+        json.dumps(
+            Server().benches[bench].sites[site].analyze_slow_queries(queries, mariadb_root_password),
+            cls=JSONEncoderForSQLQueryResult,
+        ),
+        mimetype="application/json",
+    )
 
 
 @application.route(
@@ -618,14 +623,18 @@ def database_performance_report(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/processes", methods=["GET", "POST"])
 def database_process_list(bench, site):
-    return jsonify(Server().benches[bench].sites[site].fetch_database_process_list())
+    data = request.json
+    return jsonify(
+        Server().benches[bench].sites[site].fetch_database_process_list(data["mariadb_root_password"])
+    )
 
 
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/database/kill-process/<string:pid>", methods=["GET", "POST"]
 )
 def database_kill_process(bench, site, pid):
-    Server().benches[bench].sites[site].kill_database_process(pid)
+    data = request.json
+    Server().benches[bench].sites[site].kill_database_process(pid, data["mariadb_root_password"])
     return "killed"
 
 

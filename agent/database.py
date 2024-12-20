@@ -385,7 +385,7 @@ WHERE
             return []
         return [
             {
-                "id": record["Id"],
+                "id": str(record["Id"]),
                 "command": record["Command"],
                 "query": record["Info"],
                 "state": record["State"],
@@ -394,10 +394,24 @@ WHERE
                 "db_user_host": record["Host"].split(":")[0],
             }
             for record in result[0]["output"]
+            if record["db"] == self.database_name
         ]
 
     def kill_process(self, pid: str):
         with contextlib.suppress(Exception):
+            processes = self.fetch_process_list()
+            """
+            It's important to validate whether the pid belongs to the current database
+            As we are running it as `root` user, it can be possible to kill processes from other databases
+            by forging the request
+            """
+            isFound = False
+            for process in processes:
+                if process.get("id") == pid:
+                    isFound = True
+                    break
+            if not isFound:
+                return
             """
             The query can fail if the process is already killed.
             Anyway we need to reload the process list after killing to verify if the process is killed.
