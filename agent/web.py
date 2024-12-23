@@ -1373,10 +1373,6 @@ def start_devbox(devbox_name: str):
         devbox_name=devbox_name,
         vnc_password=data.get("vnc_password"),
         codeserver_password=data.get("codeserver_password"),
-        websockify_port=data.get("websockify_port"),
-        vnc_port=data.get("vnc_port"),
-        codeserver_port=data.get("codeserver_port"),
-        browser_port=data.get("browser_port"),
     )
     return {"job": job}
 

@@ -819,16 +819,9 @@ class Server(Base):
         }
 
     @job("Start Devbox", priority="low")
-    def start_devbox(
-        self,
-        devbox_name,
-        vnc_password,
-        codeserver_password,
-        websockify_port,
-        vnc_port,
-        codeserver_port,
-        browser_port,
-    ):
+    def start_devbox(self, devbox_name, vnc_password, codeserver_password):
+        ports = self.find_available_ports(num_ports=4)
+        websockify_port, vnc_port, codeserver_port, browser_port = ports
         devbox = Devbox(
             devbox_name=devbox_name,
             server=self,
@@ -840,6 +833,14 @@ class Server(Base):
             browser_port=browser_port,
         )
         devbox.run_devbox()
+        return {
+            "message": {
+                "websockify_port": devbox.websockify_port,
+                "vnc_port": devbox.vnc_port,
+                "codeserver_port": devbox.codeserver_port,
+                "browser_port": devbox.browser_port,
+            }
+        }
 
     @job("Stop Devbox", priority="low")
     def stop_devbox(self, devbox_name):
