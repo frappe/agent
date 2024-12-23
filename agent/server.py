@@ -833,6 +833,7 @@ class Server(Base):
             browser_port=browser_port,
         )
         devbox.run_devbox()
+        devbox.setup_nginx()
         return {
             "message": {
                 "websockify_port": devbox.websockify_port,
