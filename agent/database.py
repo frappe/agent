@@ -338,7 +338,7 @@ FROM performance_schema.events_statements_summary_by_digest
     LIMIT 10;
 
 -- Top 10 queries with full table scans;
--- https://mariadb.com/docs/server/ref/mdb/sys/statements_with_full_table_scans/
+-- https://mariadb.com/docs/server/ref/mdb/sys/statements_with_full_table_scans/;
 SELECT
   sys.format_statement(
     t.DIGEST_TEXT
@@ -371,7 +371,7 @@ ORDER BY
 LIMIT 10;
 
 -- Unused Indexes;
--- https://mariadb.com/docs/server/ref/mdb/sys/schema_unused_indexes/
+-- https://mariadb.com/docs/server/ref/mdb/sys/schema_unused_indexes/;
 SELECT
     performance_schema.table_io_waits_summary_by_index_usage.OBJECT_NAME AS table_name,
     performance_schema.table_io_waits_summary_by_index_usage.INDEX_NAME AS index_name
@@ -385,11 +385,11 @@ WHERE
     performance_schema.table_io_waits_summary_by_index_usage.INDEX_NAME <> 'PRIMARY'
 ORDER BY
     performance_schema.table_io_waits_summary_by_index_usage.OBJECT_SCHEMA,
-    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_NAME
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_NAME;
 
 
 -- Redundant Indexes;
--- https://mariadb.com/docs/server/ref/mdb/sys/schema_redundant_indexes/
+-- https://mariadb.com/docs/server/ref/mdb/sys/schema_redundant_indexes/;
 SELECT
   redundant_keys.table_name AS table_name,
   redundant_keys.index_name AS redundant_index_name,
