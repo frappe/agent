@@ -387,6 +387,7 @@ ORDER BY
 
 -- Redundant Indexes;
 -- https://mariadb.com/docs/server/ref/mdb/sys/schema_redundant_indexes/;
+
 SELECT
   redundant_keys.table_name AS table_name,
   redundant_keys.index_name AS redundant_index_name,
@@ -395,8 +396,45 @@ SELECT
   dominant_keys.index_columns AS dominant_index_columns
 FROM
   (
-    sys.x$schema_flattened_keys redundant_keys
-    JOIN sys.x$schema_flattened_keys dominant_keys ON(
+    (
+        select
+            information_schema.STATISTICS.TABLE_SCHEMA AS table_schema,
+            information_schema.STATISTICS.TABLE_NAME AS table_name,
+            information_schema.STATISTICS.INDEX_NAME AS index_name,
+            max(information_schema.STATISTICS.NON_UNIQUE) AS non_unique,
+            max(if(information_schema.STATISTICS.SUB_PART is null,0,1)) AS subpart_exists,
+            group_concat(
+                information_schema.STATISTICS.COLUMN_NAME order by information_schema.STATISTICS.SEQ_IN_INDEX ASC separator ','
+            ) AS index_columns
+        from
+            INFORMATION_SCHEMA.STATISTICS
+        where
+            information_schema.STATISTICS.INDEX_TYPE = 'BTREE' and
+            information_schema.STATISTICS.TABLE_SCHEMA = '{self.database_name}'
+        group by
+            information_schema.STATISTICS.TABLE_NAME,
+            information_schema.STATISTICS.INDEX_NAME
+    ) redundant_keys
+    JOIN
+        (
+        select
+            information_schema.STATISTICS.TABLE_SCHEMA AS table_schema,
+            information_schema.STATISTICS.TABLE_NAME AS table_name,
+            information_schema.STATISTICS.INDEX_NAME AS index_name,
+            max(information_schema.STATISTICS.NON_UNIQUE) AS non_unique,
+            max(if(information_schema.STATISTICS.SUB_PART is null,0,1)) AS subpart_exists,
+            group_concat(
+                information_schema.STATISTICS.COLUMN_NAME order by information_schema.STATISTICS.SEQ_IN_INDEX ASC separator ','
+            ) AS index_columns
+        from
+            INFORMATION_SCHEMA.STATISTICS
+        where
+            information_schema.STATISTICS.INDEX_TYPE = 'BTREE' and
+            information_schema.STATISTICS.TABLE_SCHEMA = '{self.database_name}'
+        group by
+            information_schema.STATISTICS.TABLE_NAME,
+            information_schema.STATISTICS.INDEX_NAME
+    ) dominant_keys ON(
       redundant_keys.table_schema = dominant_keys.table_schema
       and redundant_keys.table_name = dominant_keys.table_name
     )
@@ -434,7 +472,7 @@ WHERE
     ) = 1
     and dominant_keys.non_unique = 0
   );
-"""
+"""  # noqa: E501
 
         result = self._run_sql(queries, as_dict=True)
         return {
