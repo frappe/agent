@@ -350,7 +350,7 @@ SELECT
 FROM
   performance_schema.events_statements_summary_by_digest as t
 WHERE
-  t.SCHEMA_NAME = '_d525b5aff830a158' and
+  t.SCHEMA_NAME = '{self.database_name}' and
   (
     t.SUM_NO_INDEX_USED > 0
     or t.SUM_NO_GOOD_INDEX_USED > 0
