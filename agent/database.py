@@ -340,10 +340,7 @@ FROM performance_schema.events_statements_summary_by_digest
 -- Top 10 queries with full table scans;
 -- https://mariadb.com/docs/server/ref/mdb/sys/statements_with_full_table_scans/;
 SELECT
-  sys.format_statement(
-    t.DIGEST_TEXT
-  ) AS query,
-  t.DIGEST_TEXT AS example,
+  t.DIGEST_TEXT AS query,
   t.COUNT_STAR AS calls,
   t.SUM_ROWS_SENT AS rows_sent,
   t.SUM_ROWS_EXAMINED AS rows_examined
