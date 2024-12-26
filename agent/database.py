@@ -277,7 +277,9 @@ class Database:
         result = self._run_sql(query=query, as_dict=True)
         return result[0]["output"]
 
-    def explain_queries(self, queries: list) -> list:
+    def explain_queries(self, queries: list) -> dict:
+        if len(queries) == 0:
+            return {}
         sql_query = ""
         for query in queries:
             sql_query += f"EXPLAIN {query};\n"
