@@ -338,39 +338,105 @@ FROM performance_schema.events_statements_summary_by_digest
     LIMIT 10;
 
 -- Top 10 queries with full table scans;
-SELECT t1.exec_count AS calls,
-       t1.rows_examined AS rows_examined,
-       t1.rows_sent AS rows_sent,
-       t1.query AS query,
-       t2.DIGEST_TEXT AS example
-FROM sys.statements_with_full_table_scans AS t1
-LEFT JOIN (
-    SELECT DIGEST, FIRST_VALUE(DIGEST_TEXT) OVER (PARTITION BY DIGEST ORDER BY RAND()) AS DIGEST_TEXT
-    FROM performance_schema.events_statements_summary_by_digest
-) AS t2 ON t1.digest = t2.DIGEST
-ORDER BY rows_examined DESC
+-- https://mariadb.com/docs/server/ref/mdb/sys/statements_with_full_table_scans/;
+SELECT
+  sys.format_statement(
+    t.DIGEST_TEXT
+  ) AS query,
+  t.DIGEST_TEXT AS example,
+  t.COUNT_STAR AS calls,
+  t.SUM_ROWS_SENT AS rows_sent,
+  t.SUM_ROWS_EXAMINED AS rows_examined
+FROM
+  performance_schema.events_statements_summary_by_digest as t
+WHERE
+  t.SCHEMA_NAME = '{self.database_name}' and
+  (
+    t.SUM_NO_INDEX_USED > 0
+    or t.SUM_NO_GOOD_INDEX_USED > 0
+  )
+  and t.DIGEST_TEXT not like 'SHOW%'
+ORDER BY
+  round(
+    ifnull(
+      t.SUM_NO_INDEX_USED / nullif(
+        t.COUNT_STAR,
+        0
+      ),
+      0
+    ) * 100,
+    0
+  ) DESC,
+  t.SUM_TIMER_WAIT DESC
 LIMIT 10;
 
 -- Unused Indexes;
+-- https://mariadb.com/docs/server/ref/mdb/sys/schema_unused_indexes/;
 SELECT
-    index_name,
-    object_name AS table_name
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_NAME AS table_name,
+    performance_schema.table_io_waits_summary_by_index_usage.INDEX_NAME AS index_name
 FROM
-    sys.schema_unused_indexes
+    performance_schema.table_io_waits_summary_by_index_usage
 WHERE
-    object_schema='{self.database_name}';
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_SCHEMA = '{self.database_name}' and
+    performance_schema.table_io_waits_summary_by_index_usage.INDEX_NAME is not null and
+    performance_schema.table_io_waits_summary_by_index_usage.COUNT_STAR = 0 and
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_SCHEMA <> 'mysql' and
+    performance_schema.table_io_waits_summary_by_index_usage.INDEX_NAME <> 'PRIMARY'
+ORDER BY
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_SCHEMA,
+    performance_schema.table_io_waits_summary_by_index_usage.OBJECT_NAME;
+
 
 -- Redundant Indexes;
+-- https://mariadb.com/docs/server/ref/mdb/sys/schema_redundant_indexes/;
 SELECT
-    table_name,
-    redundant_index_name,
-    redundant_index_columns,
-    dominant_index_name,
-    dominant_index_columns
+  redundant_keys.table_name AS table_name,
+  redundant_keys.index_name AS redundant_index_name,
+  redundant_keys.index_columns AS redundant_index_columns,
+  dominant_keys.index_name AS dominant_index_name,
+  dominant_keys.index_columns AS dominant_index_columns
 FROM
-    sys.schema_redundant_indexes
+  (
+    sys.x$schema_flattened_keys redundant_keys
+    JOIN sys.x$schema_flattened_keys dominant_keys ON(
+      redundant_keys.table_schema = dominant_keys.table_schema
+      and redundant_keys.table_name = dominant_keys.table_name
+    )
+  )
 WHERE
-    table_schema='{self.database_name}';
+  redundant_keys.table_schema = '{self.database_name}' and
+  redundant_keys.index_name <> dominant_keys.index_name
+  and (
+    redundant_keys.index_columns = dominant_keys.index_columns
+    and (
+      redundant_keys.non_unique > dominant_keys.non_unique
+      or redundant_keys.non_unique = dominant_keys.non_unique
+      and if(
+        redundant_keys.index_name = 'PRIMARY',
+        '', redundant_keys.index_name
+      ) > if(
+        dominant_keys.index_name = 'PRIMARY',
+        '', dominant_keys.index_name
+      )
+    )
+    or locate(
+      concat(
+        redundant_keys.index_columns,
+        ','
+      ),
+      dominant_keys.index_columns
+    ) = 1
+    and redundant_keys.non_unique = 1
+    or locate(
+      concat(
+        dominant_keys.index_columns,
+        ','
+      ),
+      redundant_keys.index_columns
+    ) = 1
+    and dominant_keys.non_unique = 0
+  );
 """
 
         result = self._run_sql(queries, as_dict=True)
