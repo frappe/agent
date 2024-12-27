@@ -178,6 +178,7 @@ def build_image():
         no_cache=data.get("no_cache"),
         no_push=data.get("no_push"),
         registry=data.get("registry"),
+        platform=data.get("platform", "linux/amd64"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}
@@ -550,14 +551,31 @@ def backup_site(bench, site):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/schema", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/schema",
+    methods=["POST"],
+)
 @validate_bench_and_site
 def fetch_database_table_schema(bench, site):
-    job = Server().benches[bench].sites[site].fetch_database_table_schema()
+    data = request.json or {}
+    include_table_size = data.get("include_table_size", False)
+    include_index_info = data.get("include_index_info", False)
+    job = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .fetch_database_table_schema(
+            include_table_size=include_table_size,
+            include_index_info=include_index_info,
+        )
+    )
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/sites/<string:site>/database/query/execute", methods=["POST"])
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/query/execute",
+    methods=["POST"],
+)
 @validate_bench_and_site
 def run_sql(bench, site):
     query = request.json.get("query")
@@ -570,6 +588,54 @@ def run_sql(bench, site):
         ),
         mimetype="application/json",
     )
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/analyze-slow-queries", methods=["POST"]
+)
+@validate_bench_and_site
+def analyze_slow_queries(bench: str, site: str):
+    queries = request.json["queries"]
+    mariadb_root_password = request.json["mariadb_root_password"]
+
+    return Response(
+        json.dumps(
+            Server().benches[bench].sites[site].analyze_slow_queries(queries, mariadb_root_password),
+            cls=JSONEncoderForSQLQueryResult,
+        ),
+        mimetype="application/json",
+    )
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/performance-report", methods=["POST"]
+)
+def database_performance_report(bench, site):
+    data = request.json
+    result = (
+        Server()
+        .benches[bench]
+        .sites[site]
+        .fetch_summarized_database_performance_report(data["mariadb_root_password"])
+    )
+    return jsonify(json.loads(json.dumps(result, cls=JSONEncoderForSQLQueryResult)))
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/database/processes", methods=["GET", "POST"])
+def database_process_list(bench, site):
+    data = request.json
+    return jsonify(
+        Server().benches[bench].sites[site].fetch_database_process_list(data["mariadb_root_password"])
+    )
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/database/kill-process/<string:pid>", methods=["GET", "POST"]
+)
+def database_kill_process(bench, site, pid):
+    data = request.json
+    Server().benches[bench].sites[site].kill_database_process(pid, data["mariadb_root_password"])
+    return "killed"
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
@@ -586,7 +652,8 @@ def create_database_user(bench, site):
 
 
 @application.route(
-    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>", methods=["DELETE"]
+    "/benches/<string:bench>/sites/<string:site>/database/users/<string:db_user>",
+    methods=["DELETE"],
 )
 @validate_bench_and_site
 def remove_database_user(bench, site, db_user):
@@ -607,7 +674,10 @@ def update_database_permissions(bench, site, db_user):
         .benches[bench]
         .sites[site]
         .modify_database_user_permissions_job(
-            db_user, data["mode"], data.get("permissions", {}), data["mariadb_root_password"]
+            db_user,
+            data["mode"],
+            data.get("permissions", {}),
+            data["mariadb_root_password"],
         )
     )
     return {"job": job}
@@ -996,13 +1066,15 @@ def get_database_deadlocks():
     return jsonify(DatabaseServer().get_deadlocks(**data))
 
 
+# TODO can be removed
 @application.route("/database/column-stats", methods=["POST"])
 def fetch_column_statistics():
     data = request.json
-    job = DatabaseServer().fetch_column_stats(**data)
+    job = DatabaseServer().fetch_column_stats_job(**data)
     return {"job": job}
 
 
+# TODO can be removed
 @application.route("/database/explain", methods=["POST"])
 def explain():
     data = request.json
@@ -1319,7 +1391,10 @@ def site_not_found(e):
 
 @application.route("/docker_cache_utils/<string:method>", methods=["POST"])
 def docker_cache_utils(method: str):
-    from agent.docker_cache_utils import get_cached_apps, run_command_in_docker_cache
+    from agent.docker_cache_utils import (
+        get_cached_apps,
+        run_command_in_docker_cache,
+    )
 
     if method == "run_command_in_docker_cache":
         return run_command_in_docker_cache(**request.json)

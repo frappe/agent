@@ -13,6 +13,7 @@ import requests
 
 from agent.base import AgentException, Base
 from agent.database import Database
+from agent.database_optimizer import OptimizeDatabaseQueries
 from agent.job import job, step
 from agent.utils import b2mb, compute_file_hash, get_size
 
@@ -662,7 +663,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
         output = self.bench_execute("console", input=code)["output"]
         sid = re.search(r">>>(.*)<<<", output).group(1)
-        if not sid or sid == user:  # case when it fails
+        if not sid or sid == user or sid == "Guest":  # case when it fails
             output = self.bench_execute(f"browse --user {user}")["output"]
             sid = re.search(r"\?sid=([a-z0-9]*)", output).group(1)
         return sid
@@ -852,75 +853,31 @@ print(">>>" + frappe.session.sid + "<<<")
             return []
 
     @job("Fetch Database Table Schema")
-    def fetch_database_table_schema(self):
-        return self._fetch_database_table_schema()
+    def fetch_database_table_schema(self, include_table_size: bool = True, include_index_info: bool = True):
+        database = self.db_instance()
+        tables = {}
+        table_schemas = self._fetch_database_table_schema(database, include_index_info=include_index_info)
+        for table_name in table_schemas:
+            tables[table_name] = {
+                "columns": table_schemas[table_name],
+            }
+
+        if include_table_size:
+            table_sizes = self._fetch_database_table_sizes(database)
+            for table_name in table_sizes:
+                if table_name not in tables:
+                    continue
+                tables[table_name]["size"] = table_sizes[table_name]
+
+        return tables
 
     @step("Fetch Database Table Schema")
-    def _fetch_database_table_schema(self):
-        index_info = self.get_database_table_indexes()
-        command = f"""SELECT
-                            TABLE_NAME AS `table`,
-                            COLUMN_NAME AS `column`,
-                            DATA_TYPE AS `data_type`,
-                            IS_NULLABLE AS `is_nullable`,
-                            COLUMN_DEFAULT AS `default`
-                        FROM
-                            INFORMATION_SCHEMA.COLUMNS
-                        WHERE
-                            TABLE_SCHEMA='{self.database}';
-                    """
-        command = quote(command)
-        data = self.execute(
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
-        ).get("output")
-        data = data.split("\n")
-        data = [line.split("\t") for line in data]
-        tables = {}  # <table_name>: [<column_1_info>, <column_2_info>, ...]
-        for row in data:
-            if len(row) != 5:
-                continue
-            table = row[0]
-            if table not in tables:
-                tables[table] = []
-            tables[table].append(
-                {
-                    "column": row[1],
-                    "data_type": row[2],
-                    "is_nullable": row[3] == "YES",
-                    "default": row[4],
-                    "indexes": index_info.get(table, {}).get(row[1], []),
-                }
-            )
-        return tables
+    def _fetch_database_table_schema(self, database: Database, include_index_info: bool = True):
+        return database.fetch_database_table_schema(include_index_info=include_index_info)
 
-    def get_database_table_indexes(self):
-        command = f"""
-        SELECT
-            TABLE_NAME AS `table`,
-            COLUMN_NAME AS `column`,
-            INDEX_NAME AS `index`
-        FROM
-            INFORMATION_SCHEMA.STATISTICS
-        WHERE
-            TABLE_SCHEMA='{self.database}'
-        """
-        command = quote(command)
-        data = self.execute(
-            f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e {command} --batch"
-        ).get("output")
-        data = data.split("\n")
-        data = [line.split("\t") for line in data]
-        tables = {}  # <table_name>: { <column_name> : [<index1>, <index2>, ...] }
-        for row in data:
-            if len(row) != 3:
-                continue
-            table = row[0]
-            if table not in tables:
-                tables[table] = {}
-            if row[1] not in tables[table]:
-                tables[table][row[1]] = []
-            tables[table][row[1]].append(row[2])
-        return tables
+    @step("Fetch Database Table Sizes")
+    def _fetch_database_table_sizes(self, database: Database):
+        return database.fetch_database_table_sizes()
 
     def run_sql_query(self, query: str, commit: bool = False, as_dict: bool = False):
         db = self.db_instance()
@@ -929,6 +886,38 @@ print(">>>" + frappe.session.sid + "<<<")
         if not success and hasattr(db, "last_executed_query"):
             response["failed_query"] = db.last_executed_query
         return response
+
+    def analyze_slow_queries(self, queries: list[dict], database_root_password: str) -> list[dict]:
+        """
+        Args:
+            queries (list[dict]): List of queries to analyze
+                {
+                    "example": "<complete query>",
+                    "normalized": "<normalized query>",
+                }
+        """
+        example_queries = [query["example"] for query in queries]
+        optimizer = OptimizeDatabaseQueries(self, example_queries, database_root_password)
+        analysis = optimizer.analyze()
+        analysis_summary = {}  # map[query -> list[index_info_dict]
+        for query, indexes in analysis.items():
+            analysis_summary[query] = [index.to_dict() for index in indexes]
+
+        result = []  # list[{example, normalized, suggested_indexes}]
+        for query in queries:
+            query["suggested_indexes"] = analysis_summary.get(query["example"], [])
+            result.append(query)
+        return result
+
+    def fetch_summarized_database_performance_report(self, mariadb_root_password: str):
+        database = self.db_instance(username="root", password=mariadb_root_password)
+        return database.fetch_summarized_performance_report()
+
+    def fetch_database_process_list(self, mariadb_root_password: str):
+        return self.db_instance(username="root", password=mariadb_root_password).fetch_process_list()
+
+    def kill_database_process(self, pid: str, mariadb_root_password: str):
+        return self.db_instance(username="root", password=mariadb_root_password).kill_process(pid)
 
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:
