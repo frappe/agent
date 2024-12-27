@@ -27,9 +27,14 @@ def cstr(data: str | None) -> str:
     return str(data)
 
 
-def cint(data: int | None) -> int:
+def cint(data: int | str | float | None) -> int:
     if data is None:
         return 0
+    if isinstance(data, str):
+        if len(data) == 0:
+            return 0
+        data = data.split(".")[0]  # remove decimals
+        data = data.replace(",", "")
     return int(data)
 
 
