@@ -13,7 +13,6 @@ import requests
 
 from agent.base import AgentException, Base
 from agent.database import Database
-from agent.database_optimizer import OptimizeDatabaseQueries
 from agent.job import job, step
 from agent.utils import b2mb, compute_file_hash, get_size
 
@@ -893,6 +892,8 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @step("Analyze Slow Queries")
     def analyze_slow_queries(self, queries: list[dict], database_root_password: str) -> list[dict]:
+        from agent.database_optimizer import OptimizeDatabaseQueries
+
         """
         Args:
             queries (list[dict]): List of queries to analyze
