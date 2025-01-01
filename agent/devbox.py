@@ -15,7 +15,7 @@ class Devbox(Base):
         self,
         devbox_name: str,
         server: Server,
-        devbox_image_reference: str,
+        devbox_image_reference: str | None = None,
         vnc_password: str | None = None,
         codeserver_password: str | None = None,
         websockify_port: int | None = None,
