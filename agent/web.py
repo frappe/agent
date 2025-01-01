@@ -1435,8 +1435,12 @@ def new_devbox():
     devbox_name = data.get("devbox_name")
     vnc_password = data.get("vnc_password")
     codeserver_password = data.get("codeserver_password")
+    devbox_image_reference = data.get("devbox_image_reference")
     job = Server().new_devbox(
-        devbox_name=devbox_name, vnc_password=vnc_password, codeserver_password=codeserver_password
+        devbox_name=devbox_name,
+        vnc_password=vnc_password,
+        codeserver_password=codeserver_password,
+        devbox_image_reference=devbox_image_reference,
     )
     return {"job": job}
 
@@ -1448,6 +1452,7 @@ def start_devbox(devbox_name: str):
         devbox_name=devbox_name,
         vnc_password=data.get("vnc_password"),
         codeserver_password=data.get("codeserver_password"),
+        devbox_image_reference=data.get("devbox_image_reference"),
     )
     return {"job": job}
 

@@ -791,7 +791,7 @@ class Server(Base):
         os.mkdir(devboxes_directory)
 
     @job("New Devbox", priority="low")
-    def new_devbox(self, devbox_name, vnc_password, codeserver_password):
+    def new_devbox(self, devbox_name, vnc_password, codeserver_password, devbox_image_reference):
         ports = self.find_available_ports(num_ports=4)
         websockify_port, vnc_port, codeserver_port, browser_port = ports
         self.devbox_init(devbox_name=devbox_name)
@@ -804,6 +804,7 @@ class Server(Base):
             vnc_port=vnc_port,
             codeserver_port=codeserver_port,
             browser_port=browser_port,
+            devbox_image_reference=devbox_image_reference,
         )
         devbox.create_devbox_database_volume()
         devbox.create_devbox_home_volume()
@@ -819,7 +820,7 @@ class Server(Base):
         }
 
     @job("Start Devbox", priority="low")
-    def start_devbox(self, devbox_name, vnc_password, codeserver_password):
+    def start_devbox(self, devbox_name, vnc_password, codeserver_password, devbox_image_reference):
         ports = self.find_available_ports(num_ports=4)
         websockify_port, vnc_port, codeserver_port, browser_port = ports
         devbox = Devbox(
@@ -831,6 +832,7 @@ class Server(Base):
             vnc_port=vnc_port,
             codeserver_port=codeserver_port,
             browser_port=browser_port,
+            devbox_image_reference=devbox_image_reference,
         )
         devbox.run_devbox()
         devbox.setup_nginx()

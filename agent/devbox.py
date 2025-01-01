@@ -15,6 +15,7 @@ class Devbox(Base):
         self,
         devbox_name: str,
         server: Server,
+        devbox_image_reference: str,
         vnc_password: str | None = None,
         codeserver_password: str | None = None,
         websockify_port: int | None = None,
@@ -31,6 +32,7 @@ class Devbox(Base):
         self.browser_port = browser_port
         self.vnc_password = vnc_password
         self.codeserver_password = codeserver_password
+        self.devbox_image_reference = devbox_image_reference
         self.job = None
         self.step = None
         self.status = None
@@ -103,7 +105,7 @@ class Devbox(Base):
             f'-e PASSWORD="{self.codeserver_password}" '
             f'-e VNC_PASSWORD="{self.vnc_password}" '
             f"-v {self.devbox_name}_home:/home/frappe "
-            "arunmathaisk/devbox-image:latest"
+            f"{self.devbox_image_reference}"
         )
         return self.execute(command)
 
