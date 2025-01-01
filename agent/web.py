@@ -598,13 +598,8 @@ def analyze_slow_queries(bench: str, site: str):
     queries = request.json["queries"]
     mariadb_root_password = request.json["mariadb_root_password"]
 
-    return Response(
-        json.dumps(
-            Server().benches[bench].sites[site].analyze_slow_queries(queries, mariadb_root_password),
-            cls=JSONEncoderForSQLQueryResult,
-        ),
-        mimetype="application/json",
-    )
+    job = Server().benches[bench].sites[site].analyze_slow_queries_job(queries, mariadb_root_password)
+    return {"job": job}
 
 
 @application.route(

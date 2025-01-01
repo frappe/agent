@@ -13,7 +13,6 @@ import requests
 
 from agent.base import AgentException, Base
 from agent.database import Database
-from agent.database_optimizer import OptimizeDatabaseQueries
 from agent.job import job, step
 from agent.utils import b2mb, compute_file_hash, get_size
 
@@ -887,7 +886,14 @@ print(">>>" + frappe.session.sid + "<<<")
             response["failed_query"] = db.last_executed_query
         return response
 
+    @job("Analyze Slow Queries")
+    def analyze_slow_queries_job(self, queries: list[dict], database_root_password: str) -> list[dict]:
+        return self.analyze_slow_queries(queries, database_root_password)
+
+    @step("Analyze Slow Queries")
     def analyze_slow_queries(self, queries: list[dict], database_root_password: str) -> list[dict]:
+        from agent.database_optimizer import OptimizeDatabaseQueries
+
         """
         Args:
             queries (list[dict]): List of queries to analyze
@@ -907,7 +913,9 @@ print(">>>" + frappe.session.sid + "<<<")
         for query in queries:
             query["suggested_indexes"] = analysis_summary.get(query["example"], [])
             result.append(query)
-        return result
+        return {
+            "result": result,
+        }
 
     def fetch_summarized_database_performance_report(self, mariadb_root_password: str):
         database = self.db_instance(username="root", password=mariadb_root_password)
