@@ -1344,7 +1344,7 @@ def all_exception_handler(error):
     except ImportError:
         pass
     if isinstance(error, AgentException):
-        return {"error": error.data}, 500
+        return json.loads(json.dumps(error.data, default=str)), 500
     return {"error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()}, 500
 
 
