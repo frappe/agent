@@ -13,6 +13,7 @@ from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 
+from agent.base import AgentException
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_server import DatabaseServer
@@ -1342,6 +1343,8 @@ def all_exception_handler(error):
         capture_exception(error)
     except ImportError:
         pass
+    if isinstance(error, AgentException):
+        return {"error": error.data}, 500
     return {"error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()}, 500
 
 
