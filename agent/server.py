@@ -4,7 +4,6 @@ import json
 import os
 import platform
 import shutil
-import socket
 import tempfile
 import time
 from contextlib import suppress
@@ -16,7 +15,6 @@ from peewee import MySQLDatabase
 
 from agent.base import AgentException, Base
 from agent.bench import Bench
-from agent.devbox import Devbox
 from agent.exceptions import BenchNotExistsException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
@@ -29,7 +27,6 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
-        self.devboxes_directory = self.config["devboxes_directory"]
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
@@ -766,107 +763,3 @@ class Server(Base):
             if "*" in host:
                 wildcards.append(host.strip("*."))
         return wildcards
-
-    def find_available_ports(self, num_ports, starting_port=49152, ending_port=65535):
-        reserved_ports = [22, 80, 443, 3306]  # List of reserved ports
-
-        available_ports = []
-        current_port = starting_port
-
-        while len(available_ports) < num_ports and current_port <= ending_port:
-            if current_port not in reserved_ports:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    try:
-                        s.bind(("0.0.0.0", current_port))
-                        available_ports.append(current_port)
-                    except Exception:
-                        pass
-            current_port += 1
-
-        return available_ports
-
-    @step("Initialize Devbox")
-    def devbox_init(self, devbox_name):
-        devboxes_directory = os.path.join(self.devboxes_directory, devbox_name)
-        os.mkdir(devboxes_directory)
-
-    @job("New Devbox", priority="low")
-    def new_devbox(self, devbox_name, vnc_password, codeserver_password, devbox_image_reference):
-        ports = self.find_available_ports(num_ports=4)
-        websockify_port, vnc_port, codeserver_port, browser_port = ports
-        self.devbox_init(devbox_name=devbox_name)
-        devbox = Devbox(
-            devbox_name=devbox_name,
-            server=self,
-            vnc_password=vnc_password,
-            codeserver_password=codeserver_password,
-            websockify_port=websockify_port,
-            vnc_port=vnc_port,
-            codeserver_port=codeserver_port,
-            browser_port=browser_port,
-            devbox_image_reference=devbox_image_reference,
-        )
-        devbox.create_devbox_database_volume()
-        devbox.create_devbox_home_volume()
-        devbox.run_devbox()
-        devbox.setup_nginx()
-        return {
-            "message": {
-                "websockify_port": devbox.websockify_port,
-                "vnc_port": devbox.vnc_port,
-                "codeserver_port": devbox.codeserver_port,
-                "browser_port": devbox.browser_port,
-            }
-        }
-
-    @job("Start Devbox", priority="low")
-    def start_devbox(self, devbox_name, vnc_password, codeserver_password, devbox_image_reference):
-        ports = self.find_available_ports(num_ports=4)
-        websockify_port, vnc_port, codeserver_port, browser_port = ports
-        devbox = Devbox(
-            devbox_name=devbox_name,
-            server=self,
-            vnc_password=vnc_password,
-            codeserver_password=codeserver_password,
-            websockify_port=websockify_port,
-            vnc_port=vnc_port,
-            codeserver_port=codeserver_port,
-            browser_port=browser_port,
-            devbox_image_reference=devbox_image_reference,
-        )
-        devbox.run_devbox()
-        devbox.setup_nginx()
-        return {
-            "message": {
-                "websockify_port": devbox.websockify_port,
-                "vnc_port": devbox.vnc_port,
-                "codeserver_port": devbox.codeserver_port,
-                "browser_port": devbox.browser_port,
-            }
-        }
-
-    @job("Stop Devbox", priority="low")
-    def stop_devbox(self, devbox_name):
-        devbox = Devbox(devbox_name=devbox_name, server=self)
-        devbox.stop_devbox()
-
-    def get_devbox_status(self, devbox_name):
-        devbox = Devbox(devbox_name=devbox_name, server=self)
-        return devbox.get_devbox_status()
-
-    def get_devbox_docker_volumes_size(self, devbox_name):
-        devbox = Devbox(devbox_name=devbox_name, server=self)
-        return devbox.get_devbox_docker_volumes_size()
-
-    @step("Delete Devbox Directory")
-    def destroy_devbox_directory(self, devbox_name):
-        devboxes_directory = os.path.join(self.devboxes_directory, devbox_name)
-        shutil.rmtree(devboxes_directory)
-
-    @job("Destroy Devbox", priority="low")
-    def destroy_devbox(self, devbox_name):
-        devbox = Devbox(devbox_name=devbox_name, server=self)
-        devbox.stop_devbox()
-        devbox.delete_devbox_database_volume()
-        devbox.delete_devbox_home_volume()
-        self.destroy_devbox_directory(devbox_name=devbox_name)
