@@ -63,7 +63,6 @@ def ping_server(password: str):
 def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     config = {
         "benches_directory": f"/home/{user}/benches",
-        "devboxes_directory": f"/home/{user}/devboxes",
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
