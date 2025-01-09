@@ -15,6 +15,7 @@ from playhouse.shortcuts import model_to_dict
 
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
+from agent.database_physical_backup import DatabasePhysicalBackup
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 from agent.job import JobModel, connection
@@ -1005,6 +1006,18 @@ def update_monitor_rules():
     Monitor().update_rules(data["rules"])
     Monitor().update_routes(data["routes"])
     return {}
+
+
+@application.route("/database/physical-backup", methods=["POST"])
+def physical_backup_database():
+    data = request.json
+    job = DatabasePhysicalBackup(
+        databases=data["databases"],
+        db_user="root",
+        db_password=data["mariadb_root_password"],
+        snapshot_trigger_url=data["snapshot_trigger_url"],
+    ).backup_job()
+    return {"job": job}
 
 
 @application.route("/database/binary/logs")
