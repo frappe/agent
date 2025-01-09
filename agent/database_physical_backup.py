@@ -50,9 +50,17 @@ class DatabasePhysicalBackup(DatabaseServer):
         self.flush_changes_to_disk()
         self.validate_exportable_files()
         self.export_table_schemas()
-        self.export_collected_metadata()
         self.create_snapshot()  # Blocking call
         self.unlock_all_tables()
+        # Return the data [Required for restoring the backup]
+        data = {}
+        for db_name in self.databases:
+            data[db_name] = {
+                "innodb_tables": self.innodb_tables[db_name],
+                "myisam_tables": self.myisam_tables[db_name],
+                "table_schema": self.table_schemas[db_name],
+            }
+        return data
 
     @step("Fetch Database Tables Information")
     def fetch_table_info(self):
@@ -139,17 +147,6 @@ class DatabasePhysicalBackup(DatabaseServer):
             It's important to export the schema only after taking the read lock.
             """
             self.table_schemas[db_name] = self.export_table_schema(db_name)
-
-    @step("Export Collected Metadata")
-    def export_collected_metadata(self):
-        data = {}
-        for db_name in self.databases:
-            data[db_name] = {
-                "innodb_tables": self.innodb_tables[db_name],
-                "myisam_tables": self.myisam_tables[db_name],
-                "table_schemas": self.table_schemas[db_name],
-            }
-        return data
 
     @step("Create Database Snapshot")
     def create_snapshot(self):
