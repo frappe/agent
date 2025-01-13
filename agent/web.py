@@ -16,6 +16,7 @@ from playhouse.shortcuts import model_to_dict
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
+from agent.database_physical_restore import DatabasePhysicalRestore
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
 from agent.job import JobModel, connection
@@ -1017,6 +1018,23 @@ def physical_backup_database():
         db_password=data["mariadb_root_password"],
         snapshot_trigger_url=data["snapshot_trigger_url"],
     ).backup_job()
+    return {"job": job}
+
+
+@application.route("/database/physical-restore", methods=["POST"])
+def physical_restore_database():
+    data = request.json
+    job = DatabasePhysicalRestore(
+        backup_db=data["backup_db"],
+        target_db=data["target_db"],
+        target_db_root_password=data["target_db_root_password"],
+        target_db_port=3306,
+        target_db_host="localhost",
+        innodb_tables=data.get("innodb_tables", []),
+        myisam_tables=data.get("myisam_tables", []),
+        table_schema=data.get("table_schema", ""),
+        backup_db_base_directory=data.get("backup_db_base_directory", ""),
+    ).restore_job()
     return {"job": job}
 
 
