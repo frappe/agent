@@ -29,7 +29,7 @@ class Server(Base):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
-        self.devboxes_directory = self.config["devboxes_directory"]
+        self.devboxes_directory = self.config.get("devboxes_directory")
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
