@@ -65,8 +65,6 @@ def get_size(folder):
 
 def cint(x):
     """Convert to integer"""
-    if x is None:
-        return 0
     try:
         num = int(float(x))
     except Exception:
