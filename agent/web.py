@@ -630,7 +630,7 @@ def database_process_list(bench, site):
 def database_kill_process(bench, site, pid):
     data = request.json
     Server().benches[bench].sites[site].kill_database_process(pid, data["mariadb_root_password"])
-    return "killed"
+    return {}
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/database/users", methods=["POST"])
