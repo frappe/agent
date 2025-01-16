@@ -13,12 +13,14 @@ from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 from rq.exceptions import NoSuchJobError
-from rq.job import Job, JobStatus
+from rq.job import Job as RQJob
+from rq.job import JobStatus
 
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
+from agent.job import Job as AgentJob
 from agent.job import JobModel, connection
 from agent.minio import Minio
 from agent.monitor import Monitor
@@ -1138,7 +1140,7 @@ def get_status_from_rq(job, redis):
     }
     status = None
     try:
-        rq_status = Job.fetch(str(job["id"]), connection=redis).get_status()
+        rq_status = RQJob.fetch(str(job["id"]), connection=redis).get_status()
         status = RQ_STATUS_MAP.get(rq_status)
     except NoSuchJobError:
         # Handle jobs enqueued before we started setting job_id
@@ -1192,6 +1194,14 @@ def jobs(id=None, ids=None, status=None):
     else:
         data = get_jobs(limit=100)
 
+    return jsonify(json.loads(json.dumps(data, default=str)))
+
+
+@application.route("/jobs/<int:id>/cancel", methods=["GET", "DELETE"])
+def cancel_job(id=None):
+    job = AgentJob(id=id)
+    job.cancel_or_stop()
+    data = to_dict(job.model)
     return jsonify(json.loads(json.dumps(data, default=str)))
 
 
