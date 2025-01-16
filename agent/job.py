@@ -172,6 +172,7 @@ def job(name: str, priority="default"):
             kwargs=kwargs,
             timeout=4 * 3600,
             result_ttl=24 * 3600,
+            job_id=str(instance.job_record.model.id),
         )
         return instance.job_record.model.id
 
