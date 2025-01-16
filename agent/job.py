@@ -19,6 +19,8 @@ from peewee import (
 )
 from redis import Redis
 from rq import Queue, get_current_job
+from rq.command import send_stop_job_command
+from rq.job import Job as RQJob
 
 if TYPE_CHECKING:
     from agent.base import Base
@@ -99,6 +101,13 @@ class Job(Action):
     if TYPE_CHECKING:
         model: JobModel | None
 
+    def __init__(self, id=None):
+        super().__init__()
+        if id:
+            self.model = JobModel.get(JobModel.id == id)
+            self.redis = connection()
+            self.job = RQJob.fetch(str(self.model.id), connection=self.redis)
+
     @save
     def start(self):
         self.model.start = datetime.datetime.now()
@@ -121,6 +130,25 @@ class Job(Action):
             indent=4,
         )
         self.model.agent_job_id = agent_job_id
+
+    @save
+    def cancel(self):
+        self.job.cancel()
+        self.model.status = "Failure"
+
+    @save
+    def stop(self):
+        send_stop_job_command(self.redis, self.job.get_id())
+        self.job.refresh()
+        self.model.data = json.dumps(self.job.to_dict(), default=str)
+        self.model.status = "Failure"
+        self.end()
+
+    def cancel_or_stop(self):
+        if self.job.is_started:
+            self.stop()
+        else:
+            self.cancel()
 
 
 def step(name):
