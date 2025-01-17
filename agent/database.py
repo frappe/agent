@@ -154,6 +154,8 @@ class Database:
         self._run_sql(queries_str, commit=True, allow_all_stmt_types=True)
 
     def fetch_database_table_sizes(self) -> dict:
+        from agent.utils import cint
+
         data = self._run_sql(
             f"SELECT table_name, data_length, index_length FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA"
             f"='{self.database_name}'",
@@ -165,12 +167,12 @@ class Database:
         tables = {}
         for d in data:
             tables[d["table_name"]] = {
-                "data_length": int(d["data_length"]),
-                "index_length": int(d["index_length"]),
-                "total_size": int(d["data_length"]) + int(d["index_length"]),
+                "data_length": cint(d["data_length"]),
+                "index_length": cint(d["index_length"]),
+                "total_size": cint(d["data_length"]) + cint(d["index_length"]),
             }
-            d["data_length"] = int(d["data_length"])
-            d["index_length"] = int(d["index_length"])
+            d["data_length"] = cint(d["data_length"])
+            d["index_length"] = cint(d["index_length"])
             d["total_size"] = d["data_length"] + d["index_length"]
         return tables
 
