@@ -16,7 +16,9 @@ class DatabasePhysicalBackup(DatabaseServer):
         databases: list[str],
         db_user: str,
         db_password: str,
+        site_backup_name: str,
         snapshot_trigger_url: str,
+        snapshot_request_key: str,
         db_host: str = "localhost",
         db_port: int = 3306,
         db_base_path: str = "/var/lib/mysql",
@@ -28,7 +30,9 @@ class DatabasePhysicalBackup(DatabaseServer):
         self._db_tables_locked: dict[str, bool] = {db: False for db in databases}
 
         # variables
+        self.site_backup_name = site_backup_name
         self.snapshot_trigger_url = snapshot_trigger_url
+        self.snapshot_request_key = snapshot_request_key
         self.databases = databases
         self.db_user = db_user
         self.db_password = db_password
@@ -153,7 +157,13 @@ class DatabasePhysicalBackup(DatabaseServer):
         """
         Trigger the snapshot creation
         """
-        response = requests.post(self.snapshot_trigger_url)
+        response = requests.post(
+            self.snapshot_trigger_url,
+            json={
+                "name": self.site_backup_name,
+                "key": self.snapshot_request_key,
+            },
+        )
         response.raise_for_status()
 
     @step("Unlock Tables")
