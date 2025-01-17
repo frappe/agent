@@ -6,11 +6,11 @@ import subprocess
 import peewee
 import requests
 
-from agent.base import Base
+from agent.database_server import DatabaseServer
 from agent.job import job, step
 
 
-class DatabasePhysicalBackup(Base):
+class DatabasePhysicalBackup(DatabaseServer):
     def __init__(
         self,
         databases: list[str],
@@ -46,6 +46,8 @@ class DatabasePhysicalBackup(Base):
         self.innodb_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.myisam_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.table_schemas: dict[str, str] = {}
+
+        super().__init__()
 
     @job("Physical Backup Database", priority="low")
     def backup_job(self):
