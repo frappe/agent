@@ -6,11 +6,11 @@ import subprocess
 import peewee
 import requests
 
-from agent.database_server import DatabaseServer
+from agent.base import Base
 from agent.job import job, step
 
 
-class DatabasePhysicalBackup(DatabaseServer):
+class DatabasePhysicalBackup(Base):
     def __init__(
         self,
         databases: list[str],
