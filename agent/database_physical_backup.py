@@ -105,6 +105,7 @@ class DatabasePhysicalBackup(DatabaseServer):
                 - Will not allow to change table structure (ALTER TABLE, DROP TABLE nothing will work)
             """
             tables = self.innodb_tables[db_name] + self.myisam_tables[db_name]
+            tables = [f"`{table}`" for table in tables]
             flush_table_export_query = "FLUSH TABLES {} FOR EXPORT;".format(", ".join(tables))
             self.get_db(db_name).execute_sql(flush_table_export_query)
             self._db_tables_locked[db_name] = True
