@@ -1015,6 +1015,7 @@ def physical_backup_database():
     job = DatabasePhysicalBackup(
         databases=data["databases"],
         db_user="root",
+        db_host=data["private_ip"],
         db_password=data["mariadb_root_password"],
         site_backup_name=data["site_backup"]["name"],
         snapshot_trigger_url=data["site_backup"]["snapshot_trigger_url"],
