@@ -148,7 +148,7 @@ def site_analytics():
     stderr = os.path.join(logs_directory, "analytics.error.log")
 
     cron = CronTab(user=True)
-    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
+    command = f"cd {agent_directory} && {sys.executable} {script} 1>> {stdout} 2>> {stderr}"
 
     if command in str(cron):
         cron.remove_all(command=command)
@@ -171,7 +171,7 @@ def usage():
     stderr = os.path.join(logs_directory, "usage.error.log")
 
     cron = CronTab(user=True)
-    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
+    command = f"cd {agent_directory} && {sys.executable} {script} 1>> {stdout} 2>> {stderr}"
 
     if command not in str(cron):
         job = cron.new(command=command)
