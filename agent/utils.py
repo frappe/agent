@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from datetime import datetime, timedelta
 from math import ceil
 from typing import TYPE_CHECKING
@@ -140,3 +141,17 @@ def compute_file_hash(file_path, algorithm="sha256", raise_exception=True):
         if raise_exception:
             raise
         return "Failed to compute hash"
+
+
+def decode_mariadb_filename(filename: str) -> str:
+    """
+    Decode MariaDB encoded filenames that use @XXXX format for special characters.
+    """
+
+    def _hex_to_char(match: re.Match) -> str:
+        # Convert the hex value after @ to its character representation
+        hex_value = match.group(1)
+        return chr(int(hex_value, 16))
+
+    # Find @XXXX patterns and replace them with their character equivalents
+    return re.sub(r"@([0-9A-Fa-f]{4})", _hex_to_char, filename)

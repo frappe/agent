@@ -8,6 +8,7 @@ import requests
 
 from agent.database_server import DatabaseServer
 from agent.job import job, step
+from agent.utils import decode_mariadb_filename
 
 
 class DatabasePhysicalBackup(DatabaseServer):
@@ -128,15 +129,16 @@ class DatabasePhysicalBackup(DatabaseServer):
         for db_name in self.databases:
             # list all the files in the database directory
             db_files = os.listdir(self.db_directories[db_name])
+            db_files = [decode_mariadb_filename(file) for file in db_files]
             """
             InnoDB tables should have the .cfg files to be able to restore it back
 
             https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#exporting-transportable-tablespaces-for-non-partitioned-tables
             """
             for table in self.innodb_tables[db_name]:
-                table_file = table + ".ibd"
+                table_file = table + ".cfg"
                 if table_file not in db_files:
-                    raise DatabaseExportFileNotFoundError(f"IBD file for table {table} not found")
+                    raise DatabaseExportFileNotFoundError(f"CFG file for table {table} not found")
             """
             MyISAM tables should have .MYD and .MYI files at-least to be able to restore it back
             """
