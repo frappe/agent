@@ -8,10 +8,11 @@ import subprocess
 import peewee
 
 from agent.database_physical_backup import DatabaseConnectionClosedWithDatabase
+from agent.database_server import DatabaseServer
 from agent.job import job, step
 
 
-class DatabasePhysicalRestore:
+class DatabasePhysicalRestore(DatabaseServer):
     def __init__(
         self,
         backup_db: str,
@@ -40,6 +41,8 @@ class DatabasePhysicalRestore:
         self.innodb_tables = innodb_tables
         self.myisam_tables = myisam_tables
         self.table_schema = table_schema
+
+        super().__init__()
 
     @job("Physical Restore Database")
     def restore_job(self):
