@@ -1032,7 +1032,7 @@ def physical_restore_database():
         target_db=data["target_db"],
         target_db_root_password=data["target_db_root_password"],
         target_db_port=3306,
-        target_db_host="localhost",
+        target_db_host=data["private_ip"],
         innodb_tables=data.get("innodb_tables", []),
         myisam_tables=data.get("myisam_tables", []),
         table_schema=data.get("table_schema", ""),
