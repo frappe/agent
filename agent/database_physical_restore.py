@@ -118,7 +118,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         # it will reduce the time to drop tables and will not cause any block while dropping tables
         self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
         for table in tables:
-            self._get_target_db().execute_sql(f"DROP TABLE IF EXISTS {table};")
+            self._get_target_db().execute_sql(f"DROP TABLE IF EXISTS `{table}`;")
         self._get_target_db().execute_sql(
             "SET SESSION FOREIGN_KEY_CHECKS = 1;"
         )  # re-enable foreign key checks
@@ -148,7 +148,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#foreign-key-constraints
         self._get_target_db().execute_sql("SET SESSION foreign_key_checks = 0;")
         for table in self.innodb_tables:
-            self._get_target_db().execute_sql(f"ALTER TABLE {table} DISCARD TABLESPACE;")
+            self._get_target_db().execute_sql(f"ALTER TABLE `{table}` DISCARD TABLESPACE;")
         self._get_target_db().execute_sql(
             "SET SESSION foreign_key_checks = 1;"
         )  # re-enable foreign key checks
@@ -160,7 +160,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     @step("Import InnoDB Tablespaces")
     def import_tablespaces_in_target_db(self):
         for table in self.innodb_tables:
-            self._get_target_db().execute_sql(f"ALTER TABLE {table} IMPORT TABLESPACE;")
+            self._get_target_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
 
     @step("Hold Write Lock on MyISAM Tables")
     def hold_write_lock_on_myisam_tables(self):
