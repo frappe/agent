@@ -212,12 +212,6 @@ class DatabasePhysicalRestore(DatabaseServer):
                 os.path.join(self.target_db_directory, file),
             )
 
-        # change ownership to mysql user and group and mode to 660
-        for file in os.listdir(self.target_db_directory):
-            file_path = os.path.join(self.target_db_directory, file)
-            os.chmod(file_path, 0o660)
-            shutil.chown(file_path, user="mysql", group="mysql")
-
     def _get_target_db(self) -> peewee.MySQLDatabase:
         if self._target_db_instance is not None:
             if not self._target_db_instance.is_connection_usable():
