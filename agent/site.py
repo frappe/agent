@@ -656,6 +656,7 @@ user = '{user}'
 set_request(path="/")
 frappe.local.cookie_manager = CookieManager()
 frappe.local.login_manager = LoginManager()
+frappe.local.request_ip = "127.0.0.1"
 frappe.local.login_manager.login_as(user)
 print(">>>" + frappe.session.sid + "<<<")
 """
