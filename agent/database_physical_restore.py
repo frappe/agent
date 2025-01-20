@@ -207,7 +207,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             if engine == "myisam" and not (file.endswith(".MYI") or file.endswith(".MYD")):
                 continue
 
-            shutil.copy(
+            shutil.copyfile(
                 os.path.join(self.backup_db_directory, file),
                 os.path.join(self.target_db_directory, file),
             )
