@@ -84,6 +84,10 @@ log.handlers = []
 
 @application.before_request
 def validate_access_token():
+    exempt_endpoints = ["get_benches_metrics"]
+    if request.endpoint in exempt_endpoints:
+        return None
+
     try:
         if application.debug:
             return None
@@ -223,10 +227,25 @@ def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}
 
 
+@application.route("/benches/metrics")
+def get_benches_metrics():
+    from agent.exporter import get_bench_metrics
+
+    benches_metrics = [get_bench_metrics(name) for name in Server().benches]
+    return Response(benches_metrics, mimetype="text/plain")
+
+
 @application.route("/benches/<string:bench>")
 @validate_bench
 def get_bench(bench):
     return Server().benches[bench].dump()
+
+
+@application.route("/benches/<string:bench>/metrics", methods=["GET"])
+def get_bench_metrics(bench):
+    from agent.exporter import get_bench_metrics
+
+    return Response(get_bench_metrics(bench), mimetype="text/plain")
 
 
 @application.route("/benches/<string:bench>/info", methods=["POST", "GET"])
