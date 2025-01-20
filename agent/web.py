@@ -16,6 +16,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
 
+from agent.base import AgentException
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_server import DatabaseServer
@@ -1382,6 +1383,8 @@ def all_exception_handler(error):
         capture_exception(error)
     except ImportError:
         pass
+    if isinstance(error, AgentException):
+        return json.loads(json.dumps(error.data, default=str)), 500
     return {"error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()}, 500
 
 
