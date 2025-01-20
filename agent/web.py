@@ -1197,7 +1197,7 @@ def jobs(id=None, ids=None, status=None):
     return jsonify(json.loads(json.dumps(data, default=str)))
 
 
-@application.route("/jobs/<int:id>/cancel", methods=["GET", "DELETE"])
+@application.route("/jobs/<int:id>/cancel", methods=["POST"])
 def cancel_job(id=None):
     job = AgentJob(id=id)
     job.cancel_or_stop()
