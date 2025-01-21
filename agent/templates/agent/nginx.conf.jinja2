@@ -98,7 +98,7 @@ server {
 		location /metrics/mariadb {
 			proxy_pass http://127.0.0.1:9104/metrics;
 		}
-	
+
 		location /metrics/mariadb_proxy {
 			proxy_pass http://127.0.0.1:9104/metrics;
 		}
@@ -122,7 +122,7 @@ server {
 		location /metrics/blackbox {
 			proxy_pass http://127.0.0.1:9115/blackbox/metrics;
 		}
-	
+
 		location /metrics/grafana {
 			proxy_pass http://127.0.0.1:3000/grafana/metrics;
 		}
@@ -201,7 +201,7 @@ server {
 		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
 		proxy_pass http://127.0.0.1:9115/blackbox;
 	}
-	
+
 	location /grafana {
 		auth_basic "Grafana UI";
 		auth_basic_user_file /home/frappe/agent/nginx/grafana-ui.htpasswd;
@@ -232,7 +232,7 @@ server {
 	location /kibana/ {
 		auth_basic "Kibana";
 		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
-		
+
 		proxy_set_header Upgrade $http_upgrade;
 		proxy_set_header Connection "upgrade";
 		proxy_set_header host $host;
