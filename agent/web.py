@@ -710,6 +710,25 @@ def clear_site_cache(bench, site):
 
 
 @application.route(
+    "/benches/<string:bench>/sites/<string:site>/activate",
+    methods=["POST"],
+)
+@validate_bench_and_site
+def activate_site(bench, site):
+    job = Server().activate_site_job(site, bench)
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/deactivate",
+    methods=["POST"],
+)
+def deactivate_site(bench, site):
+    job = Server().deactivate_site_job(site, bench)
+    return {"job": job}
+
+
+@application.route(
     "/benches/<string:bench>/sites/<string:site>/update/migrate",
     methods=["POST"],
 )

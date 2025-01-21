@@ -261,14 +261,31 @@ class Server(Base):
 
         with suppress(Exception):
             site.bench_execute(
-                "execute"
-                " frappe.website.doctype.website_theme.website_theme"
-                ".generate_theme_files_if_not_exist"
+                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
             )
 
         if activate:
             site.disable_maintenance_mode()
 
+        with suppress(Exception):
+            # Don't fail job on failure
+            # v12 does not have build_search_index command
+            site.build_search_index()
+
+    @job("Deactivate Site", priority="high")
+    def deactivate_site_job(self, name, bench):
+        source = Bench(bench, self)
+        site = Site(name, source)
+
+        site.enable_maintenance_mode()
+        site.wait_till_ready()
+
+    @job("Activate Site", priority="high")
+    def activate_site_job(self, name, bench):
+        source = Bench(bench, self)
+        site = Site(name, source)
+
+        site.disable_maintenance_mode()
         with suppress(Exception):
             # Don't fail job on failure
             # v12 does not have build_search_index command
@@ -336,9 +353,7 @@ class Server(Base):
 
         with suppress(Exception):
             site.bench_execute(
-                "execute"
-                " frappe.website.doctype.website_theme.website_theme"
-                ".generate_theme_files_if_not_exist"
+                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
             )
 
         if activate:
