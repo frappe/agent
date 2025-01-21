@@ -769,6 +769,7 @@ def update_site_recover_migrate(bench, site):
         data["target"],
         data.get("activate", True),
         data.get("rollback_scripts", {}),
+        data.get("restore_touched_tables", False),
     )
     return {"job": job}
 

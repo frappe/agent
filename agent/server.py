@@ -292,7 +292,9 @@ class Server(Base):
             site.build_search_index()
 
     @job("Recover Failed Site Migrate", priority="high")
-    def update_site_recover_migrate_job(self, name, source, target, activate, rollback_scripts):
+    def update_site_recover_migrate_job(
+        self, name, source, target, activate, rollback_scripts, restore_touched_tables
+    ):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -304,7 +306,8 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
-        site.restore_touched_tables()
+        if restore_touched_tables:
+            site.restore_touched_tables()
 
         if rollback_scripts:
             site.run_app_scripts(rollback_scripts)
