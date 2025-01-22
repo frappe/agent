@@ -137,7 +137,7 @@ def copy_file_from_container(
     )
 
     if not proc.returncode:
-        print(f"file copied:\n" f"- from {container_source}\n" f"- to   {host_dest.absolute().as_posix()}")
+        print(f"file copied:\n- from {container_source}\n- to   {host_dest.absolute().as_posix()}")
     else:
         print(proc.stdout)
 

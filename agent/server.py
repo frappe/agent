@@ -261,9 +261,7 @@ class Server(Base):
 
         with suppress(Exception):
             site.bench_execute(
-                "execute"
-                " frappe.website.doctype.website_theme.website_theme"
-                ".generate_theme_files_if_not_exist"
+                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
             )
 
         if activate:
@@ -336,9 +334,7 @@ class Server(Base):
 
         with suppress(Exception):
             site.bench_execute(
-                "execute"
-                " frappe.website.doctype.website_theme.website_theme"
-                ".generate_theme_files_if_not_exist"
+                "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
             )
 
         if activate:
