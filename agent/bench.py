@@ -175,13 +175,13 @@ class Bench(Base):
             workdir = os.path.join(workdir, subdir)
 
         if self.bench_config.get("single_container"):
-            command = f"docker exec -w {workdir} " f"{interactive} {self.name} {command}"
+            command = f"docker exec -w {workdir} {interactive} {self.name} {command}"
         else:
             service = f"{self.name}_worker_default"
-            task = self.execute("docker service ps -f desired-state=Running -q --no-trunc " f"{service}")[
+            task = self.execute(f"docker service ps -f desired-state=Running -q --no-trunc {service}")[
                 "output"
             ].split()[0]
-            command = f"docker exec -w {workdir} " f"{interactive} {service}.1.{task} {command}"
+            command = f"docker exec -w {workdir} {interactive} {service}.1.{task} {command}"
         return self.execute(command, input=input, non_zero_throw=non_zero_throw)
 
     @step("New Site")
@@ -266,7 +266,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f'mysql -h {self.host} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
         return database, user, password
 
@@ -279,7 +279,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f'mysql -h {self.host} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
 
     def fetch_monitor_data(self):
@@ -626,7 +626,7 @@ class Bench(Base):
             self.docker_execute("supervisorctl start code-server:")
 
         self.docker_execute(
-            f"sed -i 's/^password:.*/password: {password}/'" " /home/frappe/.config/code-server/config.yaml"
+            f"sed -i 's/^password:.*/password: {password}/' /home/frappe/.config/code-server/config.yaml"
         )
         self.docker_execute("supervisorctl restart code-server:")
 
@@ -707,7 +707,7 @@ class Bench(Base):
                 f"-v {self.sites_directory}:{bench_directory}/sites "
                 f"-v {self.logs_directory}:{bench_directory}/logs "
                 f"-v {self.config_directory}:{bench_directory}/config "
-                f"{ mounts } "
+                f"{mounts} "
                 f"--name {self.name} {self.bench_config['docker_image']}"
             )
         else:
@@ -765,7 +765,7 @@ class Bench(Base):
         return self.server.job_record
 
     def readable_jde_err(self, title: str, jde: json.decoder.JSONDecodeError) -> str:
-        output = f"{title}:\n" f"{jde.doc}\n" f"{jde}\n"
+        output = f"{title}:\n{jde.doc}\n{jde}\n"
         import re
 
         output = re.sub(r'("db_name":.* ")(\w*)(")', r"\1********\3", output)

@@ -47,7 +47,7 @@ class ProxySQL(Server):
         if self.proxysql_execute(f"SELECT 1 from mysql_servers where hostgroup_id = {backend_id}")["output"]:
             return
         commands = [
-            ("INSERT INTO mysql_servers (hostgroup_id, hostname) " f'VALUES ({backend_id}, "{backend_ip}")'),
+            (f'INSERT INTO mysql_servers (hostgroup_id, hostname) VALUES ({backend_id}, "{backend_ip}")'),
             "LOAD MYSQL SERVERS TO RUNTIME",
             "SAVE MYSQL SERVERS TO DISK",
         ]

@@ -63,6 +63,7 @@ def ping_server(password: str):
 def config(name, user, workers, proxy_ip=None, sentry_dsn=None):
     config = {
         "benches_directory": f"/home/{user}/benches",
+        "devboxes_directory": f"/home/{user}/devboxes",
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
@@ -147,7 +148,7 @@ def site_analytics():
     stderr = os.path.join(logs_directory, "analytics.error.log")
 
     cron = CronTab(user=True)
-    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
+    command = f"cd {agent_directory} && {sys.executable} {script} 1>> {stdout} 2>> {stderr}"
 
     if command in str(cron):
         cron.remove_all(command=command)
@@ -170,7 +171,7 @@ def usage():
     stderr = os.path.join(logs_directory, "usage.error.log")
 
     cron = CronTab(user=True)
-    command = f"cd {agent_directory} && {sys.executable} {script}" f" 1>> {stdout} 2>> {stderr}"
+    command = f"cd {agent_directory} && {sys.executable} {script} 1>> {stdout} 2>> {stderr}"
 
     if command not in str(cron):
         job = cron.new(command=command)

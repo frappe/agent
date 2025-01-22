@@ -273,7 +273,7 @@ class Site(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f"mysql -h {self.host} -uroot -p{mariadb_root_password}" f' -e "{query}"'
+            command = f'mysql -h {self.host} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
         return {"database": database, "user": user, "password": password}
 
@@ -656,6 +656,7 @@ user = '{user}'
 set_request(path="/")
 frappe.local.cookie_manager = CookieManager()
 frappe.local.login_manager = LoginManager()
+frappe.local.request_ip = "127.0.0.1"
 frappe.local.login_manager.login_as(user)
 print(">>>" + frappe.session.sid + "<<<")
 """
@@ -717,7 +718,7 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             self.execute(
-                f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" {self.database} -e '{query}'"
+                f"mysql -sN -h {self.host} -u{self.user} -p{self.password} {self.database} -e '{query}'"
             )
 
     def fetch_latest_backup(self, with_files=True):
@@ -781,7 +782,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -827,7 +828,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -845,7 +846,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
-            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password}" f" -e '{query}'"
+            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
             output = self.execute(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:
@@ -948,7 +949,5 @@ print(">>>" + frappe.session.sid + "<<<")
 
     def generate_theme_files(self):
         self.bench_execute(
-            "execute"
-            " frappe.website.doctype.website_theme.website_theme"
-            ".generate_theme_files_if_not_exist"
+            "execute frappe.website.doctype.website_theme.website_theme.generate_theme_files_if_not_exist"
         )
