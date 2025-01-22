@@ -57,6 +57,7 @@ server {
 
 	location /assets {
 		try_files $uri =404;
+		add_header Cache-Control "max-age=31536000, immutable";
 	}
 
 	location ~ ^/protected/(.*) {
@@ -83,6 +84,12 @@ server {
 
 		location ~* ^/files/.*.(htm|html|svg|xml) {
 			add_header Content-disposition "attachment";
+			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+		}
+
+		location ~* ^/files/.*.(png|jpe?g|gif|css|js|mp3|wav|ogg|flac|avi|mov|mp4|m4v|mkv|webm) {
+			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 
@@ -183,7 +190,7 @@ server {
 
 	location /assets {
 		try_files $uri =404;
-		add_header Cache-Control "max-age=31536000";
+		add_header Cache-Control "max-age=31536000, immutable";
 	}
 
 	location ~ ^/protected/(.*) {
@@ -210,6 +217,12 @@ server {
 
 		location ~* ^/files/.*.(htm|html|svg|xml) {
 			add_header Content-disposition "attachment";
+			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
+		}
+
+		location ~* ^/files/.*.(png|jpe?g|gif|css|js|mp3|wav|ogg|flac|avi|mov|mp4|m4v|mkv|webm) {
+			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 

@@ -12,11 +12,16 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
+from rq.exceptions import NoSuchJobError
+from rq.job import Job as RQJob
+from rq.job import JobStatus
 
+from agent.base import AgentException
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
+from agent.job import Job as AgentJob
 from agent.job import JobModel, connection
 from agent.minio import Minio
 from agent.monitor import Monitor
@@ -1123,10 +1128,38 @@ def proxysql_remove_user(username):
     return {"job": job}
 
 
+def get_status_from_rq(job, redis):
+    RQ_STATUS_MAP = {
+        JobStatus.QUEUED: "Pending",
+        JobStatus.FINISHED: "Success",
+        JobStatus.FAILED: "Failure",
+        JobStatus.STARTED: "Running",
+        JobStatus.DEFERRED: "Pending",
+        JobStatus.SCHEDULED: "Pending",
+        JobStatus.STOPPED: "Failure",
+        JobStatus.CANCELED: "Failure",
+    }
+    status = None
+    try:
+        rq_status = RQJob.fetch(str(job["id"]), connection=redis).get_status()
+        status = RQ_STATUS_MAP.get(rq_status)
+    except NoSuchJobError:
+        # Handle jobs enqueued before we started setting job_id
+        pass
+    return status
+
+
 def to_dict(model):
     redis = connection()
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
+        status_from_rq = get_status_from_rq(job, redis)
+        if status_from_rq:
+            # Override status from JobModel if rq says the job is already ended
+            TERMINAL_STATUSES = ["Success", "Failure"]
+            if job["status"] not in TERMINAL_STATUSES and status_from_rq in TERMINAL_STATUSES:
+                job["status"] = status_from_rq
+
         job["data"] = json.loads(job["data"]) or {}
         job_key = f"agent:job:{job['id']}"
         job["commands"] = [json.loads(command) for command in redis.lrange(job_key, 0, -1)]
@@ -1162,6 +1195,14 @@ def jobs(id=None, ids=None, status=None):
     else:
         data = get_jobs(limit=100)
 
+    return jsonify(json.loads(json.dumps(data, default=str)))
+
+
+@application.route("/jobs/<int:id>/cancel", methods=["POST"])
+def cancel_job(id=None):
+    job = AgentJob(id=id)
+    job.cancel_or_stop()
+    data = to_dict(job.model)
     return jsonify(json.loads(json.dumps(data, default=str)))
 
 
@@ -1342,6 +1383,8 @@ def all_exception_handler(error):
         capture_exception(error)
     except ImportError:
         pass
+    if isinstance(error, AgentException):
+        return json.loads(json.dumps(error.data, default=str)), 500
     return {"error": "".join(traceback.format_exception(*sys.exc_info())).splitlines()}, 500
 
 
