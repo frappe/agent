@@ -28,7 +28,7 @@ class Base:
         self.directory = None
         self.config_file = None
         self.name = None
-        self.data = {}
+        self.data: dict[str, str] = {}
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"

@@ -661,11 +661,17 @@ frappe.local.login_manager.login_as(user)
 print(">>>" + frappe.session.sid + "<<<")
 """
 
-        output = self.bench_execute("console", input=code)["output"]
-        sid = re.search(r">>>(.*)<<<", output).group(1)
-        if not sid or sid == user or sid == "Guest":  # case when it fails
-            output = self.bench_execute(f"browse --user {user}")["output"]
-            sid = re.search(r"\?sid=([a-z0-9]*)", output).group(1)
+        sid = None
+        if (output := self.bench_execute("console", input=code)["output"]) and (
+            res := re.search(r">>>(.*)<<<", output)
+        ):
+            sid = res.group(1)
+        if (
+            (not sid or sid == user or sid == "Guest")
+            and (output := self.bench_execute(f"browse --user {user}")["output"])
+            and (res := re.search(r"\?sid=([a-z0-9]*)", output))
+        ):
+            sid = res.group(1)
         return sid
 
     @property
