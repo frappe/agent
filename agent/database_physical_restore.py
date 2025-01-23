@@ -88,9 +88,9 @@ class DatabasePhysicalRestore(DatabaseServer):
             if file_metadata["checksum"]:
                 checksum = compute_file_hash(file_path, raise_exception=True)
                 if checksum == file_metadata["checksum"]:
-                    output += f"[VALID] {file} - Checksum Matched\n"
+                    output += f"[VALID] {file} - Checksum Matched - {checksum}\n"
                 else:
-                    output += f"[INVALID] {file} - Checksum Mismatched\n"
+                    output += f"[INVALID] {file} - Checksum Mismatched - {checksum}\n"
                     invalid_files.add(file)
             else:
                 output += f"[SKIP] {file} - No Checksum\n"
@@ -99,9 +99,9 @@ class DatabasePhysicalRestore(DatabaseServer):
             output += "Invalid Files:\n"
             for file in invalid_files:
                 output += f"{file}\n"
-            raise AgentException(output)
+            raise AgentException({"output": output})
 
-        return output
+        return {"output": output}
 
     @step("Validate Connection to Target Database")
     def validate_connection_to_target_db(self):
