@@ -121,7 +121,14 @@ class DatabasePhysicalBackup(DatabaseServer):
             files = os.listdir(self.db_directories[db_name])
             for file in files:
                 file_path = os.path.join(self.db_directories[db_name], file)
-                with open(file_path, "r") as f:
+                """
+                Open the file in binary mode and keep buffering disabled(allowed only for binary mode)
+                https://docs.python.org/3/library/functions.html#open:~:text=buffering%20is%20an%20optional%20integer
+
+                With this change, we don't need to call f.flush()
+                https://docs.python.org/3/library/os.html#os.fsync
+                """
+                with open(file_path, "rb", buffering=0) as f:
                     os.fsync(f.fileno())
 
     @step("Validate Exportable Files")
