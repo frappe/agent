@@ -155,7 +155,7 @@ server {
 
 		proxy_pass $upstream_server_hash;
 	}
-
+	{% if is_devbox_proxy %}
 	location /websockify {
 		proxy_http_version 1.1;
 
@@ -208,6 +208,7 @@ server {
 
 		proxy_pass $upstream_server_hash;
 	}
+	{% endif %}
 
 	location / {
 		proxy_http_version 1.1;

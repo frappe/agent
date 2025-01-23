@@ -23,6 +23,8 @@ class Proxy(Server):
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
 
+        self.is_devbox_proxy = self.config.get("is_devbox_proxy")
+
         self.job = None
         self.step = None
 
@@ -71,7 +73,7 @@ class Proxy(Server):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
     @job("Add Site to Upstream")
-    def add_site_to_upstream_job(self, upstream, site, skip_reload=False):
+    def add_site_to_upstream_job(self, upstream, site, skip_reload=False, is_devbox_proxy=False):
         self.add_site_to_upstream(upstream, site)
         self.generate_proxy_config()
         if skip_reload:
@@ -273,6 +275,7 @@ class Proxy(Server):
                 "nginx_directory": self.config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
                 "tls_protocols": self.config.get("tls_protocols"),
+                "is_devbox_proxy": self.is_devbox_proxy or False,
             },
             proxy_config_file,
         )
