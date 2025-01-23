@@ -8,7 +8,7 @@ import requests
 
 from agent.database_server import DatabaseServer
 from agent.job import job, step
-from agent.utils import decode_mariadb_filename
+from agent.utils import compute_file_hash, decode_mariadb_filename
 
 
 class DatabasePhysicalBackup(DatabaseServer):
@@ -46,6 +46,7 @@ class DatabasePhysicalBackup(DatabaseServer):
 
         self.innodb_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.myisam_tables: dict[str, list[str]] = {db: [] for db in self.databases}
+        self.files_metadata: dict[str, dict[str, str]] = {db: {} for db in self.databases}
         self.table_schemas: dict[str, str] = {}
 
         super().__init__()
@@ -57,6 +58,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         self.flush_changes_to_disk()
         self.validate_exportable_files()
         self.export_table_schemas()
+        self.collect_files_metadata()
         self.create_snapshot()  # Blocking call
         self.unlock_all_tables()
         # Return the data [Required for restoring the backup]
@@ -66,6 +68,7 @@ class DatabasePhysicalBackup(DatabaseServer):
                 "innodb_tables": self.innodb_tables[db_name],
                 "myisam_tables": self.myisam_tables[db_name],
                 "table_schema": self.table_schemas[db_name],
+                "files_metadata": self.files_metadata[db_name],
             }
         return data
 
@@ -141,11 +144,19 @@ class DatabasePhysicalBackup(DatabaseServer):
             InnoDB tables should have the .cfg files to be able to restore it back
 
             https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#exporting-transportable-tablespaces-for-non-partitioned-tables
+
+            Additionally, ensure .frm files should be present as well.
+            If Import tablespace failed for some reason and we need to reconstruct the tables,
+            we need .frm files to start the database server.
             """
             for table in self.innodb_tables[db_name]:
-                table_file = table + ".cfg"
-                if table_file not in db_files:
+                file = table + ".cfg"
+                if file not in db_files:
                     raise DatabaseExportFileNotFoundError(f"CFG file for table {table} not found")
+                file = table + ".frm"
+                if file not in db_files:
+                    raise DatabaseExportFileNotFoundError(f"FRM file for table {table} not found")
+
             """
             MyISAM tables should have .MYD and .MYI files at-least to be able to restore it back
             """
@@ -163,6 +174,35 @@ class DatabasePhysicalBackup(DatabaseServer):
             It's important to export the schema only after taking the read lock.
             """
             self.table_schemas[db_name] = self.export_table_schema(db_name)
+
+    @step("Collect Files Metadata")
+    def collect_files_metadata(self):
+        for db_name in self.databases:
+            files = os.listdir(self.db_directories[db_name])
+            for file in files:
+                file_extension = os.path.splitext(file)[-1].lower()
+                if file_extension not in [".cfg", ".frm", ".myd", ".myi", ".ibd"]:
+                    continue
+                file_path = os.path.join(self.db_directories[db_name], file)
+                """
+                cfg, frm files are too important to restore/reconstruct the database.
+                This files are small also, so we can take the checksum of these files.
+
+                For IBD, MYD files we will just take the size of the file as a validation during restore,
+                whether the fsync has happened successfully or not.
+
+                For MariaDB > 10.6.0, it use O_DIRECT as innodb_flush_method,
+                So, data will be written directly to the disk without buffering.
+                Only the metadata will be updated via fsync.
+
+                https://mariadb.com/kb/en/innodb-system-variables/#innodb_flush_method
+                """
+                self.files_metadata[db_name][file] = {
+                    "size": os.path.getsize(file_path),
+                    "checksum": compute_file_hash(file_path, raise_exception=True)
+                    if file_extension in [".cfg", ".frm", ".myi"]
+                    else None,
+                }
 
     @step("Create Database Snapshot")
     def create_snapshot(self):
