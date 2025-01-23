@@ -7,6 +7,7 @@ import subprocess
 
 import peewee
 
+from agent.base import AgentException
 from agent.database_physical_backup import DatabaseConnectionClosedWithDatabase
 from agent.database_server import DatabaseServer
 from agent.job import job, step
@@ -67,6 +68,8 @@ class DatabasePhysicalRestore(DatabaseServer):
     @step("Validate Backup Files")
     def validate_backup_files(self):
         files = os.listdir(self.backup_db_directory)
+        output = ""
+        invalid_files = set()
         for file in files:
             if file not in self.files_metadata:
                 continue
@@ -74,13 +77,31 @@ class DatabasePhysicalRestore(DatabaseServer):
             file_path = os.path.join(self.backup_db_directory, file)
             # validate file size
             file_size = os.path.getsize(file_path)
-            if file_size != file_metadata["size"]:
-                raise Exception(f"File size mismatch for {file}")
+            if file_size == file_metadata["size"]:
+                output += f"[VALID] {file} - {file_size} bytes\n"
+            else:
+                output += f"[INVALID] {file} - {file_size} bytes\n"
+                invalid_files.add(file)
+                continue
+
             # if file checksum is provided, validate checksum
             if file_metadata["checksum"]:
                 checksum = compute_file_hash(file_path, raise_exception=True)
-                if checksum != file_metadata["checksum"]:
-                    raise Exception(f"Checksum mismatch for {file}")
+                if checksum == file_metadata["checksum"]:
+                    output += f"[VALID] {file} - Checksum Matched\n"
+                else:
+                    output += f"[INVALID] {file} - Checksum Mismatched\n"
+                    invalid_files.add(file)
+            else:
+                output += f"[SKIP] {file} - No Checksum\n"
+
+        if invalid_files:
+            output += "Invalid Files:\n"
+            for file in invalid_files:
+                output += f"{file}\n"
+            raise AgentException(output)
+
+        return output
 
     @step("Validate Connection to Target Database")
     def validate_connection_to_target_db(self):
