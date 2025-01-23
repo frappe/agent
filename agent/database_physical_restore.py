@@ -78,9 +78,9 @@ class DatabasePhysicalRestore(DatabaseServer):
             # validate file size
             file_size = os.path.getsize(file_path)
             if file_size == file_metadata["size"]:
-                output += f"[VALID] {file} - {file_size} bytes\n"
+                output += f"[VALID] [FILE SIZE] {file} - {file_size} bytes\n"
             else:
-                output += f"[INVALID] {file} - {file_size} bytes\n"
+                output += f"[INVALID] [FILE SIZE] {file} - {file_size} bytes\n"
                 invalid_files.add(file)
                 continue
 
@@ -88,12 +88,12 @@ class DatabasePhysicalRestore(DatabaseServer):
             if file_metadata["checksum"]:
                 checksum = compute_file_hash(file_path, raise_exception=True)
                 if checksum == file_metadata["checksum"]:
-                    output += f"[VALID] {file} - Checksum Matched - {checksum}\n"
+                    output += f"[VALID] [CHECKSUM] {file} - {checksum}\n"
                 else:
-                    output += f"[INVALID] {file} - Checksum Mismatched - {checksum}\n"
+                    output += f"[INVALID] [CHECKSUM] {file} - {checksum}\n"
                     invalid_files.add(file)
             else:
-                output += f"[SKIP] {file} - No Checksum\n"
+                output += f"[SKIP] [CHECKSUM] {file} - No\n"
 
         if invalid_files:
             output += "Invalid Files:\n"
