@@ -10,6 +10,7 @@ import peewee
 from agent.database_physical_backup import DatabaseConnectionClosedWithDatabase
 from agent.database_server import DatabaseServer
 from agent.job import job, step
+from agent.utils import compute_file_hash
 
 
 class DatabasePhysicalRestore(DatabaseServer):
@@ -20,6 +21,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         target_db_root_password: str,
         target_db_port: int,
         target_db_host: str,
+        files_metadata: dict[str, dict[str, any]],
         innodb_tables: list[str],
         myisam_tables: list[str],
         table_schema: str,
@@ -38,6 +40,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.backup_db = backup_db
         self.backup_db_directory = os.path.join(backup_db_base_directory, backup_db)
 
+        self.files_metadata = files_metadata
         self.innodb_tables = innodb_tables
         self.myisam_tables = myisam_tables
         self.table_schema = table_schema
@@ -46,6 +49,7 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     @job("Physical Restore Database")
     def restore_job(self):
+        self.validate_backup_files()
         self.validate_connection_to_target_db()
         self.warmup_myisam_files()
         self.check_and_fix_myisam_table_files()
@@ -59,6 +63,24 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
         self.unlock_all_tables()
+
+    @step("Validate Backup Files")
+    def validate_backup_files(self):
+        files = os.listdir(self.backup_db_directory)
+        for file in files:
+            if file not in self.files_metadata:
+                continue
+            file_metadata = self.files_metadata[file]
+            file_path = os.path.join(self.backup_db_directory, file)
+            # validate file size
+            file_size = os.path.getsize(file_path)
+            if file_size != file_metadata["size"]:
+                raise Exception(f"File size mismatch for {file}")
+            # if file checksum is provided, validate checksum
+            if file_metadata["checksum"]:
+                checksum = compute_file_hash(file_path, raise_exception=True)
+                if checksum != file_metadata["checksum"]:
+                    raise Exception(f"Checksum mismatch for {file}")
 
     @step("Validate Connection to Target Database")
     def validate_connection_to_target_db(self):
