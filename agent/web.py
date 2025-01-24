@@ -1058,6 +1058,8 @@ def physical_restore_database():
         myisam_tables=data.get("myisam_tables", []),
         table_schema=data.get("table_schema", ""),
         backup_db_base_directory=data.get("backup_db_base_directory", ""),
+        restore_specific_tables=data.get("restore_specific_tables", False),
+        tables_to_restore=data.get("tables_to_restore", []),
     ).restore_job()
     return {"job": job}
 

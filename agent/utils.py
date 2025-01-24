@@ -155,3 +155,17 @@ def decode_mariadb_filename(filename: str) -> str:
 
     # Find @XXXX patterns and replace them with their character equivalents
     return re.sub(r"@([0-9A-Fa-f]{4})", _hex_to_char, filename)
+
+
+def get_mariadb_table_name_from_path(path: str) -> str:
+    """
+    Extract the table name from a MariaDB table file path.
+    """
+    # Extract the filename from the path
+    filename = os.path.basename(path)
+    if not filename:
+        return ""
+    # Remove the extension
+    filename = os.path.splitext(filename)[0]
+    # Decode the filename
+    return decode_mariadb_filename(filename)
