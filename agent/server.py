@@ -254,10 +254,13 @@ class Server(Base):
         if before_migrate_scripts:
             site.run_app_scripts(before_migrate_scripts)
 
-        site.migrate(
-            skip_search_index=skip_search_index,
-            skip_failing_patches=skip_failing_patches,
-        )
+        try:
+            site.migrate(
+                skip_search_index=skip_search_index,
+                skip_failing_patches=skip_failing_patches,
+            )
+        finally:
+            site.log_touched_tables()
 
         with suppress(Exception):
             site.bench_execute(
