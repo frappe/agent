@@ -65,7 +65,6 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, is_devbox_proxy=
     config = {
         "benches_directory": f"/home/{user}/benches",
         "devboxes_directory": f"/home/{user}/devboxes",
-        "is_devbox_proxy": is_devbox_proxy,
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
@@ -79,6 +78,8 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, is_devbox_proxy=
         config["proxy_ip"] = proxy_ip
     if sentry_dsn:
         config["sentry_dsn"] = sentry_dsn
+    if is_devbox_proxy:
+        config["is_devbox_proxy"] = is_devbox_proxy
 
     with open("config.json", "w") as f:
         json.dump(config, f, sort_keys=True, indent=4)
