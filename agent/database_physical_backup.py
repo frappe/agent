@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import time
 
 import peewee
 import requests
@@ -209,14 +210,23 @@ class DatabasePhysicalBackup(DatabaseServer):
         """
         Trigger the snapshot creation
         """
-        response = requests.post(
-            self.snapshot_trigger_url,
-            json={
-                "name": self.site_backup_name,
-                "key": self.snapshot_request_key,
-            },
-        )
-        response.raise_for_status()
+        retries = 0
+
+        while True:
+            response = requests.post(
+                self.snapshot_trigger_url,
+                json={
+                    "name": self.site_backup_name,
+                    "key": self.snapshot_request_key,
+                },
+            )
+            if response.status_code in [500, 502, 503, 504] and retries <= 10:
+                retries += 1
+                time.sleep(10)
+                continue
+
+            response.raise_for_status()
+            break
 
     @step("Unlock Tables")
     def unlock_all_tables(self):
