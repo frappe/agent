@@ -530,6 +530,16 @@ class Site(Base):
             cmd += " --skip-failing"
         return self.bench_execute(cmd)
 
+    @step("Log Touched Tables")
+    def log_touched_tables(self):
+        try:
+            # It will either return the touched tables
+            # or try to return the previous tables
+            return self.tables_to_restore
+        except Exception:
+            # If both file is not there, assume no tables are touched
+            return []
+
     @step("Build Search Index")
     def build_search_index(self):
         return self.bench_execute("build-search-index")
@@ -568,11 +578,7 @@ class Site(Base):
 
     def _restore_touched_tables(self):
         data = {"restored": {}}
-        try:
-            tables_to_restore = self.touched_tables
-        except Exception:
-            tables_to_restore = self.previous_tables
-        for table in tables_to_restore:
+        for table in self.tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
                 output = self.execute(
@@ -705,6 +711,13 @@ print(">>>" + frappe.session.sid + "<<<")
     def previous_tables(self):
         with open(self.previous_tables_file, "r") as f:
             return json.load(f)
+
+    @property
+    def tables_to_restore(self):
+        try:
+            return self.touched_tables
+        except Exception:
+            return self.previous_tables
 
     @job("Backup Site", priority="low")
     def backup_job(self, with_files=False, offsite=None):
