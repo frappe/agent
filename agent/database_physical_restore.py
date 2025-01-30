@@ -168,7 +168,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     @step("Prepare Database for Restoration")
     def prepare_target_db_for_restore(self):
         # Only perform this, if we are restoring all tables
-        if not self.restore_specific_tables:
+        if self.restore_specific_tables:
             return
 
         """
