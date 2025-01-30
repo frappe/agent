@@ -248,6 +248,8 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         Discard tablespace query on innodb already took care of locks
         """
+        if not self.myisam_tables:
+            return
         tables = [f"`{table}` WRITE" for table in self.myisam_tables]
         self._get_target_db_for_myisam().execute_sql("LOCK TABLES {};".format(", ".join(tables)))
 
