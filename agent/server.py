@@ -257,10 +257,13 @@ class Server(Base):
         if before_migrate_scripts:
             site.run_app_scripts(before_migrate_scripts)
 
-        site.migrate(
-            skip_search_index=skip_search_index,
-            skip_failing_patches=skip_failing_patches,
-        )
+        try:
+            site.migrate(
+                skip_search_index=skip_search_index,
+                skip_failing_patches=skip_failing_patches,
+            )
+        finally:
+            site.log_touched_tables()
 
         with suppress(Exception):
             site.bench_execute(
@@ -275,8 +278,29 @@ class Server(Base):
             # v12 does not have build_search_index command
             site.build_search_index()
 
+    @job("Deactivate Site", priority="high")
+    def deactivate_site_job(self, name, bench):
+        source = Bench(bench, self)
+        site = Site(name, source)
+
+        site.enable_maintenance_mode()
+        site.wait_till_ready()
+
+    @job("Activate Site", priority="high")
+    def activate_site_job(self, name, bench):
+        source = Bench(bench, self)
+        site = Site(name, source)
+
+        site.disable_maintenance_mode()
+        with suppress(Exception):
+            # Don't fail job on failure
+            # v12 does not have build_search_index command
+            site.build_search_index()
+
     @job("Recover Failed Site Migrate", priority="high")
-    def update_site_recover_migrate_job(self, name, source, target, activate, rollback_scripts):
+    def update_site_recover_migrate_job(
+        self, name, source, target, activate, rollback_scripts, restore_touched_tables
+    ):
         source = Bench(source, self)
         target = Bench(target, self)
 
@@ -288,7 +312,8 @@ class Server(Base):
         self.reload_nginx()
 
         site = Site(name, target)
-        site.restore_touched_tables()
+        if restore_touched_tables:
+            site.restore_touched_tables()
 
         if rollback_scripts:
             site.run_app_scripts(rollback_scripts)
