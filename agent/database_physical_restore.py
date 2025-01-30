@@ -339,7 +339,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     def is_db_file_need_to_be_restored(self, file_name: str) -> bool:
         return self.is_table_need_to_be_restored(get_mariadb_table_name_from_path(file_name))
 
-    def get_create_table_statement(sql_dump, table_name) -> str:
+    def get_create_table_statement(self, sql_dump, table_name) -> str:
         # Define the regex pattern to match the CREATE TABLE statement
         pattern = re.compile(rf"CREATE TABLE `{table_name}`.*?;", re.DOTALL)
 
