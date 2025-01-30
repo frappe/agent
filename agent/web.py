@@ -1522,3 +1522,58 @@ def recover_update_inplace(bench: str):
         request.json.get("image"),
     )
     return {"job": job}
+
+
+@application.route("/devboxes", methods=["POST"])
+def new_devbox():
+    data = request.json
+    devbox_name = data.get("devbox_name")
+    vnc_password = data.get("vnc_password")
+    codeserver_password = data.get("codeserver_password")
+    devbox_image_reference = data.get("devbox_image_reference")
+    job = Server().new_devbox(
+        devbox_name=devbox_name,
+        vnc_password=vnc_password,
+        codeserver_password=codeserver_password,
+        devbox_image_reference=devbox_image_reference,
+    )
+    return {"job": job}
+
+
+@application.route("/devboxes/<string:devbox_name>/start", methods=["POST"])
+def start_devbox(devbox_name: str):
+    data = request.json
+    job = Server().start_devbox(
+        devbox_name=devbox_name,
+        vnc_password=data.get("vnc_password"),
+        codeserver_password=data.get("codeserver_password"),
+        devbox_image_reference=data.get("devbox_image_reference"),
+    )
+    return {"job": job}
+
+
+@application.route("/devboxes/<string:devbox_name>/stop", methods=["POST"])
+def stop_devbox(devbox_name: str):
+    job = Server().stop_devbox(devbox_name=devbox_name)
+    return {"job": job}
+
+
+@application.route("/devboxes/<string:devbox_name>/status", methods=["POST"])
+def get_devbox_status(devbox_name: str):
+    result = Server().get_devbox_status(devbox_name=devbox_name)
+    result["start"] = result["start"].isoformat()
+    result["end"] = result["end"].isoformat()
+    result["duration"] = result["duration"].total_seconds()
+    return jsonify(result)
+
+
+@application.route("/devboxes/<string:devbox_name>/docker_volumes_size", methods=["POST"])
+def get_devbox_docker_volumes_size(devbox_name: str):
+    result = Server().get_devbox_docker_volumes_size(devbox_name=devbox_name)
+    return {"message": result}
+
+
+@application.route("/devboxes/<string:devbox_name>/destroy", methods=["POST"])
+def destroy_devbox(devbox_name: str):
+    job = Server().destroy_devbox(devbox_name=devbox_name)
+    return {"job": job}
