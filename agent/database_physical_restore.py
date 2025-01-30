@@ -348,7 +348,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         if match:
             return match.group(0)
 
-        raise AgentException(f"CREATE TABLE statement for {table_name} not found in SQL dump")
+        raise Exception(f"CREATE TABLE statement for {table_name} not found in SQL dump")
 
     def __del__(self):
         if self._target_db_instance is not None:
