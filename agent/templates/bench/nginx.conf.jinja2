@@ -150,6 +150,7 @@ server {
 
 {% endfor %}
 
+{% if sites|length > 0 and domains|length > 0 %}
 server {
 	listen 80;
 	server_name
@@ -168,6 +169,8 @@ server {
 		return 301 https://$host$request_uri;
 	}
 }
+{% endif %}
+
 {% else %}
 server {
 	listen 80;
