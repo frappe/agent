@@ -1,6 +1,8 @@
 
 upstream {{ bench_name }}-web-server {
 	server 127.0.0.1:{{ web_port }} fail_timeout=0;
+	keepalive 4;
+	keepalive_timeout 15s;
 }
 
 upstream {{ bench_name}}-socketio-server {
