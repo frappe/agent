@@ -454,18 +454,31 @@ class Bench(Base):
             self.generate_nginx_config()
         return self.server._reload_nginx()
 
-    def _set_sites_host(self, sites: list[Site]):
-        for site in sites:
+    def _set_sites_host(self, site):
+            site.host = ''
             for wildcard_domain in self.server.wildcards:
                 if site.name.endswith("." + wildcard_domain):
                     site.host = "*." + wildcard_domain
+
+    def _validate_certificate_path(self, site):
+        cert_path = f'{self.server.nginx_directory}/hosts/{ site.host or site.name }/fullchain.pem'
+        site.tls_exists = False
+
+        if os.path.exists(cert_path):
+            site.tls_exists = True
 
     def generate_nginx_config(self):
         sites = [s for s in self.valid_sites.values()]
         domains = _get_domains(sites)
 
         if standalone := self.server.config.get("standalone"):
-            self._set_sites_host(sites)
+            for site in sites:
+                self._set_sites_host(site)
+                self._validate_certificate_path(site)
+                if site.name in domains:
+                    del domains[site.name]
+
+            sites = [s.name for s in sites if s.tls_exists]
 
         codeserver = _get_codeserver_config(self.directory)
 
