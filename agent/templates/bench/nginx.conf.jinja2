@@ -150,7 +150,7 @@ server {
 
 {% endfor %}
 
-{% if sites|length > 0 and domains|length > 0 %}
+{% if sites|length > 0 or domains|length > 0 %}
 server {
 	listen 80;
 	server_name
