@@ -155,7 +155,7 @@ server {
 	listen 80;
 	server_name
 		{% for site in sites -%}
-			{{ site.name }}
+			{{ site }}
 		{% endfor -%}
 		{% for domain in domains -%}
 			{{ domain }}
