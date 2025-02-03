@@ -86,6 +86,10 @@ log.handlers = []
 
 @application.before_request
 def validate_access_token():
+    exempt_endpoints = ["get_metrics"]
+    if request.endpoint in exempt_endpoints:
+        return None
+
     try:
         if application.debug:
             return None
@@ -225,10 +229,34 @@ def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}
 
 
+@application.route("/benches/metrics")
+def get_metrics():
+    from agent.exporter import get_metrics
+
+    benches_metrics = [
+        get_metrics(name, rq_port)
+        for name, bench in Server().benches.items()
+        if (rq_port := bench.bench_config.get("rq_port")) is not None
+    ]
+    return Response(benches_metrics, mimetype="text/plain")
+
+
 @application.route("/benches/<string:bench>")
 @validate_bench
 def get_bench(bench):
     return Server().benches[bench].dump()
+
+
+@application.route("/benches/<string:bench_str>/metrics", methods=["GET"])
+def get_bench_metrics(bench_str):
+    from agent.exporter import get_metrics
+
+    bench = Server().benches[bench_str]
+    rq_port = bench.bench_config.get("rq_port")
+    if rq_port:
+        return Response(get_metrics(bench_str, rq_port), mimetype="text/plain")
+
+    return Response("Unavailable", status=400, mimetype="text/plain")
 
 
 @application.route("/benches/<string:bench>/info", methods=["POST", "GET"])
