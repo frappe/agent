@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import ast
 import contextlib
 import json
-from decimal import Decimal
 import time
-from typing import Any
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 import peewee
-import ast
-from agent.sql_runner import SQLQuery
+
+if TYPE_CHECKING:
+    from agent.sql_runner import SQLQuery
 
 
 class Database:
