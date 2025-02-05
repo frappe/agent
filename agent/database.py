@@ -3,9 +3,12 @@ from __future__ import annotations
 import contextlib
 import json
 from decimal import Decimal
+import time
 from typing import Any
 
 import peewee
+import ast
+from agent.sql_runner import SQLQuery
 
 
 class Database:
@@ -636,6 +639,65 @@ WHERE
     def _is_tcl_query(self, query: str) -> bool:
         query = query.upper().replace(" ", "")
         return query.startswith(("COMMIT", "ROLLBACK", "SAVEPOINT", "BEGINTRANSACTION"))
+
+    def _run_sql_v2(  # noqa: C901
+        self, queries: list[SQLQuery], commit: bool = False, continue_on_error: bool = False
+    ) -> list[SQLQuery]:
+        try:
+            self.db.begin()
+        except Exception:
+            for q in queries:
+                q.success = False
+                q.error_code = "DatabaseError"
+                q.error_message = "Failed to connect to database"
+        else:
+            with self.db.atomic() as transaction:
+                is_any_query_failed = False
+
+                for q in queries:
+                    # If previous queries failed and we don't want to continue on error
+                    # then we need to mark all the queries as failed
+                    if is_any_query_failed and not continue_on_error:
+                        q.success = False
+                        q.error_code = "PREVIOUS_QUERIES_FAILED"
+                        q.error_message = "Failed to execute previous queries"
+                        continue
+
+                    try:
+                        start_time = time.time()
+                        cursor = self.db.execute_sql(q)
+                        q.duration = time.time() - start_time
+                        q.success = True
+                        if cursor.description:
+                            q.columns = [d[0] for d in cursor.description]
+                            q.data = cursor.fetchall()
+                        q.row_count = cursor.rowcount or 0
+                    except (peewee.ProgrammingError, peewee.InternalError, peewee.OperationalError) as e:
+                        q.success = False
+                        is_any_query_failed = True
+                        q.error_code = "UNKNOWN"
+                        q.error_message = str(e)
+                        with contextlib.suppress(Exception):
+                            mysql_error = ast.literal_eval(q.error_message)
+                            q.error_code = mysql_error[0]
+                            q.error_message = mysql_error[1]
+
+                    except Exception:
+                        q.success = False
+                        is_any_query_failed = True
+                        q.error_code = "UNKNOWN"
+                        q.error_message = "Failed to execute query due to unknown error. Please check the query and try again later."  # noqa: E501
+
+                if not commit or is_any_query_failed:
+                    with contextlib.suppress(Exception):
+                        transaction.rollback()
+                else:
+                    transaction.commit()
+        finally:
+            with contextlib.suppress(Exception):
+                self.db.close()
+
+        return queries
 
 
 class JSONEncoderForSQLQueryResult(json.JSONEncoder):

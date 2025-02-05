@@ -31,6 +31,7 @@ from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
+from agent.sql_runner import SQLRunner
 from agent.ssh import SSHProxy
 
 if TYPE_CHECKING:
@@ -1067,6 +1068,27 @@ def physical_restore_database():
         tables_to_restore=data.get("tables_to_restore", []),
     ).restore_job()
     return {"job": job}
+
+
+@application.route("/database/sql/execute", methods=["POST"])
+def run_sql_queries():
+    data = request.json
+    async_task = data["async_task"]
+    runner = SQLRunner(
+        database=data["database"],
+        db_host=data["database_credential"]["host"],
+        db_port=data["database_credential"]["port"],
+        queries=data["queries"],
+        db_user=data["database_credential"].get("user", None),
+        db_password=data["database_credential"].get("password", None),
+        site=data.get("site"),
+        bench=data.get("bench"),
+        read_only=data.get("read_only", True),
+        continue_on_error=data.get("continue_on_error", False),
+    )
+    if async_task:
+        return {"job": runner.run_sql_queries_job()}
+    return runner.run_sql_queries()
 
 
 @application.route("/database/binary/logs")
