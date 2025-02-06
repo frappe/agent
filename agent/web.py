@@ -1045,7 +1045,7 @@ def physical_backup_database():
         site_backup_name=data["site_backup"]["name"],
         snapshot_trigger_url=data["site_backup"]["snapshot_trigger_url"],
         snapshot_request_key=data["site_backup"]["snapshot_request_key"],
-    ).backup_job()
+    ).create_backup_job()
     return {"job": job}
 
 
@@ -1058,14 +1058,10 @@ def physical_restore_database():
         target_db_root_password=data["target_db_root_password"],
         target_db_port=3306,
         target_db_host=data["private_ip"],
-        files_metadata=data.get("files_metadata", {}),
-        innodb_tables=data.get("innodb_tables", []),
-        myisam_tables=data.get("myisam_tables", []),
-        table_schema=data.get("table_schema", ""),
         backup_db_base_directory=data.get("backup_db_base_directory", ""),
         restore_specific_tables=data.get("restore_specific_tables", False),
         tables_to_restore=data.get("tables_to_restore", []),
-    ).restore_job()
+    ).create_restore_job()
     return {"job": job}
 
 
