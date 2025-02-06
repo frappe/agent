@@ -218,7 +218,7 @@ class DatabasePhysicalBackup(DatabaseServer):
                 "table_schema": self.table_schemas[db_name],
                 "files_metadata": self.files_metadata[db_name],
             }
-            file_path = os.path.join(self.db_base_path, f"physical_backup{db_name}.json")
+            file_path = get_path_of_physical_backup_metadata(self.db_base_path, db_name)
             with open(file_path, "w") as f:
                 json.dump(data, f)
 
@@ -323,4 +323,4 @@ class DatabaseConnectionClosedWithDatabase(Exception):
 
 
 def get_path_of_physical_backup_metadata(db_base_path: str, database_name: str) -> str:
-    return os.path.join(db_base_path, f"physical_backup{database_name}.json")
+    return os.path.join(db_base_path, database_name, "physical_backup_meta.json")
