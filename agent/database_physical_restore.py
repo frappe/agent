@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -8,7 +9,10 @@ import subprocess
 import peewee
 
 from agent.base import AgentException
-from agent.database_physical_backup import DatabaseConnectionClosedWithDatabase
+from agent.database_physical_backup import (
+    DatabaseConnectionClosedWithDatabase,
+    get_path_of_physical_backup_metadata,
+)
 from agent.database_server import DatabaseServer
 from agent.job import job, step
 from agent.utils import compute_file_hash, get_mariadb_table_name_from_path
@@ -22,10 +26,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         target_db_root_password: str,
         target_db_port: int,
         target_db_host: str,
-        files_metadata: dict[str, dict[str, any]],
-        innodb_tables: list[str],
-        myisam_tables: list[str],
-        table_schema: str,
         backup_db_base_directory: str,
         target_db_base_directory: str = "/var/lib/mysql",
         restore_specific_tables: bool = False,
@@ -44,23 +44,16 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.target_db_directory = os.path.join(target_db_base_directory, target_db)
 
         self.backup_db = backup_db
+        self.backup_db_base_directory = backup_db_base_directory
         self.backup_db_directory = os.path.join(backup_db_base_directory, backup_db)
 
-        self.files_metadata = files_metadata
-        self.innodb_tables = innodb_tables
-        self.myisam_tables = myisam_tables
-        self.table_schema = table_schema
         self.restore_specific_tables = restore_specific_tables
         self.tables_to_restore = tables_to_restore
-
-        if restore_specific_tables:
-            self.innodb_tables = [table for table in self.innodb_tables if table in tables_to_restore]
-            self.myisam_tables = [table for table in self.myisam_tables if table in tables_to_restore]
 
         super().__init__()
 
     @job("Physical Restore Database")
-    def restore_job(self):
+    def create_restore_job(self):
         self.validate_backup_files()
         self.validate_connection_to_target_db()
         self.warmup_myisam_files()
@@ -78,6 +71,33 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
+        # fetch the required metadata to proceed
+        backup_metadata_path = get_path_of_physical_backup_metadata(
+            self.backup_db_base_directory, self.backup_db
+        )
+        if not os.path.exists(backup_metadata_path):
+            raise Exception(f"Backup metadata not found for {self.backup_db}")
+
+        backup_metadata = None
+        with open(backup_metadata_path, "r") as f:
+            backup_metadata = json.load(f)
+        if not backup_metadata:
+            raise Exception(f"Backup metadata is empty for {self.backup_db}")
+
+        self.files_metadata = backup_metadata["files_metadata"]
+        self.innodb_tables = backup_metadata["innodb_tables"]
+        self.myisam_tables = backup_metadata["myisam_tables"]
+        self.table_schema = backup_metadata["table_schema"]
+        if self.restore_specific_tables:
+            # remove invalid tables from tables_to_restore
+            all_tables = self.innodb_tables + self.myisam_tables
+            self.tables_to_restore = [table for table in self.tables_to_restore if table in all_tables]
+
+            # remove the unwanted tables
+            self.innodb_tables = [table for table in self.innodb_tables if table in self.tables_to_restore]
+            self.myisam_tables = [table for table in self.myisam_tables if table in self.tables_to_restore]
+
+        # validate files
         files = os.listdir(self.backup_db_directory)
         output = ""
         invalid_files = set()
@@ -90,9 +110,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             file_path = os.path.join(self.backup_db_directory, file)
             # validate file size
             file_size = os.path.getsize(file_path)
-            if file_size == file_metadata["size"]:
-                output += f"[VALID] [FILE SIZE] {file} - {file_size} bytes\n"
-            else:
+            if file_size != file_metadata["size"]:
                 output += f"[INVALID] [FILE SIZE] {file} - {file_size} bytes\n"
                 invalid_files.add(file)
                 continue
@@ -100,13 +118,9 @@ class DatabasePhysicalRestore(DatabaseServer):
             # if file checksum is provided, validate checksum
             if file_metadata["checksum"]:
                 checksum = compute_file_hash(file_path, raise_exception=True)
-                if checksum == file_metadata["checksum"]:
-                    output += f"[VALID] [CHECKSUM] {file} - {checksum}\n"
-                else:
+                if checksum != file_metadata["checksum"]:
                     output += f"[INVALID] [CHECKSUM] {file} - {checksum}\n"
                     invalid_files.add(file)
-            else:
-                output += f"[SKIP] [CHECKSUM] {file} - No\n"
 
         if invalid_files:
             output += "Invalid Files:\n"
