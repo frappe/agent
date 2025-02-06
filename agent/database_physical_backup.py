@@ -219,8 +219,10 @@ class DatabasePhysicalBackup(DatabaseServer):
                 "files_metadata": self.files_metadata[db_name],
             }
             file_path = os.path.join(self.db_base_path, f"physical_backup{db_name}.json")
-            with open(file_path, "w", mode=0o777) as f:
+            with open(file_path, "w") as f:
                 json.dump(data, f)
+
+            os.chmod(file_path, 0o777)
 
             with open(file_path, "rb", buffering=0) as f:
                 os.fsync(f.fileno())
