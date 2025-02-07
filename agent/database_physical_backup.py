@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import time
+from random import randint
 
 import peewee
 import requests
@@ -244,7 +245,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             )
             if response.status_code in [500, 502, 503, 504] and retries <= 10:
                 retries += 1
-                time.sleep(10)
+                time.sleep(15 + randint(2, 8))
                 continue
 
             response.raise_for_status()
