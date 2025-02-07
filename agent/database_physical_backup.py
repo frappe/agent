@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import json
 import os
 import subprocess
 import time
@@ -53,25 +55,23 @@ class DatabasePhysicalBackup(DatabaseServer):
         super().__init__()
 
     @job("Physical Backup Database", priority="low")
-    def backup_job(self):
+    def create_backup_job(self):
+        self.remove_backups_metadata()
         self.fetch_table_info()
         self.flush_tables()
         self.flush_changes_to_disk()
         self.validate_exportable_files()
         self.export_table_schemas()
         self.collect_files_metadata()
+        self.store_backup_metadata()
         self.create_snapshot()  # Blocking call
         self.unlock_all_tables()
-        # Return the data [Required for restoring the backup]
-        data = {}
-        for db_name in self.databases:
-            data[db_name] = {
-                "innodb_tables": self.innodb_tables[db_name],
-                "myisam_tables": self.myisam_tables[db_name],
-                "table_schema": self.table_schemas[db_name],
-                "files_metadata": self.files_metadata[db_name],
-            }
-        return data
+        self.remove_backups_metadata()
+
+    def remove_backups_metadata(self):
+        with contextlib.suppress(Exception):
+            for db_name in self.databases:
+                os.remove(get_path_of_physical_backup_metadata(self.db_base_path, db_name))
 
     @step("Fetch Database Tables Information")
     def fetch_table_info(self):
@@ -205,6 +205,28 @@ class DatabasePhysicalBackup(DatabaseServer):
                     else None,
                 }
 
+    @step("Store Backup Metadata")
+    def store_backup_metadata(self):
+        """
+        Store the backup metadata in the database
+        """
+        data = {}
+        for db_name in self.databases:
+            data = {
+                "innodb_tables": self.innodb_tables[db_name],
+                "myisam_tables": self.myisam_tables[db_name],
+                "table_schema": self.table_schemas[db_name],
+                "files_metadata": self.files_metadata[db_name],
+            }
+            file_path = get_path_of_physical_backup_metadata(self.db_base_path, db_name)
+            with open(file_path, "w") as f:
+                json.dump(data, f)
+
+            os.chmod(file_path, 0o777)
+
+            with open(file_path, "rb", buffering=0) as f:
+                os.fsync(f.fileno())
+
     @step("Create Database Snapshot")
     def create_snapshot(self):
         """
@@ -298,3 +320,7 @@ class DatabaseExportFileNotFoundError(Exception):
 
 class DatabaseConnectionClosedWithDatabase(Exception):
     pass
+
+
+def get_path_of_physical_backup_metadata(db_base_path: str, database_name: str) -> str:
+    return os.path.join(db_base_path, database_name, "physical_backup_meta.json")
