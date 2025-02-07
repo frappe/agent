@@ -50,7 +50,7 @@ class SQLRunner(Base):
         self.job = None
         self.step = None
 
-        self.queries: list[SQLQuery] = [SQLQuery(query) for query in self.queries]
+        self.queries: list[SQLQuery] = [SQLQuery(query) for query in queries]
 
     @job("Run SQL Queries")
     def run_sql_queries_job(self):
