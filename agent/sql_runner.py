@@ -83,7 +83,7 @@ class SQLRunner(Base):
         data = database._run_sql_v2(
             self.queries, commit=(not self.read_only), continue_on_error=self.continue_on_error
         )
-        return [q.to_json() for q in data]
+        return {"data": [q.to_json() for q in data]}
 
 
 class SQLQuery:
