@@ -667,7 +667,7 @@ WHERE
 
                     try:
                         start_time = time.time()
-                        cursor = self.db.execute_sql(q)
+                        cursor = self.db.execute_sql(q.query)
                         q.duration = time.time() - start_time
                         q.success = True
                         if cursor.description:
