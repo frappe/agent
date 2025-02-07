@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime
+import decimal
 import re
 
 from agent.base import Base
@@ -114,16 +116,50 @@ class SQLQuery:
         self.success = False
 
     def to_json(self):
-        # TODO: handle decimal kind of stuffs
+        if not self.data:
+            self.data = []
+
         return {
             "id": self.id,
             "type": self.type,
             "query": self.query,
             "columns": self.columns,
-            "data": self.data,
+            "data": [[self._serialize(col) for col in row] for row in self.data],
             "row_count": self.row_count,
             "error_code": self.error_code,
             "error_message": self.error_message,
             "duration": self.duration,
             "success": self.success,
         }
+
+    def _serialize(self, obj):
+        """
+        Serialize non-serializable data for json
+
+        Source : https://github.com/frappe/frappe/blob/50a88149c15d419897d4d057bef1d63f79582c3a/frappe/__init__.py
+        """
+        from collections.abc import Iterable
+        from re import Match
+
+        try:
+            if isinstance(obj, int | float | str | bool | None):
+                return obj
+
+            if isinstance(obj, decimal.Decimal):
+                return float(obj)
+
+            if isinstance(obj, datetime.date | datetime.datetime | datetime.time):
+                return obj.isoformat()
+
+            if isinstance(obj, Iterable):
+                return list(obj)
+
+            if isinstance(obj, Match):
+                return obj.string
+
+            if hasattr(obj, "__value__"):
+                return obj.__value__()
+
+            return str(obj)
+        except Exception:
+            return repr(obj)
