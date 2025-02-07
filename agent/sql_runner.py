@@ -53,6 +53,7 @@ class SQLRunner(Base):
         self.step = None
 
         self.queries: list[SQLQuery] = [SQLQuery(query) for query in queries]
+        self.result = []
 
     @property
     def job_record(self):
@@ -72,11 +73,12 @@ class SQLRunner(Base):
 
     @job("Run SQL Queries")
     def run_sql_queries_job(self):
-        return self.run_sql_queries_step()
+        self.run_sql_queries_step()
+        return self.result
 
     @step("Run SQL Queries")
     def run_sql_queries_step(self):
-        return self.run_sql_queries()
+        self.result = self.run_sql_queries()
 
     def run_sql_queries(self) -> list[dict]:
         database = Database(self.db_host, self.db_port, self.db_user, self.db_password, self.database)
