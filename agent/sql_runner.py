@@ -22,6 +22,8 @@ class SQLRunner(Base):
         read_only: bool = False,
         continue_on_error: bool = False,
     ):
+        super().__init__()
+
         self.db_host = db_host
         self.db_port = db_port
         self.database = database
