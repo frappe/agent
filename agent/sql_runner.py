@@ -3,6 +3,8 @@ from __future__ import annotations
 import datetime
 import decimal
 import re
+from collections.abc import Iterable
+from re import Match
 
 from agent.base import Base
 from agent.database import Database
@@ -138,17 +140,15 @@ class SQLQuery:
 
         Source : https://github.com/frappe/frappe/blob/50a88149c15d419897d4d057bef1d63f79582c3a/frappe/__init__.py
         """
-        from collections.abc import Iterable
-        from re import Match
 
         try:
-            if isinstance(obj, int | float | str | bool | None):
+            if isinstance(obj, (int, float, str, bool)) or obj is None:
                 return obj
 
             if isinstance(obj, decimal.Decimal):
                 return float(obj)
 
-            if isinstance(obj, datetime.date | datetime.datetime | datetime.time):
+            if isinstance(obj, (datetime.date, datetime.datetime, datetime.time)):
                 return obj.isoformat()
 
             if isinstance(obj, Iterable):
@@ -162,4 +162,4 @@ class SQLQuery:
 
             return str(obj)
         except Exception:
-            return repr(obj)
+            return str(obj)
