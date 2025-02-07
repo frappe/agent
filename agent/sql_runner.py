@@ -4,7 +4,7 @@ import re
 
 from agent.base import Base
 from agent.database import Database
-from agent.job import job, step
+from agent.job import Job, Step, job, step
 from agent.server import Server
 
 
@@ -53,6 +53,22 @@ class SQLRunner(Base):
         self.step = None
 
         self.queries: list[SQLQuery] = [SQLQuery(query) for query in queries]
+
+    @property
+    def job_record(self):
+        if self.job is None:
+            self.job = Job()
+        return self.job
+
+    @property
+    def step_record(self):
+        if self.step is None:
+            self.step = Step()
+        return self.step
+
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
 
     @job("Run SQL Queries")
     def run_sql_queries_job(self):
