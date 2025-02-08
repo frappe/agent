@@ -357,7 +357,7 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def get_create_table_statement(self, sql_dump, table_name) -> str:
         # Define the regex pattern to match the CREATE TABLE statement
-        pattern = re.compile(rf"CREATE TABLE `{table_name}`.*?;", re.DOTALL)
+        pattern = re.compile(rf"CREATE TABLE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
 
         # Search for the CREATE TABLE statement in the SQL dump
         match = pattern.search(sql_dump)
