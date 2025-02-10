@@ -243,7 +243,7 @@ class DatabasePhysicalBackup(DatabaseServer):
                     "key": self.snapshot_request_key,
                 },
             )
-            if response.status_code in [500, 502, 503, 504] and retries <= 10:
+            if response.status_code in [417, 500, 502, 503, 504] and retries <= 10:
                 retries += 1
                 time.sleep(15 + randint(2, 8))
                 continue
