@@ -1089,6 +1089,8 @@ def physical_restore_database():
         backup_db_base_directory=data.get("backup_db_base_directory", ""),
         restore_specific_tables=data.get("restore_specific_tables", False),
         tables_to_restore=data.get("tables_to_restore", []),
+        docker_image=data.get("docker_image"),
+        attempt_failover=data.get("attempt_failover", False),
     ).create_restore_job()
     return {"job": job}
 
