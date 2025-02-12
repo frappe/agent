@@ -1083,12 +1083,15 @@ def physical_restore_database():
     job = DatabasePhysicalRestore(
         backup_db=data["backup_db"],
         target_db=data["target_db"],
+        backup_db_root_password=data["backup_db_root_password"],
         target_db_root_password=data["target_db_root_password"],
         target_db_port=3306,
         target_db_host=data["private_ip"],
         backup_db_base_directory=data.get("backup_db_base_directory", ""),
         restore_specific_tables=data.get("restore_specific_tables", False),
         tables_to_restore=data.get("tables_to_restore", []),
+        docker_image=data.get("docker_image"),
+        attempt_failover=data.get("attempt_failover", False),
     ).create_restore_job()
     return {"job": job}
 

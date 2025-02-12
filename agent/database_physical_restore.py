@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
-import shutil
 import subprocess
+from shlex import quote
+from shutil import which
 
 import peewee
 
@@ -23,6 +25,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self,
         backup_db: str,
         target_db: str,
+        backup_db_root_password: str,
         target_db_root_password: str,
         target_db_port: int,
         target_db_host: str,
@@ -30,6 +33,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         target_db_base_directory: str = "/var/lib/mysql",
         restore_specific_tables: bool = False,
         tables_to_restore: list[str] | None = None,
+        docker_image: str | None = None,
+        attempt_failover: bool = False,
     ):
         if tables_to_restore is None:
             tables_to_restore = []
@@ -44,11 +49,20 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.target_db_directory = os.path.join(target_db_base_directory, target_db)
 
         self.backup_db = backup_db
+        self.backup_db_root_password = backup_db_root_password
         self.backup_db_base_directory = backup_db_base_directory
         self.backup_db_directory = os.path.join(backup_db_base_directory, backup_db)
 
         self.restore_specific_tables = restore_specific_tables
         self.tables_to_restore = tables_to_restore
+
+        self.docker_image = docker_image
+        self.attempt_failover = attempt_failover
+
+        if self.attempt_failover and not self.docker_image:
+            raise Exception("Docker image is required for failover and not provided")
+
+        self.use_fio = which("fio") is not None
 
         super().__init__()
 
@@ -59,15 +73,23 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.warmup_myisam_files()
         self.check_and_fix_myisam_table_files()
         self.warmup_innodb_files()
-        # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
-        self.prepare_target_db_for_restore()
-        self.create_tables_from_table_schema()
-        self.discard_innodb_tablespaces_from_target_db()
-        self.perform_innodb_file_operations()
-        self.import_tablespaces_in_target_db()
-        self.hold_write_lock_on_myisam_tables()
-        self.perform_myisam_file_operations()
-        self.unlock_all_tables()
+
+        try:
+            # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
+            self.prepare_target_db_for_restore()
+            self.create_tables_from_table_schema()
+            self.discard_innodb_tablespaces_from_target_db()
+            self.perform_innodb_file_operations()
+            self.import_tablespaces_in_target_db()
+            self.hold_write_lock_on_myisam_tables()
+            self.perform_myisam_file_operations()
+            self.unlock_all_tables()
+        except Exception as e:
+            if self.attempt_failover:
+                self.unlock_all_tables()
+                self.run_container_to_restore_tables()
+            else:
+                raise e
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
@@ -276,6 +298,42 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._get_target_db().execute_sql("UNLOCK TABLES;")
         self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
 
+    @step("Run Container to Restore Tables")
+    def run_container_to_restore_tables(self):
+        if not self.attempt_failover:
+            return
+
+        # Drop the tables before starting the container
+        # Because, we can't import data in discarded tablespaces
+        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
+        if self.restore_specific_tables:
+            tables = self.tables_to_restore
+        else:
+            tables = self._get_target_db().get_tables()
+        for table in tables:
+            with contextlib.suppress(Exception):
+                self._get_target_db().execute_sql(f"DROP TABLE IF EXISTS `{table}`;")
+        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
+
+        # Start the container
+        mysql_uid = self.execute("id -u mysql")["output"].strip()
+        mysql_gid = self.execute("id -g mysql")["output"].strip()
+
+        tables_str = quote(json.dumps(self.innodb_tables + self.myisam_tables))
+
+        self.execute(
+            f"docker run --rm -t "
+            f"-e MYSQL_GID={mysql_gid} -e MYSQL_UID={mysql_uid} "
+            f"-e BACKUP_DB_ROOT_PASSWORD={self.backup_db_root_password} "
+            f"-e BACKUP_DB={self.backup_db} "
+            f"-e TARGET_DB={self.target_db} "
+            f"-e TARGET_DB_ROOT_PASSWORD={self.target_db_password} "
+            f"-e TARGET_DB_HOST={self.target_db_host} "
+            f"-e TABLES={tables_str} "
+            f"-v {self.backup_db_base_directory}:/var/lib/mysql "
+            f"{self.docker_image}"
+        )
+
     def _warmup_files(self, file_paths: list[str]):
         """
         Once the snapshot is converted to disk and attached to the instance,
@@ -289,7 +347,25 @@ class DatabasePhysicalRestore(DatabaseServer):
         Ref - https://docs.aws.amazon.com/ebs/latest/userguide/ebs-initialize.html
         """
         for file in file_paths:
-            subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
+            # If file size is greater than 1.5MB
+            # then use fio to warm up the file (if available)
+            if self.use_fio and os.path.getsize(file) > 1572864:
+                subprocess.run(
+                    [
+                        "fio",
+                        "--filename=" + file,
+                        "--rw=read",
+                        "--bs=1M",
+                        "--iodepth=6",
+                        "--ioengine=libaio",
+                        "--direct=1",
+                        "--name="
+                        + file,  # We need to give a job name to fio, using the file name as job name
+                    ],
+                    check=True,
+                )
+            else:
+                subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
 
     def _perform_file_operations(self, engine: str):
         for file in os.listdir(self.backup_db_directory):
@@ -305,9 +381,17 @@ class DatabasePhysicalRestore(DatabaseServer):
             if engine == "myisam" and not (file.endswith(".MYI") or file.endswith(".MYD")):
                 continue
 
-            shutil.copyfile(
-                os.path.join(self.backup_db_directory, file),
-                os.path.join(self.target_db_directory, file),
+            """
+            `frappe` user will not have perm to change group to mysql,
+            so dont try to preserve it `frappe` user
+            """
+            subprocess.run(
+                [
+                    "cp",
+                    "--no-preserve=all",
+                    os.path.join(self.backup_db_directory, file),
+                    os.path.join(self.target_db_directory, file),
+                ]
             )
 
     def _get_target_db(self) -> peewee.MySQLDatabase:
