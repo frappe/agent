@@ -327,7 +327,8 @@ class DatabasePhysicalRestore(DatabaseServer):
                 continue
 
             """
-            `frappe` user will not have perm to change group to mysql, so dont try to preserve it `frappe` uses
+            `frappe` user will not have perm to change group to mysql,
+            so dont try to preserve it `frappe` user
             """
             subprocess.run(
                 [
