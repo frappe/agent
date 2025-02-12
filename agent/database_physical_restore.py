@@ -307,15 +307,15 @@ class DatabasePhysicalRestore(DatabaseServer):
         tables_str = quote(json.dumps(self.innodb_tables + self.myisam_tables))
 
         self.execute(
-            f"docker run --rm -t"
-            f"-e MYSQL_GID={mysql_gid} -e MYSQL_UID={mysql_uid}"
-            f"-e BACKUP_DB_ROOT_PASSWORD={self.backup_db_root_password}"
-            f"-e BACKUP_DB={self.backup_db}"
-            f"-e TARGET_DB={self.target_db}"
-            f"-e TARGET_DB_ROOT_PASSWORD={self.target_db_password}"
-            f"-e TARGET_DB_HOST={self.target_db_host}"
-            f"-e TABLES={tables_str}"
-            f"-v {self.backup_db_base_directory}:/var/lib/mysql"
+            f"docker run --rm -t "
+            f"-e MYSQL_GID={mysql_gid} -e MYSQL_UID={mysql_uid} "
+            f"-e BACKUP_DB_ROOT_PASSWORD={self.backup_db_root_password} "
+            f"-e BACKUP_DB={self.backup_db} "
+            f"-e TARGET_DB={self.target_db} "
+            f"-e TARGET_DB_ROOT_PASSWORD={self.target_db_password} "
+            f"-e TARGET_DB_HOST={self.target_db_host} "
+            f"-e TABLES={tables_str} "
+            f"-v {self.backup_db_base_directory}:/var/lib/mysql "
             f"{self.docker_image}"
         )
 
