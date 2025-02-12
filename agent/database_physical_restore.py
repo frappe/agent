@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+from shutil import which
 
 import peewee
 
@@ -49,6 +50,8 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         self.restore_specific_tables = restore_specific_tables
         self.tables_to_restore = tables_to_restore
+
+        self.use_fio = which("fio") is not None
 
         super().__init__()
 
@@ -289,7 +292,25 @@ class DatabasePhysicalRestore(DatabaseServer):
         Ref - https://docs.aws.amazon.com/ebs/latest/userguide/ebs-initialize.html
         """
         for file in file_paths:
-            subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
+            # If file size is greater than 1.5MB
+            # then use fio to warm up the file (if available)
+            if self.use_fio and os.path.getsize(file) > 1572864:
+                subprocess.run(
+                    [
+                        "fio",
+                        "--filename=" + file,
+                        "--rw=read",
+                        "--bs=1M",
+                        "--iodepth=6",
+                        "--ioengine=libaio",
+                        "--direct=1",
+                        "--name="
+                        + file,  # We need to give a job name to fio, using the file name as job name
+                    ],
+                    check=True,
+                )
+            else:
+                subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
 
     def _perform_file_operations(self, engine: str):
         for file in os.listdir(self.backup_db_directory):
