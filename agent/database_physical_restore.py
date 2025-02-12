@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -302,6 +303,19 @@ class DatabasePhysicalRestore(DatabaseServer):
         if not self.attempt_failover:
             return
 
+        # Drop the tables before starting the container
+        # Because, we can't import data in discarded tablespaces
+        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
+        if self.restore_specific_tables:
+            tables = self.tables_to_restore
+        else:
+            tables = self._get_target_db().get_tables()
+        for table in tables:
+            with contextlib.suppress(Exception):
+                self._get_target_db().execute_sql(f"DROP TABLE IF EXISTS `{table}`;")
+        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
+
+        # Start the container
         mysql_uid = self.execute("id -u mysql")["output"].strip()
         mysql_gid = self.execute("id -g mysql")["output"].strip()
 
