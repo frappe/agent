@@ -1083,6 +1083,7 @@ def physical_restore_database():
     job = DatabasePhysicalRestore(
         backup_db=data["backup_db"],
         target_db=data["target_db"],
+        backup_db_root_password=data["backup_db_root_password"],
         target_db_root_password=data["target_db_root_password"],
         target_db_port=3306,
         target_db_host=data["private_ip"],
