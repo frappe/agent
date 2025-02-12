@@ -85,6 +85,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             self.unlock_all_tables()
         except Exception as e:
             if self.attempt_failover:
+                self.unlock_all_tables()
                 self.run_container_to_restore_tables()
             else:
                 raise e
