@@ -326,9 +326,16 @@ class DatabasePhysicalRestore(DatabaseServer):
             if engine == "myisam" and not (file.endswith(".MYI") or file.endswith(".MYD")):
                 continue
 
-            shutil.copyfile(
-                os.path.join(self.backup_db_directory, file),
-                os.path.join(self.target_db_directory, file),
+            """
+            `frappe` user will not have perm to change group to mysql, so dont try to preserve it `frappe` uses
+            """
+            subprocess.run(
+                [
+                    "cp",
+                    "--no-preserve=all",
+                    os.path.join(self.backup_db_directory, file),
+                    os.path.join(self.target_db_directory, file),
+                ]
             )
 
     def _get_target_db(self) -> peewee.MySQLDatabase:
