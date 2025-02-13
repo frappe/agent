@@ -1018,6 +1018,13 @@ def proxy_add_upstream_site(upstream):
     return {"job": job}
 
 
+@application.route("/proxy/upstreams/<string:upstream>/domains", methods=["POST"])
+def proxy_add_upstream_site_domain(upstream):
+    data = request.json
+    job = Proxy().add_domain_to_upstream_job(upstream, data["domain"], data.get("skip_reload", False))
+    return {"job": job}
+
+
 @application.route(
     "/proxy/upstreams/<string:upstream>/sites/<string:site>",
     methods=["DELETE"],
