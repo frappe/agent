@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from flask import Flask, Response, jsonify, request
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
+from redis.exceptions import ConnectionError as RedisConnectionError
 from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
@@ -233,11 +234,21 @@ def get_benches():
 def get_metrics():
     from agent.exporter import get_metrics
 
-    benches_metrics = [
-        get_metrics(name, rq_port)
-        for name, bench in Server().benches.items()
-        if (rq_port := bench.bench_config.get("rq_port")) is not None
-    ]
+    benches_metrics = []
+    server = Server()
+
+    for name, bench in server.benches.items():
+        rq_port = bench.bench_config.get("rq_port")
+        if rq_port is not None:
+            try:
+                metrics = get_metrics(name, rq_port)
+                benches_metrics.append(metrics)
+            except RedisConnectionError as e:
+                # This is to specifically catch the error on old benches that had their
+                # configs updated to render rq_port but the container doesn't actually
+                # expose the rq_port
+                log.error(f"Failed to get metrics for {name} on port {rq_port}: {e}")
+
     return Response(benches_metrics, mimetype="text/plain")
 
 
@@ -254,7 +265,15 @@ def get_bench_metrics(bench_str):
     bench = Server().benches[bench_str]
     rq_port = bench.bench_config.get("rq_port")
     if rq_port:
-        return Response(get_metrics(bench_str, rq_port), mimetype="text/plain")
+        try:
+            res = get_metrics(bench_str, rq_port)
+        except RedisConnectionError as e:
+            # This is to specifically catch the error on old benches that had their
+            # configs updated to render rq_port but the container doesn't actually
+            # expose the rq_port
+            log.error(f"Failed to get metrics for {bench_str} on port {rq_port}: {e}")
+        else:
+            return Response(res, mimetype="text/plain")
 
     return Response("Unavailable", status=400, mimetype="text/plain")
 
