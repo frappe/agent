@@ -70,14 +70,21 @@ class Proxy(Server):
             if wildcard.get("code_server"):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
-    @job("Add Site to Upstream")
-    def add_site_to_upstream_job(self, upstream, site, skip_reload=False):
+    def add_site_domain_to_upstream(self, upstream, site, skip_reload=False):
         self.remove_conflicting_site(site)
         self.add_site_to_upstream(upstream, site)
         self.generate_proxy_config()
         if skip_reload:
             return
         self.reload_nginx()
+
+    @job("Add Site to Upstream")
+    def add_site_to_upstream_job(self, upstream, site, skip_reload=False):
+        self.add_site_domain_to_upstream(upstream, site, skip_reload)
+
+    @job("Add Domain to Upstream")
+    def add_domain_to_upstream_job(self, upstream, domain, skip_reload=False):
+        self.add_site_domain_to_upstream(upstream, domain, skip_reload)
 
     @step("Remove Conflicting Site")
     def remove_conflicting_site(self, site):
