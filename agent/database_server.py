@@ -131,7 +131,11 @@ class DatabaseServer(Server):
                 port=3306,
             )
             for process in processes:
-                if (process["Time"] or 0) >= kill_threshold:
+                if (
+                    (process["Time"] or 0) >= kill_threshold
+                    and process["User"] != "system user"
+                    and process["Command"] not in ["Binlog Dump", "Slave_SQL", "Slave_IO"]
+                ):
                     mariadb.execute_sql(f"KILL {process['Id']}")
         except Exception:
             import traceback
