@@ -50,7 +50,8 @@ class DatabasePhysicalBackup(DatabaseServer):
 
         self.innodb_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.myisam_tables: dict[str, list[str]] = {db: [] for db in self.databases}
-        self.files_metadata: dict[str, dict[str, str]] = {db: {} for db in self.databases}
+        self.sequence_tables: dict[str, list[str]] = {db: [] for db in self.databases}
+        self.files_metadata: dict[str, dict[str, dict[str, str]]] = {db: {} for db in self.databases}
         self.table_schemas: dict[str, str] = {}
 
         super().__init__()
@@ -82,7 +83,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         for db_name in self.databases:
             db_instance = self.get_db(db_name)
             query = (
-                "SELECT table_name, ENGINE FROM information_schema.tables "
+                "SELECT table_name, engine, table_type FROM information_schema.tables "
                 "WHERE table_schema = DATABASE() AND table_type != 'VIEW' "
                 "ORDER BY table_name"
             )
@@ -90,10 +91,24 @@ class DatabasePhysicalBackup(DatabaseServer):
             for row in data:
                 table = row[0]
                 engine = row[1]
+                table_type = row[2]
                 if engine == "InnoDB":
                     self.innodb_tables[db_name].append(table)
                 elif engine == "MyISAM":
                     self.myisam_tables[db_name].append(table)
+
+                if table_type == "SEQUENCE":
+                    """
+                    Sequence table can use any engine
+
+                    In mariadb-dump result, sequence table will have specific SQL for creating/dropping
+                    https://mariadb.com/kb/en/create-sequence/
+                    https://mariadb.com/kb/en/drop-sequence/
+
+                    Store the table references, so that we can handle this in a different manner
+                    during physical restore
+                    """
+                    self.sequence_tables[db_name].append(table)
 
     @step("Flush Database Tables")
     def flush_tables(self):
@@ -216,6 +231,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             data = {
                 "innodb_tables": self.innodb_tables[db_name],
                 "myisam_tables": self.myisam_tables[db_name],
+                "sequence_tables": self.sequence_tables[db_name],
                 "table_schema": self.table_schemas[db_name],
                 "files_metadata": self.files_metadata[db_name],
             }
