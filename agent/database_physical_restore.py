@@ -6,9 +6,8 @@ import re
 import shutil
 import subprocess
 
-import peewee
-
 from agent.base import AgentException
+from agent.database import CustomPeeweeDB
 from agent.database_physical_backup import (
     DatabaseConnectionClosedWithDatabase,
     get_path_of_physical_backup_metadata,
@@ -34,8 +33,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         if tables_to_restore is None:
             tables_to_restore = []
 
-        self._target_db_instance: peewee.MySQLDatabase = None
-        self._target_db_instance_for_myisam: peewee.MySQLDatabase = None
+        self._target_db_instance: CustomPeeweeDB = None
+        self._target_db_instance_for_myisam: CustomPeeweeDB = None
         self.target_db = target_db
         self.target_db_user = "root"
         self.target_db_password = target_db_root_password
@@ -317,13 +316,13 @@ class DatabasePhysicalRestore(DatabaseServer):
                 os.path.join(self.target_db_directory, file),
             )
 
-    def _get_target_db(self) -> peewee.MySQLDatabase:
+    def _get_target_db(self) -> CustomPeeweeDB:
         if self._target_db_instance is not None:
             if not self._target_db_instance.is_connection_usable():
                 raise DatabaseConnectionClosedWithDatabase()
             return self._target_db_instance
 
-        self._target_db_instance = peewee.MySQLDatabase(
+        self._target_db_instance = CustomPeeweeDB(
             self.target_db,
             user=self.target_db_user,
             password=self.target_db_password,
@@ -335,13 +334,13 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._target_db_instance.execute_sql("SET SESSION wait_timeout = 14400;")
         return self._target_db_instance
 
-    def _get_target_db_for_myisam(self) -> peewee.MySQLDatabase:
+    def _get_target_db_for_myisam(self) -> CustomPeeweeDB:
         if self._target_db_instance_for_myisam is not None:
             if not self._target_db_instance_for_myisam.is_connection_usable():
                 raise DatabaseConnectionClosedWithDatabase()
             return self._target_db_instance_for_myisam
 
-        self._target_db_instance_for_myisam = peewee.MySQLDatabase(
+        self._target_db_instance_for_myisam = CustomPeeweeDB(
             self.target_db,
             user=self.target_db_user,
             password=self.target_db_password,

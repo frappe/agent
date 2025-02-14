@@ -7,9 +7,9 @@ import subprocess
 import time
 from random import randint
 
-import peewee
 import requests
 
+from agent.database import CustomPeeweeDB
 from agent.database_server import DatabaseServer
 from agent.job import job, step
 from agent.utils import compute_file_hash, decode_mariadb_filename
@@ -31,7 +31,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         if not databases:
             raise ValueError("At least one database is required")
         # Instance variable for internal use
-        self._db_instances: dict[str, peewee.MySQLDatabase] = {}
+        self._db_instances: dict[str, CustomPeeweeDB] = {}
         self._db_tables_locked: dict[str, bool] = {db: False for db in databases}
 
         # variables
@@ -296,7 +296,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         the tables will be unlocked automatically
         """
 
-    def get_db(self, db_name: str) -> peewee.MySQLDatabase:
+    def get_db(self, db_name: str) -> CustomPeeweeDB:
         instance = self._db_instances.get(db_name, None)
         if instance is not None:
             if not instance.is_connection_usable():
@@ -306,7 +306,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             return instance
         if db_name not in self.databases:
             raise ValueError(f"Database {db_name} not found")
-        self._db_instances[db_name] = peewee.MySQLDatabase(
+        self._db_instances[db_name] = CustomPeeweeDB(
             db_name,
             user=self.db_user,
             password=self.db_password,
