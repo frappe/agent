@@ -51,7 +51,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         self.innodb_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.myisam_tables: dict[str, list[str]] = {db: [] for db in self.databases}
         self.sequence_tables: dict[str, list[str]] = {db: [] for db in self.databases}
-        self.files_metadata: dict[str, dict[str, str]] = {db: {} for db in self.databases}
+        self.files_metadata: dict[str, dict[str, dict[str, str]]] = {db: {} for db in self.databases}
         self.table_schemas: dict[str, str] = {}
 
         super().__init__()
@@ -98,6 +98,16 @@ class DatabasePhysicalBackup(DatabaseServer):
                     self.myisam_tables[db_name].append(table)
 
                 if table_type == "SEQUENCE":
+                    """
+                    Sequence table can use any engine
+
+                    In mariadb-dump result, sequence table will have specific SQL for creating/dropping
+                    https://mariadb.com/kb/en/create-sequence/
+                    https://mariadb.com/kb/en/drop-sequence/
+
+                    Store the table references, so that we can handle this in a different manner
+                    during physical restore
+                    """
                     self.sequence_tables[db_name].append(table)
 
     @step("Flush Database Tables")

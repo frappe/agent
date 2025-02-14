@@ -50,6 +50,12 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.restore_specific_tables = restore_specific_tables
         self.tables_to_restore = tables_to_restore
 
+        # Initialize the variables
+        self.files_metadata: dict[str, dict[str, str]] = {}
+        self.innodb_tables: list[str] = []
+        self.myisam_tables: list[str] = []
+        self.sequence_tables: list[str] = []
+
         super().__init__()
 
     @job("Physical Restore Database")
@@ -87,6 +93,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.files_metadata = backup_metadata["files_metadata"]
         self.innodb_tables = backup_metadata["innodb_tables"]
         self.myisam_tables = backup_metadata["myisam_tables"]
+        self.sequence_tables = backup_metadata["sequence_tables"]
         self.table_schema = backup_metadata["table_schema"]
         if self.restore_specific_tables:
             # remove invalid tables from tables_to_restore
@@ -195,7 +202,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         # it will reduce the time to drop tables and will not cause any block while dropping tables
         self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
         for table in tables:
-            self._get_target_db().execute_sql(f"DROP TABLE IF EXISTS `{table}`;")
+            self._get_target_db().execute_sql(self.get_drop_table_statement(table))
         self._get_target_db().execute_sql(
             "SET SESSION FOREIGN_KEY_CHECKS = 1;"
         )  # re-enable foreign key checks
@@ -205,7 +212,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         if self.restore_specific_tables:
             sql_stmts = []
             for table in self.tables_to_restore:
-                sql_stmts.append(f"DROP TABLE IF EXISTS `{table}`;")
+                sql_stmts.append(self.get_drop_table_statement(table))
                 sql_stmts.append(self.get_create_table_statement(self.table_schema, table))
         else:
             # https://github.com/frappe/frappe/pull/26855
@@ -355,16 +362,32 @@ class DatabasePhysicalRestore(DatabaseServer):
     def is_db_file_need_to_be_restored(self, file_name: str) -> bool:
         return self.is_table_need_to_be_restored(get_mariadb_table_name_from_path(file_name))
 
+    def is_sequence_table(self, table_name: str) -> bool:
+        return table_name in self.sequence_tables
+
     def get_create_table_statement(self, sql_dump, table_name) -> str:
-        # Define the regex pattern to match the CREATE TABLE statement
-        pattern = re.compile(rf"CREATE TABLE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
+        if self.is_sequence_table(table_name):
+            # Define the regex pattern to match the CREATE SEQUENCE statement
+            pattern = re.compile(rf"CREATE SEQUENCE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
+        else:
+            # Define the regex pattern to match the CREATE TABLE statement
+            pattern = re.compile(rf"CREATE TABLE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
 
         # Search for the CREATE TABLE statement in the SQL dump
         match = pattern.search(sql_dump)
         if match:
             return match.group(0)
 
-        raise Exception(f"CREATE TABLE statement for {table_name} not found in SQL dump")
+        if self.is_sequence_table(table_name):
+            raise Exception(f"CREATE SEQUENCE statement for {table_name} not found in SQL dump")
+        else:  # noqa: RET506
+            raise Exception(f"CREATE TABLE statement for {table_name} not found in SQL dump")
+
+    def get_drop_table_statement(self, table_name) -> str:
+        if self.is_sequence_table(table_name):
+            return f"DROP SEQUENCE IF EXISTS `{table_name}`;"
+
+        return f"DROP TABLE IF EXISTS `{table_name}`;"
 
     def __del__(self):
         if self._target_db_instance is not None:
