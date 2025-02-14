@@ -368,7 +368,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     def get_create_table_statement(self, sql_dump, table_name) -> str:
         if self.is_sequence_table(table_name):
             # Define the regex pattern to match the CREATE SEQUENCE statement
-            pattern = re.compile(rf"CREATE SEQUENCE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
+            pattern = re.compile(rf"CREATE SEQUENCE `{table_name}`[\s\S]*?;", re.DOTALL)
         else:
             # Define the regex pattern to match the CREATE TABLE statement
             pattern = re.compile(rf"CREATE TABLE `{table_name}`[\s\S]*?;(?=\s*(?=\n|$))", re.DOTALL)
