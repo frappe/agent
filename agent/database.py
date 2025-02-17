@@ -645,6 +645,9 @@ class JSONEncoderForSQLQueryResult(json.JSONEncoder):
         return str(obj)
 
 
+SENTINEL = object()
+
+
 class CustomPeeweeDB(peewee.MySQLDatabase):
     """
     Override peewee.MySQLDatabase to modify `execute_sql` method
@@ -674,18 +677,19 @@ class CustomPeeweeDB(peewee.MySQLDatabase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def execute_sql(self, sql):
-        if self.in_transaction():
-            commit = False
-        elif self.commit_select:
-            commit = True
-        else:
-            commit = not sql[:6].lower().startswith("select")
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
+        if commit is SENTINEL:
+            if self.in_transaction():
+                commit = False
+            elif self.commit_select:
+                commit = True
+            else:
+                commit = not sql[:6].lower().startswith("select")
 
         with self.__exception_wrapper__:
             cursor = self.cursor(commit)
             try:
-                cursor.execute(sql, None)  # params passed as none
+                cursor.execute(sql, params)
             except Exception:
                 if self.autorollback and not self.in_transaction():
                     self.rollback()
