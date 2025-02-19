@@ -92,7 +92,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.files_metadata = backup_metadata["files_metadata"]
         self.innodb_tables = backup_metadata["innodb_tables"]
         self.myisam_tables = backup_metadata["myisam_tables"]
-        self.sequence_tables = backup_metadata["sequence_tables"]
+        self.sequence_tables = backup_metadata.get("sequence_tables", [])
         self.table_schema = backup_metadata["table_schema"]
         if self.restore_specific_tables:
             # remove invalid tables from tables_to_restore
