@@ -72,7 +72,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.import_tablespaces_in_target_db()
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
-        self.perform_post_restoration_checks()
+        self.perform_post_restoration_validation_and_fixes()
         self.unlock_all_tables()
 
     @step("Validate Backup Files")
@@ -278,8 +278,8 @@ class DatabasePhysicalRestore(DatabaseServer):
     def perform_myisam_file_operations(self):
         self._perform_file_operations(engine="myisam")
 
-    @step("Post Restoration Checks")
-    def perform_post_restoration_checks(self):
+    @step("Validate And Fix Tables")
+    def perform_post_restoration_validation_and_fixes(self):
         innodb_tables_with_fts = self.get_innodb_tables_with_fts_index()
         """
         FLUSH TABLES ... FOR EXPORT does not support FULLTEXT indexes.
@@ -294,6 +294,16 @@ class DatabasePhysicalRestore(DatabaseServer):
             if self.is_table_corrupted(table) and not self.repair_table(table, "innodb"):
                 raise Exception(f"Failed to repair table {table}")
 
+        """
+        MyISAM table corruption can generally happen due to mismatch of no of records in MYD file.
+
+        myisamchk can't find and fix this issue.
+        Because this out of sync happen after creating a blank MyISAM table and just copying MYF & MYI files.
+
+        Usually, DB Restart will fix this issue. But we can't do in live database.
+        So running `REPAIR TABLE ... USE_FRM` can fix the issue.
+        https://dev.mysql.com/doc/refman/8.4/en/myisam-repair.html
+        """
         for table in self.myisam_tables:
             if self.is_table_corrupted(table) and not self.repair_table(table, "myisam"):
                 raise Exception(f"Failed to repair table {table}")
