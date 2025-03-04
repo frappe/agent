@@ -72,6 +72,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.import_tablespaces_in_target_db()
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
+        self.perform_post_restoration_validation_and_fixes()
         self.unlock_all_tables()
 
     @step("Validate Backup Files")
@@ -277,6 +278,46 @@ class DatabasePhysicalRestore(DatabaseServer):
     def perform_myisam_file_operations(self):
         self._perform_file_operations(engine="myisam")
 
+    @step("Validate And Fix Tables")
+    def perform_post_restoration_validation_and_fixes(self):
+        innodb_tables_with_fts = self.get_innodb_tables_with_fts_index()
+        """
+        FLUSH TABLES ... FOR EXPORT does not support FULLTEXT indexes.
+        https://dev.mysql.com/doc/refman/8.4/en/innodb-table-import.html#:~:text=in%20the%20operation.-,Limitations,-The%20Transportable%20Tablespaces
+
+        We can either drop + add index.
+        Or, run `OPTIMIZE TABLE` on the table to rebuild the index.
+        https://mariadb.com/kb/en/optimize-table/#updating-an-innodb-fulltext-index
+        """
+
+        for table in innodb_tables_with_fts:
+            if self.is_table_corrupted(table) and not self.repair_table(table, "innodb"):
+                raise Exception(f"Failed to repair table {table}")
+
+        """
+        MyISAM table corruption can generally happen due to mismatch of no of records in MYD file.
+
+        myisamchk can't find and fix this issue.
+        Because this out of sync happen after creating a blank MyISAM table and just copying MYF & MYI files.
+
+        Usually, DB Restart will fix this issue. But we can't do in live database.
+        So running `REPAIR TABLE ... USE_FRM` can fix the issue.
+        https://dev.mysql.com/doc/refman/8.4/en/myisam-repair.html
+        """
+        for table in self.myisam_tables:
+            if self.is_table_corrupted(table) and not self.repair_table(table, "myisam"):
+                raise Exception(f"Failed to repair table {table}")
+
+        for table in self.innodb_tables:
+            if table in innodb_tables_with_fts:
+                continue
+            """
+            If other innodb tables are corrupted,
+            We can't repair the table in running database
+            """
+            if self.is_table_corrupted(table):
+                raise Exception(f"Failed to repair table {table}")
+
     @step("Unlock All Tables")
     def unlock_all_tables(self):
         self._get_target_db().execute_sql("UNLOCK TABLES;")
@@ -388,8 +429,89 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         return f"DROP TABLE IF EXISTS `{table_name}`;"
 
+    def is_table_corrupted(self, table_name: str) -> bool:
+        result = run_sql_query(self._get_target_db(), f"CHECK TABLE `{table_name}` QUICK;")
+        """
+        +-----------------------------------+-------+----------+------------------------------------------------------+
+        | Table                             | Op    | Msg_type | Msg_text                                             |
+        +-----------------------------------+-------+----------+------------------------------------------------------+
+        | _8edd549f4b072174.__global_search | check | warning  | Size of indexfile is: 22218752      Should be: 4096  |
+        | _8edd549f4b072174.__global_search | check | warning  | Size of datafile is:  31303496       Should be: 0    |
+        | _8edd549f4b072174.__global_search | check | error    | Record-count is not ok; is     152774   Should be: 0 |
+        | _8edd549f4b072174.__global_search | check | warning  | Found     172605 key parts. Should be: 0             |
+        | _8edd549f4b072174.__global_search | check | error    | Corrupt                                              |
+        +-----------------------------------+-------+----------+------------------------------------------------------+
+
+        +-------------------------------------------+-------+----------+--------------------------------------------------------+
+        | Table                                     | Op    | Msg_type | Msg_text                                               |
+        +-------------------------------------------+-------+----------+--------------------------------------------------------+
+        | _8edd549f4b072174.energy_point_log_id_seq | check | note     | The storage engine for the table doesn't support check |
+        +-------------------------------------------+-------+----------+--------------------------------------------------------+
+        """  # noqa: E501
+        isError = False
+        for row in result:
+            if row[2] == "error":
+                isError = True
+                break
+        return isError
+
+    def repair_table(self, table_name: str, engine: str) -> bool:
+        if engine == "innodb":
+            result = run_sql_query(self._get_target_db(), f"OPTIMIZE TABLE `{table_name}`;")
+        elif engine == "myisam":
+            result = run_sql_query(self._get_target_db(), f"REPAIR TABLE `{table_name}` USE_FRM;")
+        else:
+            raise Exception(f"Engine {engine} is not supported")
+        """
+        +---------------------------------------------------+--------+----------+----------+
+        | Table                                             | Op     | Msg_type | Msg_text |
+        +---------------------------------------------------+--------+----------+----------+
+        | _8edd549f4b072174.tabInsights Query Execution Log | repair | status   | OK       |
+        +---------------------------------------------------+--------+----------+----------+
+
+        Msg Type can be status, error, info, note, or warning
+        """
+        isErrorOccurred = False
+        for row in result:
+            if row[2] == "error":
+                isErrorOccurred = True
+                break
+
+        return not isErrorOccurred
+
+    def get_innodb_tables_with_fts_index(self):
+        rows = run_sql_query(
+            self._get_target_db(),
+            f"""
+        SELECT
+            DISTINCT(t.TABLE_NAME)
+        FROM
+            information_schema.STATISTICS s
+        JOIN
+            information_schema.TABLES t
+            ON s.TABLE_SCHEMA = t.TABLE_SCHEMA
+            AND s.TABLE_NAME = t.TABLE_NAME
+        WHERE
+            s.INDEX_TYPE = 'FULLTEXT'
+            AND t.TABLE_SCHEMA = '{self.target_db}'
+            AND t.ENGINE = 'InnoDB'
+        """,
+        )
+        return [row[0] for row in rows]
+
     def __del__(self):
         if self._target_db_instance is not None:
             self._target_db_instance.close()
         if self._target_db_instance_for_myisam is not None:
             self._target_db_instance_for_myisam.close()
+
+
+def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
+    """
+    Return the result of the query as a list of rows
+    """
+    cursor = db.execute_sql(query)
+    if not cursor.description:
+        return []
+    rows = cursor.fetchall()
+    return [row for row in rows]
