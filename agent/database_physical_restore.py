@@ -324,6 +324,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
 
     def _warmup_files(self, file_paths: list[str]):
+        from filewarmer import FWUP
+
         """
         Once the snapshot is converted to disk and attached to the instance,
         All the files are not immediately available to the system.
@@ -335,8 +337,9 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         Ref - https://docs.aws.amazon.com/ebs/latest/userguide/ebs-initialize.html
         """
-        for file in file_paths:
-            subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
+
+        fwup = FWUP()
+        fwup.warmup(file_paths, method="io_uring")
 
     def _perform_file_operations(self, engine: str):
         for file in os.listdir(self.backup_db_directory):
