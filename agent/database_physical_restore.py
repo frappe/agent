@@ -447,7 +447,13 @@ class DatabasePhysicalRestore(DatabaseServer):
         """  # noqa: E501
         isError = False
         for row in result:
-            if row[2] == "error":
+            if row[2] == "error" or (
+                row[2] == "warning"
+                and (
+                    row[3].lower().startswith("size of datafile")
+                    or row[3].lower().startswith("size of indexfile")
+                )
+            ):
                 isError = True
                 break
         return isError
