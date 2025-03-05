@@ -315,16 +315,6 @@ class DatabasePhysicalRestore(DatabaseServer):
             if self.is_table_corrupted(table) and not self.repair_table(table, "myisam"):
                 raise Exception(f"Failed to repair table {table}")
 
-        for table in self.innodb_tables:
-            if table in innodb_tables_with_fts:
-                continue
-            """
-            If other innodb tables are corrupted,
-            We can't repair the table in running database
-            """
-            if self.is_table_corrupted(table):
-                raise Exception(f"Failed to repair table {table}")
-
     @step("Unlock All Tables")
     def unlock_all_tables(self):
         self._get_target_db().execute_sql("UNLOCK TABLES;")
