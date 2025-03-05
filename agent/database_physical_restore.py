@@ -59,6 +59,9 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     @job("Physical Restore Database")
     def create_restore_job(self):
+        from filewarmer import FWUP
+
+        self.fwup = FWUP()
         self.validate_backup_files()
         self.validate_connection_to_target_db()
         self.warmup_myisam_files()
@@ -335,8 +338,8 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         Ref - https://docs.aws.amazon.com/ebs/latest/userguide/ebs-initialize.html
         """
-        for file in file_paths:
-            subprocess.run(["dd", "if=" + file, "of=/dev/null", "bs=1M"], check=True)
+
+        self.fwup.warmup(file_paths, method="io_uring")
 
     def _perform_file_operations(self, engine: str):
         for file in os.listdir(self.backup_db_directory):
