@@ -298,7 +298,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             No need to waste time on checking whether index is corrupted or not
             Because, physical restoration will not work for FULLTEXT index.
             """
-            if self.repair_table(table, "innodb"):
+            if not self.repair_table(table, "innodb"):
                 raise Exception(f"Failed to repair table {table}")
 
         """
