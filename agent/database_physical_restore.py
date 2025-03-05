@@ -75,8 +75,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.import_tablespaces_in_target_db()
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
-        self.perform_post_restoration_validation_and_fixes()
         self.unlock_all_tables()
+        self.perform_post_restoration_validation_and_fixes()
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
@@ -294,7 +294,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         """
 
         for table in innodb_tables_with_fts:
-            if self.is_table_corrupted(table) and not self.repair_table(table, "innodb"):
+            """
+            No need to waste time on checking whether index is corrupted or not
+            Because, physical restoration will not work for FULLTEXT index.
+            """
+            if not self.repair_table(table, "innodb"):
                 raise Exception(f"Failed to repair table {table}")
 
         """
@@ -309,16 +313,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         """
         for table in self.myisam_tables:
             if self.is_table_corrupted(table) and not self.repair_table(table, "myisam"):
-                raise Exception(f"Failed to repair table {table}")
-
-        for table in self.innodb_tables:
-            if table in innodb_tables_with_fts:
-                continue
-            """
-            If other innodb tables are corrupted,
-            We can't repair the table in running database
-            """
-            if self.is_table_corrupted(table):
                 raise Exception(f"Failed to repair table {table}")
 
     @step("Unlock All Tables")
@@ -453,7 +447,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         """  # noqa: E501
         isError = False
         for row in result:
-            if row[2] == "error":
+            if row[2] == "error" or (row[2] == "warning" and table_name in self.myisam_tables):
                 isError = True
                 break
         return isError
