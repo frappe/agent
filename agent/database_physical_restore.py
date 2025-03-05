@@ -75,8 +75,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.import_tablespaces_in_target_db()
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
-        self.perform_post_restoration_validation_and_fixes()
         self.unlock_all_tables()
+        self.perform_post_restoration_validation_and_fixes()
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
@@ -294,7 +294,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         """
 
         for table in innodb_tables_with_fts:
-            if self.is_table_corrupted(table) and not self.repair_table(table, "innodb"):
+            """
+            No need to waste time on checking whether index is corrupted or not
+            Because, physical restoration will not work for FULLTEXT index.
+            """
+            if self.repair_table(table, "innodb"):
                 raise Exception(f"Failed to repair table {table}")
 
         """
