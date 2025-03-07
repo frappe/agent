@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+from contextlib import suppress
 
 from agent.base import AgentException
 from agent.database import CustomPeeweeDB
@@ -76,6 +77,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.hold_write_lock_on_myisam_tables()
         self.perform_myisam_file_operations()
         self.unlock_all_tables()
+        self._close_db_connections()
         self.perform_post_restoration_validation_and_fixes()
 
     @step("Validate Backup Files")
@@ -281,6 +283,11 @@ class DatabasePhysicalRestore(DatabaseServer):
     def perform_myisam_file_operations(self):
         self._perform_file_operations(engine="myisam")
 
+    @step("Unlock All Tables")
+    def unlock_all_tables(self):
+        self._get_target_db().execute_sql("UNLOCK TABLES;")
+        self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
+
     @step("Validate And Fix Tables")
     def perform_post_restoration_validation_and_fixes(self):
         innodb_tables_with_fts = self._get_innodb_tables_with_fts_index()
@@ -313,11 +320,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         for table in self.myisam_tables:
             if self.is_table_corrupted(table) and not self.repair_myisam_table(table, "myisam"):
                 raise Exception(f"Failed to repair table {table}")
-
-    @step("Unlock All Tables")
-    def unlock_all_tables(self):
-        self._get_target_db().execute_sql("UNLOCK TABLES;")
-        self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
 
     def _warmup_files(self, file_paths: list[str]):
         """
@@ -352,43 +354,6 @@ class DatabasePhysicalRestore(DatabaseServer):
                 os.path.join(self.backup_db_directory, file),
                 os.path.join(self.target_db_directory, file),
             )
-
-    def _get_target_db(self) -> CustomPeeweeDB:
-        if self._target_db_instance is not None:
-            if not self._target_db_instance.is_connection_usable():
-                raise DatabaseConnectionClosedWithDatabase()
-            return self._target_db_instance
-
-        self._target_db_instance = CustomPeeweeDB(
-            self.target_db,
-            user=self.target_db_user,
-            password=self.target_db_password,
-            host=self.target_db_host,
-            port=self.target_db_port,
-        )
-        self._target_db_instance.connect()
-        # Set session wait timeout to 4 hours [EXPERIMENTAL]
-        self._target_db_instance.execute_sql("SET SESSION wait_timeout = 14400;")
-        return self._target_db_instance
-
-    def _get_target_db_for_myisam(self) -> CustomPeeweeDB:
-        if self._target_db_instance_for_myisam is not None:
-            if not self._target_db_instance_for_myisam.is_connection_usable():
-                raise DatabaseConnectionClosedWithDatabase()
-            return self._target_db_instance_for_myisam
-
-        self._target_db_instance_for_myisam = CustomPeeweeDB(
-            self.target_db,
-            user=self.target_db_user,
-            password=self.target_db_password,
-            host=self.target_db_host,
-            port=self.target_db_port,
-            autocommit=False,
-        )
-        self._target_db_instance_for_myisam.connect()
-        # Set session wait timeout to 4 hours [EXPERIMENTAL]
-        self._target_db_instance_for_myisam.execute_sql("SET SESSION wait_timeout = 14400;")
-        return self._target_db_instance_for_myisam
 
     def is_table_need_to_be_restored(self, table_name: str) -> bool:
         if not self.restore_specific_tables:
@@ -518,19 +483,90 @@ class DatabasePhysicalRestore(DatabaseServer):
         )
         return {row[0]: row[1] for row in rows}
 
-    def __del__(self):
+    def _get_target_db(self, raise_error_on_connection_closed: bool = True) -> CustomPeeweeDB:
+        if self._target_db_instance is not None and not is_db_connection_usable(self._target_db_instance):
+            if raise_error_on_connection_closed:
+                raise DatabaseConnectionClosedWithDatabase()
+            self._target_db_instance = None
+
         if self._target_db_instance is not None:
-            self._target_db_instance.close()
+            return self._target_db_instance
+
+        self._target_db_instance = CustomPeeweeDB(
+            self.target_db,
+            user=self.target_db_user,
+            password=self.target_db_password,
+            host=self.target_db_host,
+            port=self.target_db_port,
+        )
+        self._target_db_instance.connect()
+        # Set session wait timeout to 4 hours [EXPERIMENTAL]
+        self._target_db_instance.execute_sql("SET SESSION wait_timeout = 14400;")
+        return self._target_db_instance
+
+    def _get_target_db_for_myisam(self) -> CustomPeeweeDB:
         if self._target_db_instance_for_myisam is not None:
-            self._target_db_instance_for_myisam.close()
+            if not is_db_connection_usable(self._target_db_instance_for_myisam):
+                raise DatabaseConnectionClosedWithDatabase()
+            return self._target_db_instance_for_myisam
+
+        self._target_db_instance_for_myisam = CustomPeeweeDB(
+            self.target_db,
+            user=self.target_db_user,
+            password=self.target_db_password,
+            host=self.target_db_host,
+            port=self.target_db_port,
+            autocommit=False,
+        )
+        self._target_db_instance_for_myisam.connect()
+        # Set session wait timeout to 4 hours [EXPERIMENTAL]
+        self._target_db_instance_for_myisam.execute_sql("SET SESSION wait_timeout = 14400;")
+        return self._target_db_instance_for_myisam
+
+    def _close_db_connections(self):
+        if self._target_db_instance is not None:
+            with suppress(Exception):
+                self._target_db_instance.close()
+        if self._target_db_instance_for_myisam is not None:
+            with suppress(Exception):
+                self._target_db_instance_for_myisam.close()
+
+    def __del__(self):
+        self._close_db_connections()
 
 
-def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
+def is_db_connection_usable(db: CustomPeeweeDB) -> bool:
+    try:
+        if not db.is_connection_usable():
+            return False
+        db.execute_sql("SELECT 1;")
+        return True
+    except Exception:
+        return False
+
+
+def run_sql_query(db: CustomPeeweeDB, query: str, retries_on_lost_connection: int = 0) -> list[str]:
     """
     Return the result of the query as a list of rows
     """
-    cursor = db.execute_sql(query)
-    if not cursor.description:
-        return []
-    rows = cursor.fetchall()
-    return [row for row in rows]
+    attempt = 0
+    while True:
+        try:
+            cursor = db.execute_sql(query)
+            if not cursor.description:
+                return []
+            rows = cursor.fetchall()
+            return [row for row in rows]
+        except Exception as e:
+            # Check if we should retry on lost connection errors
+            if (
+                retries_on_lost_connection != 0
+                and "lost connection" in str(e).lower()
+                and attempt < retries_on_lost_connection
+            ):
+                attempt += 1
+                with suppress(Exception):
+                    # Try to reconnect
+                    db.connect()
+                continue
+            raise
