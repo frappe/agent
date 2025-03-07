@@ -283,13 +283,13 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     @step("Validate And Fix Tables")
     def perform_post_restoration_validation_and_fixes(self):
-        innodb_tables_with_fts = self.get_innodb_tables_with_fts_index()
+        innodb_tables_with_fts = self._get_innodb_tables_with_fts_index()
         """
         FLUSH TABLES ... FOR EXPORT does not support FULLTEXT indexes.
         https://dev.mysql.com/doc/refman/8.4/en/innodb-table-import.html#:~:text=in%20the%20operation.-,Limitations,-The%20Transportable%20Tablespaces
 
-        We can either drop + add index.
-        Or, run `OPTIMIZE TABLE` on the table to rebuild the index.
+        Need to drop + add all fulltext indexes of InnoDB tables.
+        Caution: OPTIMIZE TABLE does not work in case of fulltext index corruption. Only normal rebuild occur.
         https://mariadb.com/kb/en/optimize-table/#updating-an-innodb-fulltext-index
         """
 
@@ -298,8 +298,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             No need to waste time on checking whether index is corrupted or not
             Because, physical restoration will not work for FULLTEXT index.
             """
-            if not self.repair_table(table, "innodb"):
-                raise Exception(f"Failed to repair table {table}")
+            self.recreate_fts_indexes(table)
 
         """
         MyISAM table corruption can generally happen due to mismatch of no of records in MYD file.
@@ -312,7 +311,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         https://dev.mysql.com/doc/refman/8.4/en/myisam-repair.html
         """
         for table in self.myisam_tables:
-            if self.is_table_corrupted(table) and not self.repair_table(table, "myisam"):
+            if self.is_table_corrupted(table) and not self.repair_myisam_table(table, "myisam"):
                 raise Exception(f"Failed to repair table {table}")
 
     @step("Unlock All Tables")
@@ -452,18 +451,13 @@ class DatabasePhysicalRestore(DatabaseServer):
                 break
         return isError
 
-    def repair_table(self, table_name: str, engine: str) -> bool:
-        if engine == "innodb":
-            result = run_sql_query(self._get_target_db(), f"OPTIMIZE TABLE `{table_name}`;")
-        elif engine == "myisam":
-            result = run_sql_query(self._get_target_db(), f"REPAIR TABLE `{table_name}` USE_FRM;")
-        else:
-            raise Exception(f"Engine {engine} is not supported")
+    def repair_myisam_table(self, table_name: str) -> bool:
+        result = run_sql_query(self._get_target_db(), f"REPAIR TABLE `{table_name}` USE_FRM;")
         """
         +---------------------------------------------------+--------+----------+----------+
         | Table                                             | Op     | Msg_type | Msg_text |
         +---------------------------------------------------+--------+----------+----------+
-        | _8edd549f4b072174.tabInsights Query Execution Log | repair | status   | OK       |
+        | _8edd549f4b072174.tabInsights Query Execution Log | repair  | status   | OK       |
         +---------------------------------------------------+--------+----------+----------+
 
         Msg Type can be status, error, info, note, or warning
@@ -476,7 +470,17 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         return not isErrorOccurred
 
-    def get_innodb_tables_with_fts_index(self):
+    def recreate_fts_indexes(self, table: str):
+        fts_indexes = self._get_fts_indexes_of_table(table)
+        for index_name, columns in fts_indexes.items():
+            self._get_target_db().execute_sql(
+                f"""
+            ALTER TABLE `{table}` DROP INDEX `{index_name}`;
+            ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});
+            """
+            )
+
+    def _get_innodb_tables_with_fts_index(self):
         rows = run_sql_query(
             self._get_target_db(),
             f"""
@@ -495,6 +499,24 @@ class DatabasePhysicalRestore(DatabaseServer):
         """,
         )
         return [row[0] for row in rows]
+
+    def _get_fts_indexes_of_table(self, table: str) -> dict[str, str]:
+        rows = run_sql_query(
+            self._get_target_db(),
+            f"""
+        SELECT
+            INDEX_NAME, group_concat(column_name ORDER BY seq_in_index) AS columns
+        FROM
+            information_schema.statistics
+        WHERE
+            TABLE_SCHEMA = `{self.target_db}`
+            AND TABLE_NAME = `{table}`
+            AND INDEX_TYPE = 'FULLTEXT'
+        GROUP BY
+            INDEX_NAME;
+        """,
+        )
+        return {row[0]: row[1] for row in rows}
 
     def __del__(self):
         if self._target_db_instance is not None:
