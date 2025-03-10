@@ -394,7 +394,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         result = run_sql_query(
             self._get_target_db(raise_error_on_connection_closed=False),
             f"CHECK TABLE `{table_name}` QUICK;",
-            retries_on_lost_connection=3,
         )
         """
         +-----------------------------------+-------+----------+------------------------------------------------------+
@@ -424,7 +423,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         result = run_sql_query(
             self._get_target_db(raise_error_on_connection_closed=False),
             f"REPAIR TABLE `{table_name}` USE_FRM;",
-            retries_on_lost_connection=3,
         )
         """
         +---------------------------------------------------+--------+----------+----------+
@@ -445,16 +443,20 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def recreate_fts_indexes(self, table: str):
         fts_indexes = self._get_fts_indexes_of_table(table)
+        for index_name, _ in fts_indexes.items():
+            run_sql_query(
+                self._get_target_db(raise_error_on_connection_closed=False),
+                f"ALTER TABLE `{table}` DROP INDEX IF EXISTS `{index_name}`;",
+            )
+        # Optimize table to fix existing corruptions
+        run_sql_query(
+            self._get_target_db(raise_error_on_connection_closed=False), f"OPTIMIZE TABLE `{table}`;"
+        )
+        # Recreate the indexes
         for index_name, columns in fts_indexes.items():
             run_sql_query(
                 self._get_target_db(raise_error_on_connection_closed=False),
-                f"ALTER TABLE `{table}` DROP INDEX `{index_name}`;",
-                retries_on_lost_connection=3,
-            )
-            run_sql_query(
-                self._get_target_db(raise_error_on_connection_closed=False),
                 f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});",
-                retries_on_lost_connection=3,
             )
 
     def _get_innodb_tables_with_fts_index(self):
@@ -474,7 +476,6 @@ class DatabasePhysicalRestore(DatabaseServer):
             AND t.TABLE_SCHEMA = '{self.target_db}'
             AND t.ENGINE = 'InnoDB';
         """,
-            retries_on_lost_connection=3,
         )
         return [row[0] for row in rows]
 
@@ -493,7 +494,6 @@ class DatabasePhysicalRestore(DatabaseServer):
         GROUP BY
             INDEX_NAME;
         """,
-            retries_on_lost_connection=3,
         )
         return {row[0]: row[1] for row in rows}
 
@@ -559,28 +559,12 @@ def is_db_connection_usable(db: CustomPeeweeDB) -> bool:
         return False
 
 
-def run_sql_query(db: CustomPeeweeDB, query: str, retries_on_lost_connection: int = 0) -> list[str]:
+def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
     """
     Return the result of the query as a list of rows
     """
-    attempt = 0
-    while True:
-        try:
-            cursor = db.execute_sql(query)
-            if not cursor.description:
-                return []
-            rows = cursor.fetchall()
-            return [row for row in rows]
-        except Exception as e:
-            # Check if we should retry on lost connection errors
-            if (
-                retries_on_lost_connection != 0
-                and "lost connection" in str(e).lower()
-                and attempt < retries_on_lost_connection
-            ):
-                attempt += 1
-                with suppress(Exception):
-                    # Try to reconnect
-                    db.connect()
-                continue
-            raise
+    cursor = db.execute_sql(query)
+    if not cursor.description:
+        return []
+    rows = cursor.fetchall()
+    return [row for row in rows]
