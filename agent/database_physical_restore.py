@@ -318,7 +318,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         https://dev.mysql.com/doc/refman/8.4/en/myisam-repair.html
         """
         for table in self.myisam_tables:
-            if self.is_table_corrupted(table) and not self.repair_myisam_table(table, "myisam"):
+            if self.is_table_corrupted(table) and not self.repair_myisam_table(table):
                 raise Exception(f"Failed to repair table {table}")
 
     def _warmup_files(self, file_paths: list[str]):
@@ -391,7 +391,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         return f"DROP TABLE IF EXISTS `{table_name}`;"
 
     def is_table_corrupted(self, table_name: str) -> bool:
-        result = run_sql_query(self._get_target_db(), f"CHECK TABLE `{table_name}` QUICK;")
+        result = run_sql_query(
+            self._get_target_db(raise_error_on_connection_closed=False),
+            f"CHECK TABLE `{table_name}` QUICK;",
+            retries_on_lost_connection=3,
+        )
         """
         +-----------------------------------+-------+----------+------------------------------------------------------+
         | Table                             | Op    | Msg_type | Msg_text                                             |
@@ -417,7 +421,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         return isError
 
     def repair_myisam_table(self, table_name: str) -> bool:
-        result = run_sql_query(self._get_target_db(), f"REPAIR TABLE `{table_name}` USE_FRM;")
+        result = run_sql_query(
+            self._get_target_db(raise_error_on_connection_closed=False),
+            f"REPAIR TABLE `{table_name}` USE_FRM;",
+            retries_on_lost_connection=3,
+        )
         """
         +---------------------------------------------------+--------+----------+----------+
         | Table                                             | Op     | Msg_type | Msg_text |
@@ -438,16 +446,20 @@ class DatabasePhysicalRestore(DatabaseServer):
     def recreate_fts_indexes(self, table: str):
         fts_indexes = self._get_fts_indexes_of_table(table)
         for index_name, columns in fts_indexes.items():
-            self._get_target_db().execute_sql(
-                f"""
-            ALTER TABLE `{table}` DROP INDEX `{index_name}`;
-            ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});
-            """
+            run_sql_query(
+                self._get_target_db(raise_error_on_connection_closed=False),
+                "ALTER TABLE `{table}` DROP INDEX `{index_name}`;",
+                retries_on_lost_connection=3,
+            )
+            run_sql_query(
+                self._get_target_db(raise_error_on_connection_closed=False),
+                f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});",
+                retries_on_lost_connection=3,
             )
 
     def _get_innodb_tables_with_fts_index(self):
         rows = run_sql_query(
-            self._get_target_db(),
+            self._get_target_db(raise_error_on_connection_closed=False),
             f"""
         SELECT
             DISTINCT(t.TABLE_NAME)
@@ -462,12 +474,13 @@ class DatabasePhysicalRestore(DatabaseServer):
             AND t.TABLE_SCHEMA = '{self.target_db}'
             AND t.ENGINE = 'InnoDB'
         """,
+            retries_on_lost_connection=3,
         )
         return [row[0] for row in rows]
 
     def _get_fts_indexes_of_table(self, table: str) -> dict[str, str]:
         rows = run_sql_query(
-            self._get_target_db(),
+            self._get_target_db(raise_error_on_connection_closed=False),
             f"""
         SELECT
             INDEX_NAME, group_concat(column_name ORDER BY seq_in_index) AS columns
@@ -480,6 +493,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         GROUP BY
             INDEX_NAME;
         """,
+            retries_on_lost_connection=3,
         )
         return {row[0]: row[1] for row in rows}
 
