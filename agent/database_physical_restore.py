@@ -295,9 +295,9 @@ class DatabasePhysicalRestore(DatabaseServer):
         FLUSH TABLES ... FOR EXPORT does not support FULLTEXT indexes.
         https://dev.mysql.com/doc/refman/8.4/en/innodb-table-import.html#:~:text=in%20the%20operation.-,Limitations,-The%20Transportable%20Tablespaces
 
-        Need to drop + add all fulltext indexes of InnoDB tables.
-        Caution: OPTIMIZE TABLE does not work in case of fulltext index corruption. Only normal rebuild occur.
-        https://mariadb.com/kb/en/optimize-table/#updating-an-innodb-fulltext-index
+        Need to drop all fulltext indexes of InnoDB tables.
+        Then, optimize table to fix existing corruptions and rebuild table (if needed).
+        Then, recreate the fulltext indexes.
         """
 
         for table in innodb_tables_with_fts:
