@@ -448,7 +448,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         for index_name, columns in fts_indexes.items():
             run_sql_query(
                 self._get_target_db(raise_error_on_connection_closed=False),
-                "ALTER TABLE `{table}` DROP INDEX `{index_name}`;",
+                f"ALTER TABLE `{table}` DROP INDEX `{index_name}`;",
                 retries_on_lost_connection=3,
             )
             run_sql_query(
@@ -472,7 +472,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         WHERE
             s.INDEX_TYPE = 'FULLTEXT'
             AND t.TABLE_SCHEMA = '{self.target_db}'
-            AND t.ENGINE = 'InnoDB'
+            AND t.ENGINE = 'InnoDB';
         """,
             retries_on_lost_connection=3,
         )
@@ -487,8 +487,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         FROM
             information_schema.statistics
         WHERE
-            TABLE_SCHEMA = `{self.target_db}`
-            AND TABLE_NAME = `{table}`
+            TABLE_SCHEMA = '{self.target_db}'
+            AND TABLE_NAME = '{table}'
             AND INDEX_TYPE = 'FULLTEXT'
         GROUP BY
             INDEX_NAME;
