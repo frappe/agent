@@ -138,7 +138,7 @@ class ImageBuilder(Base):
     @step("Push Docker Image")
     def _push_docker_image(self):
         environment = os.environ.copy()
-        client = docker.from_env(environment=environment)
+        client = docker.from_env(environment=environment, timeout=5 * 60)
         auth_config = {
             "username": self.registry["username"],
             "password": self.registry["password"],
