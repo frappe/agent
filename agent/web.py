@@ -33,6 +33,7 @@ from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
 from agent.ssh import SSHProxy
+from agent.vm_host import VMHost
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
@@ -1572,3 +1573,96 @@ def recover_update_inplace(bench: str):
         request.json.get("image"),
     )
     return {"job": job}
+
+
+@application.route("/vm/host/setup", methods=["POST"])
+def setup_vm_host():
+    """Set up the VM host with required dependencies and configurations"""
+    data = request.get_json()
+    vm_host = VMHost()
+    job = vm_host.setup_vm_host(data)
+    return jsonify(job)
+
+
+@application.route("/vm/list", methods=["GET"])
+def list_vms():
+    """List all VMs on the host"""
+    vm_host = VMHost()
+    result = vm_host.get_vm_status()
+    return jsonify(result)
+
+
+@application.route("/vm/status/<string:vm_name>", methods=["GET"])
+def get_vm_status(vm_name):
+    """Get status of a specific VM"""
+    vm_host = VMHost()
+    result = vm_host.get_vm_status(vm_name)
+    return jsonify(result)
+
+
+@application.route("/vm/create", methods=["POST"])
+def create_vm():
+    """Create a new VM"""
+    data = request.get_json()
+    vm_host = VMHost()
+    job = vm_host.create_vm(data)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/start", methods=["POST"])
+def start_vm(vm_name):
+    """Start a VM"""
+    vm_host = VMHost()
+    job = vm_host.start_vm(vm_name)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/stop", methods=["POST"])
+def stop_vm(vm_name):
+    """Stop a VM"""
+    data = request.get_json() or {}
+    force = data.get("force", False)
+    vm_host = VMHost()
+    job = vm_host.stop_vm(vm_name, force)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/delete", methods=["POST"])
+def delete_vm(vm_name):
+    """Delete a VM"""
+    data = request.get_json() or {}
+    delete_storage = data.get("delete_storage", True)
+    vm_host = VMHost()
+    job = vm_host.delete_vm(vm_name, delete_storage)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/snapshot/create", methods=["POST"])
+def create_vm_snapshot(vm_name):
+    """Create a snapshot of a VM"""
+    data = request.get_json() or {}
+    snapshot_name = data.get("snapshot_name")
+    vm_host = VMHost()
+    job = vm_host.create_vm_snapshot(vm_name, snapshot_name)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/snapshot/restore", methods=["POST"])
+def restore_vm_snapshot(vm_name):
+    """Restore a VM from a snapshot"""
+    data = request.get_json()
+    if not data or "snapshot_name" not in data:
+        return jsonify({"status": "error", "message": "Snapshot name is required"}), 400
+    
+    snapshot_name = data["snapshot_name"]
+    vm_host = VMHost()
+    job = vm_host.restore_vm_snapshot(vm_name, snapshot_name)
+    return jsonify(job)
+
+
+@application.route("/vm/<string:vm_name>/console", methods=["GET"])
+def get_vm_console(vm_name):
+    """Get console URL for a VM"""
+    vm_host = VMHost()
+    result = vm_host.get_vm_console(vm_name)
+    return jsonify(result)
