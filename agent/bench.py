@@ -316,6 +316,34 @@ class Bench(Base):
             traceback.print_exc()
         return lines
 
+    def _parse_pids(self, lines):
+        pids = []
+        lines = lines.strip().split("\n")
+
+        for line in lines:
+            parts = line.strip().split()
+            name, pid = parts[0], parts[1]
+            pids.append((name, pid))
+
+        return pids
+
+    def get_worker_pids(self):
+        """Get all the processes running gunicorn for now"""
+        return self._parse_pids(self.execute("ps aux | grep gunicorn")["output"])
+
+    def take_snapshot(self, pid_info: list[tuple[str, str]]):
+        snapshots = []
+        for _name, pid in pid_info:
+            try:
+                snapshots.append(
+                    json.loads(self.execute(f"sudo /home/frappe/agent/env/bin/py-spy dump --pid {pid} --json")["output"])
+                )
+            except AgentException:
+                continue
+
+        return snapshots
+
+
     def status(self):
         status = {
             "sites": {site: {"scheduler": True, "web": True} for site in self.sites},
