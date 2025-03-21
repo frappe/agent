@@ -511,15 +511,34 @@ class Bench(Base):
     def rebuild_job(self):
         return self.rebuild()
 
+    @step("Stop All Worker Execution")
+    def stop_worker_execution(self):
+        self.docker_execute("supervisorctl stop all")
+
+    @step("Start All Worker Execution")
+    def start_worker_execution(self):
+        self.docker_execute("supervisorctl start all")
+
     @step("Rebuild Bench Assets")
     def rebuild(self, apps: list[str] | None = None):
-        if not apps:
-            return self.docker_execute("bench build")
+        self.stop_worker_execution()
 
-        if len(apps) == 1:
-            return self.docker_execute(f"bench build --app {apps[0]}")
+        try:
+            if not apps:
+                build_result = self.docker_execute("bench build")
+                self.start_worker_execution()
+                return build_result
 
-        return self.docker_execute(f"bench build --apps {','.join(apps)}")
+            if len(apps) == 1:
+                build_result = self.docker_execute(f"bench build --app {apps[0]}")
+                self.start_worker_execution()
+                return build_result
+
+            build_result = self.docker_execute(f"bench build --apps {','.join(apps)}")
+            self.start_worker_execution()
+            return build_result
+        except Exception:
+            self.start_worker_execution()
 
     @property
     def apps(self):
