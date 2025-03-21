@@ -161,6 +161,13 @@ def ping():
     return {"message": "pong"}
 
 
+@application.route("/snapshots/<string:bench_name>")
+def get_snapshots(bench_name: str):
+    bench = Server().benches.get(bench_name)
+    pids = bench.get_worker_pids()
+    snapshots = bench.take_snapshot(pids)
+    return {"snapshots": snapshots}
+
 @application.route("/ping_job", methods=["POST"])
 def ping_job():
     return {
