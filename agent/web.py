@@ -161,6 +161,17 @@ def ping():
     return {"message": "pong"}
 
 
+@application.route("/snapshots/<string:bench_name>")
+def get_snapshots(bench_name: str):
+    bench = Server().benches.get(bench_name)
+
+    if not bench:
+        return {"message": f"No such bench {bench_name}"}, 400
+
+    pids = bench.get_worker_pids()
+    return bench.take_snapshot(pids)
+
+
 @application.route("/ping_job", methods=["POST"])
 def ping_job():
     return {
