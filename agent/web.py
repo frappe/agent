@@ -169,9 +169,7 @@ def get_snapshots(bench_name: str):
         return {"message": f"No such bench {bench_name}"}, 400
 
     pids = bench.get_worker_pids()
-    snapshots = bench.take_snapshot(pids)
-
-    return {"snapshots": snapshots}
+    return bench.take_snapshot(pids)
 
 
 @application.route("/ping_job", methods=["POST"])

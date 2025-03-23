@@ -332,16 +332,16 @@ class Bench(Base):
         return self._parse_pids(self.execute("ps aux | grep gunicorn")["output"])
 
     def take_snapshot(self, pid_info: list[tuple[str, str]]):
-        snapshots = []
+        snapshots = {}
         pyspy_bin = os.path.join(self.server.directory, "env/bin/py-spy")
-        for _name, pid in pid_info:
+
+        for name, pid in pid_info:
             try:
-                snapshots.append(
-                    json.loads(self.execute(f"sudo {pyspy_bin} dump --pid {pid} --json")["output"])
+                snapshots[f"{name}:{pid}"] = json.loads(
+                    self.execute(f"sudo {pyspy_bin} dump --pid {pid} --json")["output"]
                 )
-            except Exception:
-                # Process is mostly not running
-                continue
+            except AgentException as e:
+                snapshots[f"{name}:{pid}"] = str(e)
 
         return snapshots
 
