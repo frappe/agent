@@ -333,16 +333,17 @@ class Bench(Base):
 
     def take_snapshot(self, pid_info: list[tuple[str, str]]):
         snapshots = []
+        pyspy_bin = os.path.join(self.server.directory, "env/bin/py-spy")
         for _name, pid in pid_info:
             try:
                 snapshots.append(
-                    json.loads(self.execute(f"sudo /home/frappe/agent/env/bin/py-spy dump --pid {pid} --json")["output"])
+                    json.loads(self.execute(f"sudo {pyspy_bin} dump --pid {pid} --json")["output"])
                 )
-            except AgentException:
+            except Exception:
+                # Process is mostly not running
                 continue
 
         return snapshots
-
 
     def status(self):
         status = {
