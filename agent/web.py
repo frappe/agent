@@ -1130,6 +1130,12 @@ def get_database_processes():
     return jsonify(DatabaseServer().processes(**data))
 
 
+@application.route("/database/variables", methods=["POST"])
+def get_database_variables():
+    data = request.json
+    return jsonify(DatabaseServer().variables(**data))
+
+
 @application.route("/database/locks", methods=["POST"])
 def get_database_locks():
     data = request.json
