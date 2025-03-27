@@ -10,6 +10,7 @@ from random import randint
 import requests
 
 from agent.database import CustomPeeweeDB
+from agent.database_physical_restore import kill_other_db_connections
 from agent.database_server import DatabaseServer
 from agent.job import job, step
 from agent.utils import compute_file_hash, decode_mariadb_filename
@@ -32,6 +33,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             raise ValueError("At least one database is required")
         # Instance variable for internal use
         self._db_instances: dict[str, CustomPeeweeDB] = {}
+        self._db_instances_connection_id: dict[str, int] = {}
         self._db_tables_locked: dict[str, bool] = {db: False for db in databases}
 
         # variables
@@ -128,6 +130,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             tables = self.innodb_tables[db_name] + self.myisam_tables[db_name]
             tables = [f"`{table}`" for table in tables]
             flush_table_export_query = "FLUSH TABLES {} FOR EXPORT;".format(", ".join(tables))
+            self._kill_other_db_connections(db_name)
             self.get_db(db_name).execute_sql(flush_table_export_query)
             self._db_tables_locked[db_name] = True
 
@@ -272,7 +275,8 @@ class DatabasePhysicalBackup(DatabaseServer):
         for db_name in self.databases:
             self._unlock_tables(db_name)
 
-    def export_table_schema(self, db_name) -> str:
+    def export_table_schema(self, db_name: str) -> str:
+        self._kill_other_db_connections(db_name)
         command = [
             "mariadb-dump",
             "-u",
@@ -316,7 +320,14 @@ class DatabasePhysicalBackup(DatabaseServer):
         self._db_instances[db_name].connect()
         # Set session wait timeout to 4 hours [EXPERIMENTAL]
         self._db_instances[db_name].execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._db_instances_connection_id[db_name] = int(
+            self._db_instances[db_name].execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
         return self._db_instances[db_name]
+
+    def _kill_other_db_connections(self, db_name: str):
+        kill_other_db_connections(self.get_db(db_name), [self._db_instances_connection_id[db_name]])
 
     def __del__(self):
         for db_name in self.databases:

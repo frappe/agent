@@ -568,3 +568,30 @@ def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
         return []
     rows = cursor.fetchall()
     return [row for row in rows]
+
+
+def kill_other_db_connections(db: CustomPeeweeDB, thread_ids: list[int]):
+    """
+    We deactivate site before backup/restore and activate site after backup/restore.
+    But, connection through ProxySQL or Frappe Cloud devtools can still be there.
+
+    it's important to kill all the connections except current threads.
+    """
+
+    # Get process list
+    thread_ids_str = ",".join([str(thread_id) for thread_id in thread_ids])
+    query = (
+        "SELECT ID from INFORMATION_SCHEMA.PROCESSLIST "
+        "where DB=DATABASE() AND USER!='system user' "
+        f"AND ID NOT IN ({thread_ids_str});"
+    )
+
+    rows = run_sql_query(db, query)
+    db_pids = [row[0] for row in rows]
+    if not db_pids:
+        return
+
+    # Kill the processes
+    for pid in db_pids:
+        with suppress(Exception):
+            run_sql_query(db, f"KILL {pid};")
