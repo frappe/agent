@@ -22,6 +22,8 @@ from rq import Queue, get_current_job
 from rq.command import send_stop_job_command
 from rq.job import Job as RQJob
 
+from agent.callbacks import callback
+
 if TYPE_CHECKING:
     from agent.base import Base
 
@@ -174,7 +176,7 @@ def step(name):
     return wrapper
 
 
-def job(name: str, priority="default"):
+def job(name: str, priority="default", on_success=None, on_failure=None):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
@@ -201,6 +203,8 @@ def job(name: str, priority="default"):
             timeout=4 * 3600,
             result_ttl=24 * 3600,
             job_id=str(instance.job_record.model.id),
+            on_success=on_success or callback,
+            on_failure=on_failure or callback,
         )
         return instance.job_record.model.id
 

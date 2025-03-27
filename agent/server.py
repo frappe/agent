@@ -35,6 +35,10 @@ class Server(Base):
         self.job = None
         self.step = None
 
+    @property
+    def press_url(self):
+        return self.config["press_url"]
+
     def docker_login(self, registry):
         url = registry["url"]
         username = registry["username"]
