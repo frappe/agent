@@ -371,7 +371,11 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def is_table_need_to_be_restored(self, table_name: str) -> bool:
         if not self.restore_specific_tables:
-            return True
+            # Ensure the tale_name is not a FTS table
+            return not re.search(
+                r"(FTS|fts)_[0-9a-f]+_(?:[0-9a-f]+_)?(?:INDEX|index|BEING|being|CONFIG|config|DELETED|deleted)",
+                table_name,
+            )
         return table_name in self.innodb_tables or table_name in self.myisam_tables
 
     def is_db_file_need_to_be_restored(self, file_name: str) -> bool:
