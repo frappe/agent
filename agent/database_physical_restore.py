@@ -12,6 +12,9 @@ from agent.database import CustomPeeweeDB
 from agent.database_physical_backup import (
     DatabaseConnectionClosedWithDatabase,
     get_path_of_physical_backup_metadata,
+    is_db_connection_usable,
+    kill_other_db_connections,
+    run_sql_query,
 )
 from agent.database_server import DatabaseServer
 from agent.job import job, step
@@ -583,51 +586,3 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def __del__(self):
         self._close_db_connections()
-
-
-def is_db_connection_usable(db: CustomPeeweeDB) -> bool:
-    try:
-        if not db.is_connection_usable():
-            return False
-        db.execute_sql("SELECT 1;")
-        return True
-    except Exception:
-        return False
-
-
-def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
-    """
-    Return the result of the query as a list of rows
-    """
-    cursor = db.execute_sql(query)
-    if not cursor.description:
-        return []
-    rows = cursor.fetchall()
-    return [row for row in rows]
-
-
-def kill_other_db_connections(db: CustomPeeweeDB, thread_ids: list[int]):
-    """
-    We deactivate site before backup/restore and activate site after backup/restore.
-    But, connection through ProxySQL or Frappe Cloud devtools can still be there.
-
-    it's important to kill all the connections except current threads.
-    """
-
-    # Get process list
-    thread_ids_str = ",".join([str(thread_id) for thread_id in thread_ids])
-    query = (
-        "SELECT ID from INFORMATION_SCHEMA.PROCESSLIST "
-        "where DB=DATABASE() AND USER!='system user' "
-        f"AND ID NOT IN ({thread_ids_str});"
-    )
-
-    rows = run_sql_query(db, query)
-    db_pids = [row[0] for row in rows]
-    if not db_pids:
-        return
-
-    # Kill the processes
-    for pid in db_pids:
-        with suppress(Exception):
-            run_sql_query(db, f"KILL {pid};")
