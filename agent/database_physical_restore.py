@@ -12,6 +12,9 @@ from agent.database import CustomPeeweeDB
 from agent.database_physical_backup import (
     DatabaseConnectionClosedWithDatabase,
     get_path_of_physical_backup_metadata,
+    is_db_connection_usable,
+    kill_other_db_connections,
+    run_sql_query,
 )
 from agent.database_server import DatabaseServer
 from agent.job import job, step
@@ -35,7 +38,9 @@ class DatabasePhysicalRestore(DatabaseServer):
             tables_to_restore = []
 
         self._target_db_instance: CustomPeeweeDB = None
+        self._target_db_instance_connection_id: int = None
         self._target_db_instance_for_myisam: CustomPeeweeDB = None
+        self._target_db_instance_for_myisam_connection_id: int = None
         self.target_db = target_db
         self.target_db_user = "root"
         self.target_db_password = target_db_root_password
@@ -145,6 +150,8 @@ class DatabasePhysicalRestore(DatabaseServer):
     @step("Validate Connection to Target Database")
     def validate_connection_to_target_db(self):
         self._get_target_db().execute_sql("SELECT 1;")
+        self._get_target_db_for_myisam().execute_sql("SELECT 1;")
+        self._kill_other_active_db_connections()
 
     @step("Warmup MyISAM Files")
     def warmup_myisam_files(self):
@@ -207,6 +214,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         # it will reduce the time to drop tables and will not cause any block while dropping tables
         self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
         for table in tables:
+            self._kill_other_active_db_connections()
             self._get_target_db().execute_sql(self.get_drop_table_statement(table))
         self._get_target_db().execute_sql(
             "SET SESSION FOREIGN_KEY_CHECKS = 1;"
@@ -239,6 +247,9 @@ class DatabasePhysicalRestore(DatabaseServer):
         # it will reduce the time to drop tables and will not cause any block while dropping tables
         self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
 
+        # kill other active db connections
+        self._kill_other_active_db_connections()
+
         # Drop and re-create the tables
         for sql_stmt in sql_stmts:
             if sql_stmt.strip():
@@ -252,6 +263,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#foreign-key-constraints
         self._get_target_db().execute_sql("SET SESSION foreign_key_checks = 0;")
         for table in self.innodb_tables:
+            self._kill_other_active_db_connections()
             self._get_target_db().execute_sql(f"ALTER TABLE `{table}` DISCARD TABLESPACE;")
         self._get_target_db().execute_sql(
             "SET SESSION foreign_key_checks = 1;"
@@ -264,6 +276,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     @step("Import InnoDB Tablespaces")
     def import_tablespaces_in_target_db(self):
         for table in self.innodb_tables:
+            self._kill_other_active_db_connections()
             self._get_target_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
 
     @step("Hold Write Lock on MyISAM Tables")
@@ -277,6 +290,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         if not self.myisam_tables:
             return
         tables = [f"`{table}` WRITE" for table in self.myisam_tables]
+        self._kill_other_active_db_connections()
         self._get_target_db_for_myisam().execute_sql("LOCK TABLES {};".format(", ".join(tables)))
 
     @step("Copying MyISAM Table Files")
@@ -420,6 +434,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         return isError
 
     def repair_myisam_table(self, table_name: str) -> bool:
+        self._kill_other_active_db_connections()
         result = run_sql_query(
             self._get_target_db(raise_error_on_connection_closed=False),
             f"REPAIR TABLE `{table_name}` USE_FRM;",
@@ -444,16 +459,19 @@ class DatabasePhysicalRestore(DatabaseServer):
     def recreate_fts_indexes(self, table: str):
         fts_indexes = self._get_fts_indexes_of_table(table)
         for index_name, _ in fts_indexes.items():
+            self._kill_other_active_db_connections()
             run_sql_query(
                 self._get_target_db(raise_error_on_connection_closed=False),
                 f"ALTER TABLE `{table}` DROP INDEX IF EXISTS `{index_name}`;",
             )
         # Optimize table to fix existing corruptions
+        self._kill_other_active_db_connections()
         run_sql_query(
             self._get_target_db(raise_error_on_connection_closed=False), f"OPTIMIZE TABLE `{table}`;"
         )
         # Recreate the indexes
         for index_name, columns in fts_indexes.items():
+            self._kill_other_active_db_connections()
             run_sql_query(
                 self._get_target_db(raise_error_on_connection_closed=False),
                 f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});",
@@ -502,6 +520,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             if raise_error_on_connection_closed:
                 raise DatabaseConnectionClosedWithDatabase()
             self._target_db_instance = None
+            self._target_db_instance_connection_id = None
 
         if self._target_db_instance is not None:
             return self._target_db_instance
@@ -516,6 +535,10 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._target_db_instance.connect()
         # Set session wait timeout to 4 hours [EXPERIMENTAL]
         self._target_db_instance.execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._target_db_instance_connection_id = int(
+            self._target_db_instance.execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
         return self._target_db_instance
 
     def _get_target_db_for_myisam(self) -> CustomPeeweeDB:
@@ -535,6 +558,10 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._target_db_instance_for_myisam.connect()
         # Set session wait timeout to 4 hours [EXPERIMENTAL]
         self._target_db_instance_for_myisam.execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._target_db_instance_for_myisam_connection_id = int(
+            self._target_db_instance_for_myisam.execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
         return self._target_db_instance_for_myisam
 
     def _close_db_connections(self):
@@ -545,26 +572,17 @@ class DatabasePhysicalRestore(DatabaseServer):
             with suppress(Exception):
                 self._target_db_instance_for_myisam.close()
 
+    def _kill_other_active_db_connections(self):
+        current_connection_ids = []
+        if self._target_db_instance is not None:
+            current_connection_ids.append(self._target_db_instance_connection_id)
+        if self._target_db_instance_for_myisam is not None:
+            current_connection_ids.append(self._target_db_instance_for_myisam_connection_id)
+
+        if not current_connection_ids:
+            return
+
+        kill_other_db_connections(self._target_db_instance, current_connection_ids)
+
     def __del__(self):
         self._close_db_connections()
-
-
-def is_db_connection_usable(db: CustomPeeweeDB) -> bool:
-    try:
-        if not db.is_connection_usable():
-            return False
-        db.execute_sql("SELECT 1;")
-        return True
-    except Exception:
-        return False
-
-
-def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
-    """
-    Return the result of the query as a list of rows
-    """
-    cursor = db.execute_sql(query)
-    if not cursor.description:
-        return []
-    rows = cursor.fetchall()
-    return [row for row in rows]
