@@ -33,6 +33,7 @@ from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
 from agent.ssh import SSHProxy
+from agent.utils import check_installed_pyspy
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
@@ -161,12 +162,16 @@ def ping():
     return {"message": "pong"}
 
 
-@application.route("/snapshots/<string:bench_name>")
+@application.route("/snapshot/<string:bench_name>")
 def get_snapshots(bench_name: str):
-    bench = Server().benches.get(bench_name)
+    server = Server()
+    bench = server.benches.get(bench_name)
 
     if not bench:
         return {"message": f"No such bench {bench_name}"}, 400
+
+    if not check_installed_pyspy(server.directory):
+        return {"message": "PySpy is not installed on this server"}, 400
 
     pids = bench.get_worker_pids()
     return bench.take_snapshot(pids)
