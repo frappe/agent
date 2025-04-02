@@ -316,6 +316,35 @@ class Bench(Base):
             traceback.print_exc()
         return lines
 
+    def _parse_pids(self, lines):
+        pids = []
+        lines = lines.strip().split("\n")
+
+        for line in lines:
+            parts = line.strip().split()
+            name, pid = parts[0], parts[1]
+            pids.append((name, pid))
+
+        return pids
+
+    def get_worker_pids(self):
+        """Get all the processes running gunicorn for now"""
+        return self._parse_pids(self.execute(f"docker top {self.name} | grep gunicorn")["output"])
+
+    def take_snapshot(self, pid_info: list[tuple[str, str]]):
+        snapshots = {}
+        pyspy_bin = os.path.join(self.server.directory, "env/bin/py-spy")
+
+        for name, pid in pid_info:
+            try:
+                snapshots[f"{name}:{pid}"] = json.loads(
+                    self.execute(f"sudo {pyspy_bin} dump --pid {pid} --json")["output"]
+                )
+            except AgentException as e:
+                snapshots[f"{name}:{pid}"] = str(e)
+
+        return snapshots
+
     def status(self):
         status = {
             "sites": {site: {"scheduler": True, "web": True} for site in self.sites},

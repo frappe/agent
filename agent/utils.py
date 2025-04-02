@@ -169,3 +169,7 @@ def get_mariadb_table_name_from_path(path: str) -> str:
     filename = os.path.splitext(filename)[0]
     # Decode the filename
     return decode_mariadb_filename(filename)
+
+
+def check_installed_pyspy(server_dir: str) -> bool:
+    return os.path.exists(os.path.join(server_dir, "env/bin/py-spy"))
