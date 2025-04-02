@@ -329,7 +329,7 @@ class Bench(Base):
 
     def get_worker_pids(self):
         """Get all the processes running gunicorn for now"""
-        return self._parse_pids(self.execute("ps aux | grep gunicorn")["output"])
+        return self._parse_pids(self.execute(f"docker top {self.name} | grep gunicorn")["output"])
 
     def take_snapshot(self, pid_info: list[tuple[str, str]]):
         snapshots = {}
