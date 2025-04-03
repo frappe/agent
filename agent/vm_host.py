@@ -3,13 +3,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict
 
-from agent.base import Base
 from agent.job import job, step
 from agent.server import Server
 
@@ -24,7 +21,6 @@ class VMHost(Server):
         self.vm_config_directory = os.path.join(self.directory, "vm_configs")
         self.vm_images_directory = os.path.join(self.directory, "vm_images")
         self.vm_templates_directory = os.path.join(self.directory, "vm_templates")
-        
         # Create required directories if they don't exist
         for directory in [
             self.vm_directory,
@@ -35,7 +31,7 @@ class VMHost(Server):
             os.makedirs(directory, exist_ok=True)
 
     @job("Setup VM Host")
-    def setup_vm_host(self, config: Dict[str, Any]):
+    def setup_vm_host(self, config: dict[str, Any]):
         """
         Set up the VM host with required dependencies and configurations
         """
@@ -63,9 +59,8 @@ class VMHost(Server):
         
         install_cmd = f"apt-get update && apt-get install -y {' '.join(packages)}"
         return self.execute(install_cmd)
-
     @step("Configure libvirt")
-    def _configure_libvirt_step(self, config: Dict[str, Any]):
+    def _configure_libvirt_step(self, config: dict[str, Any]):
         """Configure libvirt daemon and settings"""
         try:
             # Enable and start libvirtd
