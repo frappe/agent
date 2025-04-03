@@ -37,7 +37,7 @@ class Server(Base):
 
     @property
     def press_url(self):
-        return self.config["press_url"]
+        return self.config.get("press_url", "https://frappecloud.com")
 
     def docker_login(self, registry):
         url = registry["url"]
