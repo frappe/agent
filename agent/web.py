@@ -1675,7 +1675,6 @@ def restore_vm_snapshot(vm_name):
     data = request.get_json()
     if not data or "snapshot_name" not in data:
         return jsonify({"status": "error", "message": "Snapshot name is required"}), 400
-    
     snapshot_name = data["snapshot_name"]
     vm_host = VMHost()
     job = vm_host.restore_vm_snapshot(vm_name, snapshot_name)
