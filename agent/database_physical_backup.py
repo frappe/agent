@@ -32,6 +32,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             raise ValueError("At least one database is required")
         # Instance variable for internal use
         self._db_instances: dict[str, CustomPeeweeDB] = {}
+        self._db_instances_connection_id: dict[str, int] = {}
         self._db_tables_locked: dict[str, bool] = {db: False for db in databases}
 
         # variables
@@ -128,6 +129,7 @@ class DatabasePhysicalBackup(DatabaseServer):
             tables = self.innodb_tables[db_name] + self.myisam_tables[db_name]
             tables = [f"`{table}`" for table in tables]
             flush_table_export_query = "FLUSH TABLES {} FOR EXPORT;".format(", ".join(tables))
+            self._kill_other_db_connections(db_name)
             self.get_db(db_name).execute_sql(flush_table_export_query)
             self._db_tables_locked[db_name] = True
 
@@ -272,7 +274,8 @@ class DatabasePhysicalBackup(DatabaseServer):
         for db_name in self.databases:
             self._unlock_tables(db_name)
 
-    def export_table_schema(self, db_name) -> str:
+    def export_table_schema(self, db_name: str) -> str:
+        self._kill_other_db_connections(db_name)
         command = [
             "mariadb-dump",
             "-u",
@@ -316,7 +319,14 @@ class DatabasePhysicalBackup(DatabaseServer):
         self._db_instances[db_name].connect()
         # Set session wait timeout to 4 hours [EXPERIMENTAL]
         self._db_instances[db_name].execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._db_instances_connection_id[db_name] = int(
+            self._db_instances[db_name].execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
         return self._db_instances[db_name]
+
+    def _kill_other_db_connections(self, db_name: str):
+        kill_other_db_connections(self.get_db(db_name), [self._db_instances_connection_id[db_name]])
 
     def __del__(self):
         for db_name in self.databases:
@@ -341,3 +351,51 @@ class DatabaseConnectionClosedWithDatabase(Exception):
 
 def get_path_of_physical_backup_metadata(db_base_path: str, database_name: str) -> str:
     return os.path.join(db_base_path, database_name, "physical_backup_meta.json")
+
+
+def is_db_connection_usable(db: CustomPeeweeDB) -> bool:
+    try:
+        if not db.is_connection_usable():
+            return False
+        db.execute_sql("SELECT 1;")
+        return True
+    except Exception:
+        return False
+
+
+def run_sql_query(db: CustomPeeweeDB, query: str) -> list[str]:
+    """
+    Return the result of the query as a list of rows
+    """
+    cursor = db.execute_sql(query)
+    if not cursor.description:
+        return []
+    rows = cursor.fetchall()
+    return [row for row in rows]
+
+
+def kill_other_db_connections(db: CustomPeeweeDB, thread_ids: list[int]):
+    """
+    We deactivate site before backup/restore and activate site after backup/restore.
+    But, connection through ProxySQL or Frappe Cloud devtools can still be there.
+
+    it's important to kill all the connections except current threads.
+    """
+
+    # Get process list
+    thread_ids_str = ",".join([str(thread_id) for thread_id in thread_ids])
+    query = (
+        "SELECT ID from INFORMATION_SCHEMA.PROCESSLIST "
+        "where DB=DATABASE() AND USER!='system user' "
+        f"AND ID NOT IN ({thread_ids_str});"
+    )
+
+    rows = run_sql_query(db, query)
+    db_pids = [row[0] for row in rows]
+    if not db_pids:
+        return
+
+    # Kill the processes
+    for pid in db_pids:
+        with contextlib.suppress(Exception):
+            run_sql_query(db, f"KILL {pid};")

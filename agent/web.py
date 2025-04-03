@@ -34,6 +34,7 @@ from agent.security import Security
 from agent.server import Server
 from agent.ssh import SSHProxy
 from agent.vm_host import VMHost
+from agent.utils import check_installed_pyspy
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
@@ -160,6 +161,21 @@ POST /benches
 @application.route("/ping")
 def ping():
     return {"message": "pong"}
+
+
+@application.route("/snapshot/<string:bench_name>")
+def get_snapshots(bench_name: str):
+    server = Server()
+    bench = server.benches.get(bench_name)
+
+    if not bench:
+        return {"message": f"No such bench {bench_name}"}, 400
+
+    if not check_installed_pyspy(server.directory):
+        return {"message": "PySpy is not installed on this server"}, 400
+
+    pids = bench.get_worker_pids()
+    return bench.take_snapshot(pids)
 
 
 @application.route("/ping_job", methods=["POST"])
@@ -1129,6 +1145,12 @@ def get_binary_logs():
 def get_database_processes():
     data = request.json
     return jsonify(DatabaseServer().processes(**data))
+
+
+@application.route("/database/variables", methods=["POST"])
+def get_database_variables():
+    data = request.json
+    return jsonify(DatabaseServer().variables(**data))
 
 
 @application.route("/database/locks", methods=["POST"])

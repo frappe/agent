@@ -97,6 +97,22 @@ class DatabaseServer(Server):
             traceback.print_exc()
         return []
 
+    def variables(self, private_ip, mariadb_root_password):
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            return self.sql(mariadb, "SHOW VARIABLES")
+        except Exception:
+            import traceback
+
+            traceback.print_exc()
+        return []
+
     def locks(self, private_ip, mariadb_root_password):
         try:
             mariadb = MySQLDatabase(
