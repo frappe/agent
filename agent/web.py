@@ -33,8 +33,8 @@ from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
 from agent.ssh import SSHProxy
-from agent.vm_host import VMHost
 from agent.utils import check_installed_pyspy
+from agent.vm_host import VMHost
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
