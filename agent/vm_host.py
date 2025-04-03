@@ -15,6 +15,7 @@ class VMHost(Server):
     """
     Class for managing a VM host server that can run virtual machines
     """
+
     def __init__(self, directory=None):
         super().__init__(directory)
         self.vm_directory = os.path.join(self.directory, "vms")
@@ -26,7 +27,7 @@ class VMHost(Server):
             self.vm_directory,
             self.vm_config_directory,
             self.vm_images_directory,
-            self.vm_templates_directory
+            self.vm_templates_directory,
         ]:
             os.makedirs(directory, exist_ok=True)
 
@@ -108,14 +109,17 @@ class VMHost(Server):
                   </ip>
                 </network>
                 """
-                with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
                     temp_file.write(bridge_xml)
                     temp_file_path = temp_file.name
                 self.execute(f"virsh net-define {temp_file_path}")
                 self.execute(f"virsh net-autostart {bridge_name}")
                 self.execute(f"virsh net-start {bridge_name}")
                 os.unlink(temp_file_path)
-            return {"status": "success", "message": "Networking configured successfully"}
+            return {
+                "status": "success",
+                "message": "Networking configured successfully",
+            }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
 
@@ -138,7 +142,7 @@ class VMHost(Server):
                   </target>
                 </pool>
                 """
-                with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
                     temp_file.write(pool_xml)
                     temp_file_path = temp_file.name
                 self.execute(f"virsh pool-define {temp_file_path}")
@@ -190,16 +194,17 @@ class VMHost(Server):
             else:
                 # Create new disk
                 self.execute(f"qemu-img create -f {disk_format} {disk_path} {disk_size}G")
-            return {"status": "success", "message": "VM storage prepared", "disk_path": disk_path}
+            return {
+                "status": "success",
+                "message": "VM storage prepared",
+                "disk_path": disk_path,
+            }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
 
     @step("Create VM with Cloud-Init")
     def _create_vm_with_cloud_init_step(
-        self,
-        vm_name: str,
-        vm_config: dict[str, Any],
-        cloud_init_config: dict[str, Any]
+        self, vm_name: str, vm_config: dict[str, Any], cloud_init_config: dict[str, Any]
     ):
         """Create VM with cloud-init configuration"""
         try:
@@ -229,7 +234,11 @@ class VMHost(Server):
                 "--import"
             )
             result = self.execute(cmd)
-            return {"status": "success", "message": "VM created with cloud-init", "output": result["output"]}
+            return {
+                "status": "success",
+                "message": "VM created with cloud-init",
+                "output": result["output"],
+            }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
 
@@ -250,17 +259,14 @@ class VMHost(Server):
                         "hostname": vm_name,
                         "preserve_hostname": False,
                         "ssh_pwauth": True,
-                        "chpasswd": {
-                            "expire": False,
-                            "list": ["ubuntu:ubuntu"]
-                        },
+                        "chpasswd": {"expire": False, "list": ["ubuntu:ubuntu"]},
                         "users": [
                             {
                                 "name": "ubuntu",
                                 "sudo": "ALL=(ALL) NOPASSWD:ALL",
-                                "shell": "/bin/bash"
+                                "shell": "/bin/bash",
                             }
-                        ]
+                        ],
                     }
                     # Add SSH keys if provided
                     if ssh_keys := cloud_init_config.get("ssh_authorized_keys"):
@@ -318,7 +324,11 @@ class VMHost(Server):
                 "--boot hd"
             )
             result = self.execute(cmd)
-            return {"status": "success", "message": "VM created", "output": result["output"]}
+            return {
+                "status": "success",
+                "message": "VM created",
+                "output": result["output"],
+            }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
 
@@ -332,10 +342,17 @@ class VMHost(Server):
                 raise Exception(f"VM {vm_name} does not exist")
             # Check if VM is already running
             if "running" in check_vm["output"].lower():
-                return {"status": "success", "message": f"VM {vm_name} is already running"}
+                return {
+                    "status": "success",
+                    "message": f"VM {vm_name} is already running",
+                }
             # Start VM
             result = self.execute(f"virsh start {vm_name}")
-            return {"status": "success", "message": f"VM {vm_name} started", "output": result["output"]}
+            return {
+                "status": "success",
+                "message": f"VM {vm_name} started",
+                "output": result["output"],
+            }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
 
@@ -354,7 +371,10 @@ class VMHost(Server):
                 raise Exception(f"VM {vm_name} does not exist")
             # Check if VM is already stopped
             if "shut off" in check_vm["output"].lower():
-                return {"status": "success", "message": f"VM {vm_name} is already stopped"}
+                return {
+                    "status": "success",
+                    "message": f"VM {vm_name} is already stopped",
+                }
             # Stop VM (shutdown or destroy)
             if force:
                 result = self.execute(f"virsh destroy {vm_name}")
@@ -364,7 +384,7 @@ class VMHost(Server):
             return {
                 "status": "success",
                 "message": f"VM {vm_name} {msg}",
-                "output": result["output"]
+                "output": result["output"],
             }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
@@ -398,7 +418,11 @@ class VMHost(Server):
             if delete_storage:
                 self._delete_vm_storage(vm_name)
 
-            return {"status": "success", "message": f"VM {vm_name} deleted", "output": result["output"]}
+            return {
+                "status": "success",
+                "message": f"VM {vm_name} deleted",
+                "output": result["output"],
+            }
 
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
@@ -427,11 +451,7 @@ class VMHost(Server):
             for line in result["output"].split("\n")[2:]:
                 parts = line.strip().split()
                 if len(parts) >= 3:
-                    vms.append({
-                        "id": parts[0],
-                        "name": parts[1],
-                        "state": " ".join(parts[2:])
-                    })
+                    vms.append({"id": parts[0], "name": parts[1], "state": " ".join(parts[2:])})
             return {"status": "success", "vms": vms}
 
         except Exception as e:
@@ -454,12 +474,14 @@ class VMHost(Server):
             for line in network_info["output"].split("\n")[2:]:
                 parts = line.strip().split()
                 if len(parts) >= 4:
-                    interfaces.append({
-                        "name": parts[0],
-                        "mac": parts[1],
-                        "protocol": parts[2],
-                        "address": parts[3]
-                    })
+                    interfaces.append(
+                        {
+                            "name": parts[0],
+                            "mac": parts[1],
+                            "protocol": parts[2],
+                            "address": parts[3],
+                        }
+                    )
             return interfaces
         except Exception:
             return []
@@ -483,7 +505,7 @@ class VMHost(Server):
               <description>Snapshot created at {datetime.now().isoformat()}</description>
             </domainsnapshot>
             """
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+            with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
                 temp_file.write(snapshot_xml)
                 temp_file_path = temp_file.name
             result = self.execute(f"virsh snapshot-create {vm_name} {temp_file_path}")
@@ -491,7 +513,7 @@ class VMHost(Server):
             return {
                 "status": "success",
                 "message": f"Snapshot {snapshot_name} created for VM {vm_name}",
-                "output": result["output"]
+                "output": result["output"],
             }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
@@ -513,7 +535,7 @@ class VMHost(Server):
             return {
                 "status": "success",
                 "message": f"VM {vm_name} restored to snapshot {snapshot_name}",
-                "output": result["output"]
+                "output": result["output"],
             }
         except Exception as e:
             return {"status": "error", "message": f"{e!s}"}
