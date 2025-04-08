@@ -162,7 +162,7 @@ def ping():
     return {"message": "pong"}
 
 
-@application.route("/snapshot/<string:bench_name>")
+@application.route("/process-snapshot/<string:bench_name>")
 def get_snapshots(bench_name: str):
     server = Server()
     bench = server.benches.get(bench_name)
