@@ -162,7 +162,7 @@ def ping():
     return {"message": "pong"}
 
 
-@application.route("/snapshot/<string:bench_name>")
+@application.route("/process-snapshot/<string:bench_name>")
 def get_snapshots(bench_name: str):
     server = Server()
     bench = server.benches.get(bench_name)
@@ -1144,6 +1144,12 @@ def get_binary_logs():
 def get_database_processes():
     data = request.json
     return jsonify(DatabaseServer().processes(**data))
+
+
+@application.route("/database/variables", methods=["POST"])
+def get_database_variables():
+    data = request.json
+    return jsonify(DatabaseServer().variables(**data))
 
 
 @application.route("/database/locks", methods=["POST"])
