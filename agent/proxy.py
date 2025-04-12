@@ -7,6 +7,8 @@ from collections import defaultdict
 from hashlib import sha512 as sha
 from pathlib import Path
 
+import filelock
+
 from agent.job import job, step
 from agent.server import Server
 
@@ -23,6 +25,9 @@ class Proxy(Server):
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
 
+        self.nginx_defer_reload_file = os.path.join(self.nginx_directory, "nginx_reload")
+        self.nginx_defer_reload_lock_file = os.path.join(self.nginx_directory, "nginx_reload.lock")
+
         self.job = None
         self.step = None
 
@@ -30,9 +35,7 @@ class Proxy(Server):
     def add_host_job(self, host, target, certificate, skip_reload=False):
         self.add_host(host, target, certificate)
         self.generate_proxy_config()
-        if skip_reload:
-            return
-        self.reload_nginx()
+        self.reload_nginx(defer=skip_reload)
 
     @step("Add Host to Proxy")
     def add_host(self, host, target, certificate):
@@ -73,9 +76,10 @@ class Proxy(Server):
     def add_site_domain_to_upstream(self, upstream, site, skip_reload=False):
         self.remove_conflicting_site(site)
         self.add_site_to_upstream(upstream, site)
-        self.generate_proxy_config()
         if skip_reload:
+            self.reload_nginx(defer=True)
             return
+        self.generate_proxy_config()
         self.reload_nginx()
 
     @job("Add Site to Upstream")
@@ -143,6 +147,7 @@ class Proxy(Server):
         if os.path.exists(site_file):
             self.remove_site_from_upstream(site_file)
         if skip_reload:
+            self.reload_nginx(defer=True)
             return
         self.generate_proxy_config()
         self.reload_nginx()
@@ -169,6 +174,7 @@ class Proxy(Server):
         for host in hosts:
             self.rename_site_in_host_dir(host, site, new_name)
         if skip_reload:
+            self.reload_nginx(defer=True)
             return
         self.generate_proxy_config()
         self.reload_nginx()
@@ -213,6 +219,7 @@ class Proxy(Server):
     def update_site_status_job(self, upstream, site, status, skip_reload=False):
         self.update_site_status(upstream, site, status)
         if skip_reload:
+            self.reload_nginx(defer=True)
             return
         self.generate_proxy_config()
         self.reload_nginx()
@@ -266,7 +273,13 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     @step("Reload NGINX")
-    def reload_nginx(self):
+    def reload_nginx(self, defer: bool = False):
+        if defer:
+            with filelock.FileLock(self.nginx_defer_reload_lock_file) and open(
+                self.nginx_defer_reload_file, "w"
+            ) as f:
+                f.write("1")
+            return {}
         return self.execute("sudo systemctl reload nginx")
 
     @job("Reload NGINX Job")
