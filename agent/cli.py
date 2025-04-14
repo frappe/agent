@@ -39,7 +39,6 @@ def run_patches():
 
     run_patches()
 
-
 @cli.command()
 @click.option("--password", required=True)
 def ping_server(password: str):
@@ -83,6 +82,17 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
 
     with open("config.json", "w") as f:
         json.dump(config, f, sort_keys=True, indent=4)
+
+
+@setup.command()
+def enable_py_spy():
+    privileges_line = "frappe ALL = (root) NOPASSWD: /home/frappe/agent/env/bin/py-spy"
+    with open("/etc/sudoers.d/frappe", "a+") as sudoers:
+        sudoers.seek(0)
+        lines = sudoers.read().splitlines()
+
+        if privileges_line not in lines:
+            sudoers.write(privileges_line + "\n")
 
 
 @setup.command()
