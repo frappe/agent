@@ -86,6 +86,17 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
 
 
 @setup.command()
+def enable_py_spy():
+    privileges_line = "frappe ALL = (root) NOPASSWD: /home/frappe/agent/env/bin/py-spy"
+    with open("/etc/sudoers.d/frappe", "a+") as sudoers:
+        sudoers.seek(0)
+        lines = sudoers.read().splitlines()
+
+        if privileges_line not in lines:
+            sudoers.write(privileges_line + "\n")
+
+
+@setup.command()
 @click.option("--password", prompt=True, hide_input=True)
 def authentication(password):
     Server().setup_authentication(password)
