@@ -39,6 +39,7 @@ def run_patches():
 
     run_patches()
 
+
 @cli.command()
 @click.option("--password", required=True)
 def ping_server(password: str):
