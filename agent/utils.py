@@ -48,12 +48,18 @@ def download_file(url, prefix):
     return local_filename
 
 
-def get_size(folder):
+def get_size(folder, ignore_dirs=None):
     """Returns the size of the folder in bytes. Ignores symlinks"""
     total_size = os.path.getsize(folder)
 
+    if ignore_dirs is None:
+        ignore_dirs = []
+
     for item in os.listdir(folder):
         itempath = os.path.join(folder, item)
+
+        if item in ignore_dirs:
+            continue
 
         if not os.path.islink(itempath):
             if os.path.isfile(itempath):

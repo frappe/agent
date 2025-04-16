@@ -777,15 +777,14 @@ print(">>>" + frappe.session.sid + "<<<")
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
         private_directory = os.path.join(self.directory, "private")
-        backup_directory_size = get_size(backup_directory)
 
         return {
             "database": b2mb(self.get_database_size()),
             "database_free_tables": self.get_database_free_tables(),
             "database_free": b2mb(self.get_database_free_size()),
             "public": b2mb(get_size(public_directory)),
-            "private": b2mb(get_size(private_directory) - backup_directory_size),
-            "backups": b2mb(backup_directory_size),
+            "private": b2mb(get_size(private_directory, ignore_dirs=["backups"])),
+            "backups": b2mb(get_size(backup_directory)),
         }
 
     def get_analytics(self):
