@@ -199,7 +199,7 @@ def nginx_defer_reload():
 
     if command not in str(cron):
         job = cron.new(command=command)
-        job.minute.every(1)
+        job.minute.every(2)
         cron.write()
 
 
