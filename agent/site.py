@@ -466,7 +466,7 @@ class Site(Base):
 
     @step("Wait for Enqueued Jobs")
     def wait_till_ready(self):
-        WAIT_TIMEOUT = 120
+        WAIT_TIMEOUT = 600
         data = {"tries": []}
         start = time.time()
         while (time.time() - start) < WAIT_TIMEOUT:
