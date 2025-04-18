@@ -210,12 +210,12 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status, skip_reload=False, extra_upstreams=None):
+    def update_site_status_job(self, upstream, site, status, skip_reload=False, extra_domains=None):
         self.update_site_status(upstream, site, status)
-        if not extra_upstreams:
-            extra_upstreams = []
-        for upstream in extra_upstreams:
-            self.update_site_status(upstream, site, status)
+        if not extra_domains:
+            extra_domains = []
+        for domain in extra_domains:
+            self.update_site_status(upstream, domain, status)
         if skip_reload:
             return
         self.generate_proxy_config()
