@@ -466,17 +466,26 @@ class Site(Base):
 
     @step("Wait for Enqueued Jobs")
     def wait_till_ready(self):
-        WAIT_TIMEOUT = 120
+        WAIT_TIMEOUT = 600
         data = {"tries": []}
         start = time.time()
+        is_ready = False
         while (time.time() - start) < WAIT_TIMEOUT:
             try:
                 output = self.bench_execute("ready-for-migration")
                 data["tries"].append(output)
+                is_ready = True
                 break
             except Exception as e:
                 data["tries"].append(e.data)
                 time.sleep(1)
+
+        if not is_ready:
+            raise Exception(
+                f"Site not ready for migration after {WAIT_TIMEOUT}s."
+                f" Site might have lot of jobs in queue. Try again later."
+            )
+
         return data
 
     @step("Clear Backup Directory")
