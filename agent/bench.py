@@ -20,7 +20,7 @@ import requests
 
 from agent.app import App
 from agent.base import AgentException, Base
-from agent.exceptions import SiteNotExistsException
+from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, end_execution, get_execution_result, get_size
@@ -819,9 +819,12 @@ class Bench(Base):
                 sites[directory] = Site(directory, self)
             except json.decoder.JSONDecodeError as jde:
                 output = self.readable_jde_err(f"Error parsing JSON in {directory}", jde)
-                self.execute(
-                    f"echo '{output}';exit {int(validate_configs)}",
-                )  # exit 1 to make sure the job fails and shows output
+                try:
+                    self.execute(
+                        f"echo '{output}';exit {int(validate_configs)}",
+                    )  # exit 1 to make sure the job fails and shows output
+                except AgentException as e:
+                    raise InvalidSiteConfigException(e.data, directory) from e
             except Exception:
                 pass
         return sites
@@ -829,8 +832,11 @@ class Bench(Base):
     def get_site(self, site):
         try:
             return self.valid_sites[site]
-        except KeyError as exc:
-            raise SiteNotExistsException(site, self.name) from exc
+        except KeyError as e:
+            raise SiteNotExistsException(site, self.name) from e
+        except InvalidSiteConfigException as e:
+            if e.site == site:
+                raise
 
     @property
     def step_record(self):

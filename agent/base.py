@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import filelock
 import redis
 
+from agent.exceptions import AgentException
 from agent.job import connection
 from agent.utils import get_execution_result
 
