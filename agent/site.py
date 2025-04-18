@@ -469,14 +469,20 @@ class Site(Base):
         WAIT_TIMEOUT = 600
         data = {"tries": []}
         start = time.time()
+        is_ready = False
         while (time.time() - start) < WAIT_TIMEOUT:
             try:
                 output = self.bench_execute("ready-for-migration")
                 data["tries"].append(output)
+                is_ready = True
                 break
             except Exception as e:
                 data["tries"].append(e.data)
                 time.sleep(1)
+
+        if not is_ready:
+            raise Exception("Timeout waiting for site to be ready")
+
         return data
 
     @step("Clear Backup Directory")
