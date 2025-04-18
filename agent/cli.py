@@ -124,10 +124,10 @@ def nginx():
 def proxy(domain=None, press_url=None):
     proxy = Proxy()
     if domain:
-        config = proxy.config
+        config = proxy.get_config(for_update=True)
         config["domain"] = domain
         config["press_url"] = press_url
-        proxy.setconfig(config, indent=4)
+        proxy.set_config(config, indent=4)
     proxy.setup_proxy()
 
 
@@ -136,10 +136,10 @@ def proxy(domain=None, press_url=None):
 def standalone(domain=None):
     server = Server()
     if domain:
-        config = server.config
+        config = server.get_config(for_update=True)
         config["domain"] = domain
         config["standalone"] = True
-        server.setconfig(config, indent=4)
+        server.set_config(config, indent=4)
 
 
 @setup.command()

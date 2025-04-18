@@ -23,6 +23,8 @@ from agent.site import Site
 
 class Server(Base):
     def __init__(self, directory=None):
+        super().__init__()
+
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
@@ -414,9 +416,9 @@ class Server(Base):
         self.update_config({"proxysql_admin_password": password})
 
     def update_config(self, value):
-        config = self.config
+        config = self.get_config(for_update=True)
         config.update(value)
-        self.setconfig(config, indent=4)
+        self.set_config(config, indent=4)
 
     def setup_registry(self):
         self.update_config({"registry": True})

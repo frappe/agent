@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 class Site(Base):
     def __init__(self, name: str, bench: Bench):
+        super().__init__()
+
         self.name = name
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)
@@ -234,14 +236,14 @@ class Site(Base):
             remove (list, optional): Keys sent in the form of a list will be
                 popped from the existing site config. Defaults to None.
         """
-        new_config = self.config
+        new_config = self.get_config(for_update=True)
         new_config.update(value)
 
         if remove:
             for key in remove:
                 new_config.pop(key, None)
 
-        self.setconfig(new_config)
+        self.set_config(new_config)
 
     @job("Add Domain", priority="high")
     def add_domain(self, domain):
