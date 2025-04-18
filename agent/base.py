@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import redis
 
+from agent.exceptions import AgentException
 from agent.job import connection
 from agent.utils import get_execution_result
 
@@ -233,8 +234,3 @@ class Base:
         log_file = os.path.join(self.logs_directory, name)
         with open(log_file) as lf:
             return lf.read()
-
-
-class AgentException(Exception):
-    def __init__(self, data):
-        self.data = data
