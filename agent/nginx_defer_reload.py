@@ -46,7 +46,6 @@ if __name__ == "__main__":
             try:
                 proxy._generate_proxy_config()
                 proxy._reload_nginx()
-                print("Reloaded NGINX", file=sys.stdout)
             except Exception:
                 error_log = f"ERROR [{proxy.name}:{datetime.utcnow()}]: {get_traceback()}"
                 print(error_log, file=sys.stderr)
