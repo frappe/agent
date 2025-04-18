@@ -210,8 +210,12 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status, skip_reload=False):
+    def update_site_status_job(self, upstream, site, status, skip_reload=False, extra_upstreams=None):
         self.update_site_status(upstream, site, status)
+        if not extra_upstreams:
+            extra_upstreams = []
+        for upstream in extra_upstreams:
+            self.update_site_status(upstream, site, status)
         if skip_reload:
             return
         self.generate_proxy_config()
@@ -318,23 +322,24 @@ class Proxy(Server):
     @property
     def upstreams(self):
         upstreams = {}
-        for upstream in os.listdir(self.upstreams_directory):
+        for upstream in os.listdir(self.upstreams_directory):  # for each server ip
             upstream_directory = os.path.join(self.upstreams_directory, upstream)
-            if os.path.isdir(upstream_directory):
-                hashed_upstream = sha(upstream.encode()).hexdigest()[:16]
-                upstreams[upstream] = {"sites": [], "hash": hashed_upstream}
-                for site in os.listdir(upstream_directory):
-                    with open(os.path.join(upstream_directory, site)) as f:
-                        status = f.read().strip()
-                    if status in (
-                        "deactivated",
-                        "suspended",
-                        "suspended_saas",
-                    ):
-                        actual_upstream = status
-                    else:
-                        actual_upstream = hashed_upstream
-                    upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
+            if not os.path.isdir(upstream_directory):
+                continue
+            hashed_upstream = sha(upstream.encode()).hexdigest()[:16]
+            upstreams[upstream] = {"sites": [], "hash": hashed_upstream}
+            for site in os.listdir(upstream_directory):
+                with open(os.path.join(upstream_directory, site)) as f:
+                    status = f.read().strip()
+                if status in (
+                    "deactivated",
+                    "suspended",
+                    "suspended_saas",
+                ):
+                    actual_upstream = status
+                else:
+                    actual_upstream = hashed_upstream
+                upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
         return upstreams
 
     @property
