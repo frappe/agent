@@ -280,8 +280,3 @@ class Base:
         if self._config_file_lock:
             with suppress(Exception):
                 self._config_file_lock.release()
-
-
-class AgentException(Exception):
-    def __init__(self, data):
-        self.data = data
