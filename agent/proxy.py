@@ -299,16 +299,17 @@ class Proxy(Server):
 
     def _generate_proxy_config(self):
         proxy_config_file = os.path.join(self.nginx_directory, "proxy.conf")
+        config = self.get_config()
         self._render_template(
             "proxy/nginx.conf.jinja2",
             {
                 "hosts": self.hosts,
                 "upstreams": self.upstreams,
-                "domain": self.config["domain"],
+                "domain": config["domain"],
                 "wildcards": self.wildcards,
-                "nginx_directory": self.config["nginx_directory"],
+                "nginx_directory": config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
-                "tls_protocols": self.config.get("tls_protocols"),
+                "tls_protocols": config.get("tls_protocols"),
             },
             proxy_config_file,
         )

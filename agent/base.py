@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tempfile
 import traceback
+from contextlib import suppress
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING
 
+import filelock
 import redis
 
 from agent.job import connection
@@ -29,6 +32,9 @@ class Base:
         self.config_file = None
         self.name = None
         self.data: dict[str, str] = {}
+
+        # internal
+        self._config_file_lock: filelock.SoftFileLock | None = None
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -180,13 +186,47 @@ class Base:
         return connection()
 
     @property
-    def config(self):
+    def config(self) -> dict:
+        """
+        This should be used where we know that,
+        the config file isn't going to be frequently updated.
+        """
+        return self.get_config()
+
+    def get_config(self, for_update: bool = False) -> dict:
+        """
+        If we are fetching the config for updating some part of it.
+        It's better to acquire the lock to avoid race conditions and dirty reads.
+        """
+        if for_update:
+            if not self._config_file_lock:
+                self._config_file_lock = filelock.SoftFileLock(self.config_file + ".lock")
+            self._config_file_lock.acquire()
+
         with open(self.config_file, "r") as f:
             return json.load(f)
 
-    def setconfig(self, value, indent=1):
-        with open(self.config_file, "w") as f:
-            json.dump(value, f, indent=indent, sort_keys=True)
+    def set_config(self, value: dict, indent=1, release_lock: bool = True):
+        """
+        Args:
+            value (dict): Config to be set
+            indent (int, optional): Indent for the config file. Defaults to 1.
+            release_lock (bool, optional): Release the lock after setting the config. Defaults to True.
+                                           If we have more writes to do, then we should not release the lock.
+
+        To prevent partial writes, we need to first write the config to a temporary file,
+        then rename it to the original file.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            json.dump(value, temp_file, indent=indent, sort_keys=True)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+            temp_file.close()
+
+        os.rename(temp_file.name, self.config_file)
+
+        if release_lock and self._config_file_lock:
+            self._config_file_lock.release()
 
     def log(self):
         data = self.data.copy()
@@ -233,6 +273,12 @@ class Base:
         log_file = os.path.join(self.logs_directory, name)
         with open(log_file) as lf:
             return lf.read()
+
+    def __del__(self):
+        # Release lock at the end of the object's lifetime
+        if self._config_file_lock:
+            with suppress(Exception):
+                self._config_file_lock.release()
 
 
 class AgentException(Exception):

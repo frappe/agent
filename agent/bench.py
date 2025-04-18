@@ -571,9 +571,9 @@ class Bench(Base):
         bench_config: dict | None = None,
     ):
         if common_site_config:
-            new_common_site_config = self.config
+            new_common_site_config = self.get_config(for_update=True)
             new_common_site_config.update(common_site_config)
-            self.setconfig(new_common_site_config)
+            self.set_config(new_common_site_config)
 
         if bench_config:
             new_bench_config = self.bench_config
@@ -847,13 +847,22 @@ class Bench(Base):
         }
 
     @property
-    def bench_config(self):
+    def bench_config(self) -> dict:
         with open(self.bench_config_file, "r") as f:
             return json.load(f)
 
     def set_bench_config(self, value, indent=1):
-        with open(self.bench_config_file, "w") as f:
-            json.dump(value, f, indent=indent, sort_keys=True)
+        """
+        To avoid partial writes, we need to first write the config to a temporary file,
+        then rename it to the original file.
+        """
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            json.dump(value, temp_file, indent=indent, sort_keys=True)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+            temp_file.close()
+
+        os.rename(temp_file.name, self.config_file)
 
     @job("Patch App")
     def patch_app(
