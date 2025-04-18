@@ -274,14 +274,13 @@ class Proxy(Server):
 
     @step("Reload NGINX")
     def reload_nginx(self, defer: bool = False):
-        return self._reload_nginx(defer)
+        return self._reload_nginx(defer=defer)
 
     def _reload_nginx(self, defer: bool = False):
         if defer:
-            with filelock.FileLock(self.nginx_defer_reload_lock_file) and open(
-                self.nginx_defer_reload_file, "w"
-            ) as f:
-                f.write("1")
+            with filelock.FileLock(self.nginx_defer_reload_lock_file):  # noqa: SIM117
+                with open(self.nginx_defer_reload_file, "w") as f:
+                    f.write("1")
             return {}
         return self.execute("sudo systemctl reload nginx")
 
