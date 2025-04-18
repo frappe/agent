@@ -481,7 +481,10 @@ class Site(Base):
                 time.sleep(1)
 
         if not is_ready:
-            raise Exception("Timed out while waiting for the site to become ready for migration")
+            raise Exception(
+                f"Site not ready for migration after {WAIT_TIMEOUT}s."
+                f" Site might have lot of jobs in queue. Try again later."
+            )
 
         return data
 
