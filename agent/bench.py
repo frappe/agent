@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
 class Bench(Base):
     def __init__(self, name: str, server: Server, mounts=None):
+        super().__init__()
+
         self.name = name
         self.server = server
         self.directory = os.path.join(self.server.benches_directory, name)

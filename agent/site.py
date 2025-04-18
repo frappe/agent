@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
 class Site(Base):
     def __init__(self, name: str, bench: Bench):
+        super().__init__()
+
         self.name = name
         self.bench = bench
         self.directory = os.path.join(self.bench.sites_directory, name)

@@ -23,6 +23,8 @@ from agent.site import Site
 
 class Server(Base):
     def __init__(self, directory=None):
+        super().__init__()
+
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
