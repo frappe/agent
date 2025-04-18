@@ -481,7 +481,7 @@ class Site(Base):
                 time.sleep(1)
 
         if not is_ready:
-            raise Exception("Timeout waiting for site to be ready")
+            raise Exception("Timed out while waiting for the site to become ready for migration")
 
         return data
 
