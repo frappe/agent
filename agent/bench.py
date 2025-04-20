@@ -870,7 +870,7 @@ class Bench(Base):
             os.fsync(temp_file.fileno())
             temp_file.close()
 
-        os.rename(temp_file.name, self.config_file)
+        os.rename(temp_file.name, self.bench_config_file)
 
     @job("Patch App")
     def patch_app(
