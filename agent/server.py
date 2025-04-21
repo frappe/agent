@@ -19,6 +19,7 @@ from agent.exceptions import BenchNotExistsException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
+from agent.utils import get_supervisor_status
 
 
 class Server(Base):
@@ -514,17 +515,48 @@ class Server(Base):
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
 
-    def update_agent_cli(self):
+    def update_agent_cli(  # noqa: C901
+        self, commit: str, restart_redis=True, restart_rq_workers=True, restart_web_workers=True
+    ):
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         self.execute("git fetch upstream", directory=directory)
         self.execute("git merge --ff-only upstream/master", directory=directory)
 
+        if commit:
+            self.execute(f"git checkout {commit}", directory=directory)
+
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
-        self.execute("sudo supervisorctl restart agent:")
+        supervisor_status = get_supervisor_status()
+
+        # Stop web service
+        if restart_web_workers and supervisor_status.get("web") == "RUNNING":
+            self.execute("sudo supervisorctl stop agent:web")
+
+        # Stop required services
+        if restart_rq_workers:
+            for worker_id in supervisor_status.get("worker", {}):
+                self.execute(f"sudo supervisorctl stop agent:worker-{worker_id}")
+
+        # Stop redis
+        if restart_redis and supervisor_status.get("redis") == "RUNNING":
+            self.execute("sudo supervisorctl stop agent:redis")
+
         self.setup_supervisor()
+
+        # Start back services in same order
+        supervisor_status = get_supervisor_status()
+        if restart_redis or supervisor_status.get("redis") != "RUNNING":
+            self.execute("sudo supervisorctl start agent:redis")
+
+        if restart_rq_workers:
+            self.execute("sudo supervisorctl start agent:worker-0")
+            self.execute("sudo supervisorctl start agent:worker-1")
+
+        if restart_web_workers:
+            self.execute("sudo supervisorctl start agent:web")
 
         self.setup_nginx()
         run_patches()

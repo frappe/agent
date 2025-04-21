@@ -29,8 +29,17 @@ def setup():
 
 
 @cli.command()
-def update():
-    Server().update_agent_cli()
+@click.option("--restart-web-workers", default=True)
+@click.option("--restart-rq-workers", default=True)
+@click.option("--restart-redis", default=True)
+@click.option("--commit")
+def update(restart_web_workers, restart_rq_workers, restart_redis, commit: str):
+    Server().update_agent_cli(
+        restart_redis=restart_redis,
+        restart_rq_workers=restart_rq_workers,
+        restart_web_workers=restart_web_workers,
+        commit=commit,
+    )
 
 
 @cli.command()
