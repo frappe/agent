@@ -15,19 +15,17 @@ from agent.server import Server
 
 class Proxy(Server):
     def __init__(self, directory=None):
+        super().__init__(directory)
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.domain = self.config.get("domain")
-
         self.nginx_directory = self.config["nginx_directory"]
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
-
         self.nginx_defer_reload_file = os.path.join(self.nginx_directory, "nginx_reload")
         self.nginx_defer_reload_lock_file = os.path.join(self.nginx_directory, "nginx_reload.lock")
-
         self.job = None
         self.step = None
 
