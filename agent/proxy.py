@@ -20,7 +20,6 @@ class Proxy(Server):
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.domain = self.config.get("domain")
-        
         self.nginx_directory = self.config["nginx_directory"]
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
