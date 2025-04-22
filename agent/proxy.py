@@ -27,7 +27,6 @@ class Proxy(Server):
         
         self.nginx_defer_reload_file = os.path.join(self.nginx_directory, "nginx_reload")
         self.nginx_defer_reload_lock_file = os.path.join(self.nginx_directory, "nginx_reload.lock")
-        
         self.job = None
         self.step = None
 
