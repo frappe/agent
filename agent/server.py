@@ -516,18 +516,15 @@ class Server(Base):
         run_patches()
 
     def update_agent_cli(  # noqa: C901
-        self, commit: str, restart_redis=True, restart_rq_workers=True, restart_web_workers=True
+        self, restart_redis=True, restart_rq_workers=True, restart_web_workers=True, skip_repo_setup=False
     ):
         directory = os.path.join(self.directory, "repo")
-        self.execute("git reset --hard", directory=directory)
-        self.execute("git clean -fd", directory=directory)
-        self.execute("git fetch upstream", directory=directory)
-        self.execute("git merge --ff-only upstream/master", directory=directory)
-
-        if commit:
-            self.execute(f"git checkout {commit}", directory=directory)
-
-        self.execute("./env/bin/pip install -e repo", directory=self.directory)
+        if skip_repo_setup:
+            self.execute("git reset --hard", directory=directory)
+            self.execute("git clean -fd", directory=directory)
+            self.execute("git fetch upstream", directory=directory)
+            self.execute("git merge --ff-only upstream/master", directory=directory)
+            self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         supervisor_status = get_supervisor_status()
 

@@ -32,13 +32,13 @@ def setup():
 @click.option("--restart-web-workers", default=True)
 @click.option("--restart-rq-workers", default=True)
 @click.option("--restart-redis", default=True)
-@click.option("--commit")
-def update(restart_web_workers, restart_rq_workers, restart_redis, commit: str):
+@click.option("--skip-repo-setup", default=False)
+def update(restart_web_workers, restart_rq_workers, restart_redis, skip_repo_setup):
     Server().update_agent_cli(
         restart_redis=restart_redis,
         restart_rq_workers=restart_rq_workers,
         restart_web_workers=restart_web_workers,
-        commit=commit,
+        skip_repo_setup=skip_repo_setup
     )
 
 
