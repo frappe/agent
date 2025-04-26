@@ -518,7 +518,12 @@ class Server(Base):
         run_patches()
 
     def update_agent_cli(  # noqa: C901
-        self, restart_redis=True, restart_rq_workers=True, restart_web_workers=True, skip_repo_setup=False
+        self,
+        restart_redis=True,
+        restart_rq_workers=True,
+        restart_web_workers=True,
+        skip_repo_setup=False,
+        skip_patches=False,
     ):
         directory = os.path.join(self.directory, "repo")
         if skip_repo_setup:
@@ -558,7 +563,9 @@ class Server(Base):
             self.execute("sudo supervisorctl start agent:web")
 
         self.setup_nginx()
-        run_patches()
+
+        if not skip_patches:
+            run_patches()
 
     def get_agent_version(self):
         directory = os.path.join(self.directory, "repo")
