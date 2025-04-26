@@ -183,9 +183,9 @@ def check_installed_pyspy(server_dir: str) -> bool:
     return os.path.exists(os.path.join(server_dir, "env/bin/py-spy"))
 
 
-def get_supervisor_status() -> dict[str, str | dict[str, str]]:
+def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
     try:
-        output = subprocess.check_output("sudo supervisorctl status", shell=True)
+        output = subprocess.check_output("sudo supervisorctl status all", shell=True)
         lines = output.decode("utf-8").strip().split("\n")
 
         flat_status = {}
