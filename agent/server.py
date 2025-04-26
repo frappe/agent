@@ -19,6 +19,7 @@ from agent.exceptions import BenchNotExistsException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
+from agent.utils import get_supervisor_processes_status
 
 
 class Server(Base):
@@ -394,8 +395,10 @@ class Server(Base):
             shutil.move(destination, archived_site_path)
         shutil.move(site.directory, target.sites_directory)
 
-    def execute(self, command, directory=None, skip_output_log=False):
-        return super().execute(command, directory=directory, skip_output_log=skip_output_log)
+    def execute(self, command, directory=None, skip_output_log=False, non_zero_throw=True):
+        return super().execute(
+            command, directory=directory, skip_output_log=skip_output_log, non_zero_throw=non_zero_throw
+        )
 
     @job("Reload NGINX")
     def restart_nginx(self):
@@ -514,17 +517,45 @@ class Server(Base):
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
 
-    def update_agent_cli(self):
+    def update_agent_cli(  # noqa: C901
+        self, restart_redis=True, restart_rq_workers=True, restart_web_workers=True, skip_repo_setup=False
+    ):
         directory = os.path.join(self.directory, "repo")
-        self.execute("git reset --hard", directory=directory)
-        self.execute("git clean -fd", directory=directory)
-        self.execute("git fetch upstream", directory=directory)
-        self.execute("git merge --ff-only upstream/master", directory=directory)
+        if skip_repo_setup:
+            self.execute("git reset --hard", directory=directory)
+            self.execute("git clean -fd", directory=directory)
+            self.execute("git fetch upstream", directory=directory)
+            self.execute("git merge --ff-only upstream/master", directory=directory)
+            self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
-        self.execute("./env/bin/pip install -e repo", directory=self.directory)
+        supervisor_status = get_supervisor_processes_status()
 
-        self.execute("sudo supervisorctl restart agent:")
+        # Stop web service
+        if restart_web_workers and supervisor_status.get("web") == "RUNNING":
+            self.execute("sudo supervisorctl stop agent:web", non_zero_throw=False)
+
+        # Stop required services
+        if restart_rq_workers:
+            for worker_id in supervisor_status.get("worker", {}):
+                self.execute(f"sudo supervisorctl stop agent:worker-{worker_id}", non_zero_throw=False)
+
+        # Stop redis
+        if restart_redis and supervisor_status.get("redis") == "RUNNING":
+            self.execute("sudo supervisorctl stop agent:redis", non_zero_throw=False)
+
         self.setup_supervisor()
+
+        # Start back services in same order
+        supervisor_status = get_supervisor_processes_status()
+        if restart_redis or supervisor_status.get("redis") != "RUNNING":
+            self.execute("sudo supervisorctl start agent:redis")
+
+        if restart_rq_workers:
+            self.execute("sudo supervisorctl start agent:worker-0")
+            self.execute("sudo supervisorctl start agent:worker-1")
+
+        if restart_web_workers:
+            self.execute("sudo supervisorctl start agent:web")
 
         self.setup_nginx()
         run_patches()
@@ -537,6 +568,7 @@ class Server(Base):
             "upstream": self.execute("git remote get-url upstream", directory=directory)["output"],
             "show": self.execute("git show", directory=directory)["output"],
             "python": platform.python_version(),
+            "services": get_supervisor_processes_status(),
         }
 
     def status(self, mariadb_root_password):
