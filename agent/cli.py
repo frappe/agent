@@ -221,8 +221,7 @@ def rewrite_redis_aof_weekly():
 
     if command not in str(cron):
         job = cron.new(command=command)
-        job.every(7).weeks()
-        job.hour.on(2)
+        job.setall("0 2 1,8,15,22 * *")
         cron.write()
 
 
