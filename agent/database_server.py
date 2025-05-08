@@ -267,13 +267,25 @@ class DatabaseServer(Server):
         return sorted(stalks, key=lambda x: x["name"])
 
     def get_binlogs(self) -> dict:
-        binlogs = []
+        binlogs_in_disk = []
         for file in Path(self.mariadb_directory).iterdir():
             if re.match(r"mysql-bin.\d+", file.name):
-                binlogs.append(file.name)
+                stat = file.stat()
+                binlogs_in_disk.append(
+                    {
+                        "name": file.name,
+                        "size": stat.st_size,
+                        "modified_at": stat.st_mtime,
+                        "created_at": stat.st_ctime,
+                    }
+                )
+
+        # sort binlogs by name
+        binlogs_in_disk.sort(key=lambda x: x["name"])
 
         return {
-            "binlogs": binlogs,
+            "binlogs_in_disk": binlogs_in_disk,
+            "indexed_binlogs": self._get_indexed_binlogs(),
             "current_binlog": self._get_current_binlog(),
         }
 
@@ -340,6 +352,9 @@ class DatabaseServer(Server):
             if len(file_names) > 0:
                 return file_names[-1]
         return None
+
+    def _get_indexed_binlogs(self) -> list[str]:
+        self.binlog_indexer._execute_query("db", "select distinct binlog from binlogs order by binlog asc")
 
     def get_timeline(
         self, start_timestamp: int, end_timestamp: int, database: str | None = None, type: str | None = None
