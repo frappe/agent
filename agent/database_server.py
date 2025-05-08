@@ -354,7 +354,12 @@ class DatabaseServer(Server):
         return None
 
     def _get_indexed_binlogs(self) -> list[str]:
-        self.binlog_indexer._execute_query("db", "select distinct binlog from binlogs order by binlog asc")
+        return [
+            x[0]
+            for x in self.binlog_indexer._execute_query(
+                "db", "select distinct binlog from binlogs order by binlog asc"
+            )
+        ]
 
     def get_timeline(
         self, start_timestamp: int, end_timestamp: int, database: str | None = None, type: str | None = None
