@@ -38,6 +38,10 @@ class ImageBuilder(Base):
         self.image_repository = image_repository
         self.image_tag = image_tag
         self.registry = registry
+
+        if not platform.startswith("linux/"):
+            platform = f"linux/{platform}"
+
         self.platform = platform
 
         # Build context, params
