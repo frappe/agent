@@ -279,10 +279,6 @@ class Proxy(Server):
         return self._reload_nginx(defer=defer)
 
     def _reload_nginx(self, defer: bool = False):
-        # Before performing the reload, check if the nginx service is shutting down
-        if self.is_nginx_worker_shutting_down():
-            defer = True
-
         if defer:
             with filelock.FileLock(self.nginx_defer_reload_lock_file):  # noqa: SIM117
                 with open(self.nginx_defer_reload_file, "w") as f:
