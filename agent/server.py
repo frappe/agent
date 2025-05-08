@@ -556,8 +556,8 @@ class Server(Base):
             self.execute("sudo supervisorctl start agent:redis")
 
         if restart_rq_workers:
-            self.execute("sudo supervisorctl start agent:worker-0")
-            self.execute("sudo supervisorctl start agent:worker-1")
+            for i in range(self.config["workers"]):
+                self.execute(f"sudo supervisorctl start agent:worker-{i}")
 
         if restart_web_workers:
             self.execute("sudo supervisorctl start agent:web")
