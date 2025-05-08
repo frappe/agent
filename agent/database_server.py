@@ -268,14 +268,8 @@ class DatabaseServer(Server):
 
     def purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
         try:
-            mariadb = MySQLDatabase(
-                "mysql",
-                user="root",
-                password=mariadb_root_password,
-                host=private_ip,
-                port=3306,
-            )
-            mariadb.execute_sql(mariadb, f"PURGE BINARY LOGS TO '{to_binlog}';")
+            mariadb = Database(private_ip, 3306, "root", mariadb_root_password, "mysql")
+            mariadb.execute_query(f"PURGE BINARY LOGS TO '{to_binlog}';", commit=True)
             return True
         except Exception:
             return False
