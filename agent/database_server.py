@@ -266,6 +266,20 @@ class DatabaseServer(Server):
                 )
         return sorted(stalks, key=lambda x: x["name"])
 
+    def purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.execute_sql(mariadb, f"PURGE BINARY LOGS TO '{to_binlog}';")
+            return True
+        except Exception:
+            return False
+
     def get_binlogs(self) -> dict:
         binlogs_in_disk = []
         for file in Path(self.mariadb_directory).iterdir():
@@ -349,8 +363,9 @@ class DatabaseServer(Server):
         index_file = Path(self.mariadb_directory) / "mysql-bin.index"
         if index_file.exists():
             file_names = [x.strip() for x in index_file.read_text().split("\n")]
+            file_names = [x for x in file_names if x]
             if len(file_names) > 0:
-                return file_names[-1]
+                return file_names[-1].split("/var/lib/mysql/", 1)[-1]
         return None
 
     def _get_indexed_binlogs(self) -> list[str]:

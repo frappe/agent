@@ -1212,6 +1212,12 @@ def explain():
     return jsonify(DatabaseServer().explain_query(**data))
 
 
+@application.route("/database/binlogs/purge", methods=["POST"])
+def purge_binlog():
+    data = request.json
+    return jsonify(DatabaseServer().purge_binlog(**data))
+
+
 @application.route("/database/binlogs/list", methods=["GET"])
 def get_binlogs():
     return jsonify(DatabaseServer().get_binlogs())
@@ -1231,19 +1237,19 @@ def remove_binlogs_from_indexer():
     return {"job": job}
 
 
-@application.route("/database/binlogs/indexer/timeline", methods=["GET"])
+@application.route("/database/binlogs/indexer/timeline", methods=["POST"])
 def get_timeline():
     data = request.json
     return jsonify(DatabaseServer().get_timeline(**data))
 
 
-@application.route("/database/binlogs/indexer/search", methods=["GET"])
+@application.route("/database/binlogs/indexer/search", methods=["POST"])
 def get_row_ids():
     data = request.json
     return jsonify(DatabaseServer().get_row_ids(**data))
 
 
-@application.route("/database/binlogs/indexer/query", methods=["GET"])
+@application.route("/database/binlogs/indexer/query", methods=["POST"])
 def get_queries():
     data = request.json
     return jsonify(DatabaseServer().get_queries(**data))
