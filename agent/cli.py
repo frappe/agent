@@ -206,6 +206,26 @@ def usage():
 
 
 @setup.command()
+def rewrite_redis_aof_weekly():
+    from crontab import CronTab
+
+    script_directory = os.path.dirname(__file__)
+    agent_directory = os.path.dirname(os.path.dirname(script_directory))
+    logs_directory = os.path.join(agent_directory, "logs")
+    script = os.path.join(script_directory, "rewrite_redis_aof.py")
+    stdout = os.path.join(logs_directory, "rewrite_redis_aof.log")
+    stderr = os.path.join(logs_directory, "rewrite_redis_aof.error.log")
+
+    cron = CronTab(user=True)
+    command = f"cd {agent_directory} && {sys.executable} {script} 1>> {stdout} 2>> {stderr}"
+
+    if command not in str(cron):
+        job = cron.new(command=command)
+        job.setall("0 2 1,8,15,22 * *")
+        cron.write()
+
+
+@setup.command()
 def nginx_defer_reload():
     from crontab import CronTab
 
