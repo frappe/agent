@@ -1212,6 +1212,43 @@ def explain():
     return jsonify(DatabaseServer().explain_query(**data))
 
 
+@application.route("/database/binlogs/list", methods=["GET"])
+def get_binlogs():
+    return jsonify(DatabaseServer().get_binlogs())
+
+
+@application.route("/database/binlogs/indexer/add", methods=["POST"])
+def add_binlogs_to_indexer():
+    data = request.json
+    job = DatabaseServer().add_binlogs_to_index_job(data["binlogs"])
+    return {"job": job}
+
+
+@application.route("/database/binlogs/indexer/remove", methods=["POST"])
+def remove_binlogs_from_indexer():
+    data = request.json
+    job = DatabaseServer().remove_binlogs_from_index_job(data["binlogs"])
+    return {"job": job}
+
+
+@application.route("/database/binlogs/indexer/timeline", methods=["GET"])
+def get_timeline():
+    data = request.json
+    return jsonify(DatabaseServer().get_timeline(**data))
+
+
+@application.route("/database/binlogs/indexer/search", methods=["GET"])
+def get_row_ids():
+    data = request.json
+    return jsonify(DatabaseServer().get_row_ids(**data))
+
+
+@application.route("/database/binlogs/indexer/query", methods=["GET"])
+def get_queries():
+    data = request.json
+    return jsonify(DatabaseServer().get_queries(**data))
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json

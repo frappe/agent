@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+import psutil
+from mariadb_binlog_indexer import Indexer as BinlogIndexer
 from peewee import MySQLDatabase
 
 from agent.database import Database
@@ -263,3 +265,99 @@ class DatabaseServer(Server):
                     }
                 )
         return sorted(stalks, key=lambda x: x["name"])
+
+    def get_binlogs(self) -> dict:
+        binlogs = []
+        for file in Path(self.mariadb_directory).iterdir():
+            if re.match(r"mysql-bin.\d+", file.name):
+                binlogs.append(file.name)
+
+        return {
+            "binlogs": binlogs,
+            "current_binlog": self._get_current_binlog(),
+        }
+
+    @property
+    def binlog_indexer(self) -> BinlogIndexer:
+        return BinlogIndexer(os.path.join(self.directory, "binlog-indexes"), "queries.db")
+
+    @job("Add Binlogs to Indexer", priority="low")
+    def add_binlogs_to_index_job(self, binlogs: list[str]) -> dict:
+        return self.add_binlogs_to_index(binlogs)
+
+    @step("Add Binlogs to Indexer")
+    def add_binlogs_to_index(self, binlogs: list[str]) -> dict:
+        data = {
+            "indexed_binlogs": [],
+            "message": "",
+            "current_binlog": self._get_current_binlog(),
+        }
+        cpu_usage = psutil.cpu_percent(interval=5)
+        if cpu_usage > 50:
+            data["message"] = "CPU usage > 50%. Skipped indexing"
+            return data
+
+        indexed_binlogs = []
+        for binlog in binlogs:
+            try:
+                self.binlog_indexer.add(os.path.join(self.mariadb_directory, binlog))
+                indexed_binlogs.append(binlog)
+            except Exception as e:
+                data["message"] = f"Failed to index binlog {binlog}: {e}"
+                return data
+        return data
+
+    @job("Remove Binlogs from Indexer", priority="low")
+    def remove_binlogs_from_index_job(self, binlogs: list[str]) -> dict:
+        return self.remove_binlogs_from_index(binlogs)
+
+    @step("Remove Binlogs from Indexer")
+    def remove_binlogs_from_index(self, binlogs: list[str]):
+        data = {
+            "unindexed_binlogs": [],
+            "message": "",
+            "current_binlog": self._get_current_binlog(),
+        }
+        cpu_usage = psutil.cpu_percent(interval=5)
+        if cpu_usage > 50:
+            data["message"] = "CPU usage > 50%. Not safe to unindex binlogs"
+            return False
+        unindexed_binlogs = []
+
+        for binlog in binlogs:
+            try:
+                self.binlog_indexer.remove(os.path.join(self.mariadb_directory, binlog))
+                unindexed_binlogs.append(binlog)
+            except Exception as e:
+                data["message"] = f"Failed to unindex binlog {binlog}: {e}"
+                return data
+        return data
+
+    def _get_current_binlog(self) -> str | None:
+        index_file = Path(self.mariadb_directory) / "mysql-bin.index"
+        if index_file.exists():
+            file_names = [x.strip() for x in index_file.read_text().split("\n")]
+            if len(file_names) > 0:
+                return file_names[-1]
+        return None
+
+    def get_timeline(
+        self, start_timestamp: int, end_timestamp: int, database: str | None = None, type: str | None = None
+    ):
+        return self.binlog_indexer.get_timeline(start_timestamp, end_timestamp, type, database)
+
+    def get_row_ids(
+        self,
+        start_timestamp: int,
+        end_timestamp: int,
+        type: str,
+        database: str,
+        table: str | None = None,
+        search_str: str | None = None,
+    ):
+        return self.binlog_indexer.get_row_ids(
+            start_timestamp, end_timestamp, type, database, table, search_str
+        )
+
+    def get_queries(self, row_ids: dict[str, list[int]], database: str):
+        return self.binlog_indexer.get_queries(row_ids, database)
