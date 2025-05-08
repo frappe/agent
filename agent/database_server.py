@@ -306,11 +306,11 @@ class DatabaseServer(Server):
     def binlog_indexer(self) -> BinlogIndexer:
         return BinlogIndexer(os.path.join(self.directory, "binlog-indexes"), "queries.db")
 
-    @job("Add Binlogs to Indexer", priority="low")
+    @job("Add Binlogs To Indexer", priority="low")
     def add_binlogs_to_index_job(self, binlogs: list[str]) -> dict:
         return self.add_binlogs_to_index(binlogs)
 
-    @step("Add Binlogs to Indexer")
+    @step("Add Binlogs To Indexer")
     def add_binlogs_to_index(self, binlogs: list[str]) -> dict:
         data = {
             "indexed_binlogs": [],
@@ -330,13 +330,15 @@ class DatabaseServer(Server):
             except Exception as e:
                 data["message"] = f"Failed to index binlog {binlog}: {e}"
                 return data
+
+        data["indexed_binlogs"] = indexed_binlogs
         return data
 
-    @job("Remove Binlogs from Indexer", priority="low")
+    @job("Remove Binlogs From Indexer", priority="low")
     def remove_binlogs_from_index_job(self, binlogs: list[str]) -> dict:
         return self.remove_binlogs_from_index(binlogs)
 
-    @step("Remove Binlogs from Indexer")
+    @step("Remove Binlogs From Indexer")
     def remove_binlogs_from_index(self, binlogs: list[str]):
         data = {
             "unindexed_binlogs": [],
@@ -356,6 +358,8 @@ class DatabaseServer(Server):
             except Exception as e:
                 data["message"] = f"Failed to unindex binlog {binlog}: {e}"
                 return data
+
+        data["unindexed_binlogs"] = unindexed_binlogs
         return data
 
     def _get_current_binlog(self) -> str | None:
@@ -371,7 +375,7 @@ class DatabaseServer(Server):
         return [
             x[0]
             for x in self.binlog_indexer._execute_query(
-                "db", "select distinct binlog from binlogs order by binlog asc"
+                "db", "select distinct binlog from query order by binlog asc"
             )
         ]
 
