@@ -290,7 +290,6 @@ class DatabaseServer(Server):
                         "name": file.name,
                         "size": stat.st_size,
                         "modified_at": stat.st_mtime,
-                        "created_at": stat.st_ctime,
                     }
                 )
 
