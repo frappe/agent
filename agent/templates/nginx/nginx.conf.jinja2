@@ -102,13 +102,11 @@ stream {
 
     server {
         listen 80;
-		proxy_bind $remote_addr transparent;
 		proxy_pass n2_mumbai_80;
     }
 
     server {
         listen 443;
-		proxy_bind $remote_addr transparent;
 		proxy_pass n2_mumbai_443;
     }
 }
