@@ -75,7 +75,7 @@ proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 
 {% set ns = namespace(host=host) %}
 
 server {
-	listen 443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
+	listen 8443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ ns.host }};
 
 
@@ -199,7 +199,7 @@ server {
 {% endfor %}
 
 server {
-	listen 80;
+	listen 8080;
 	server_name _;
 
 	location ^~ /.well-known/acme-challenge/ {
