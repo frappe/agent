@@ -84,3 +84,31 @@ http {
 	include /etc/nginx/conf.d/*.conf;
 	include /home/frappe/benches/*/nginx.conf;
 }
+
+stream {
+    log_format basic_stream '$remote_addr [$time_local] '
+                            '$protocol $status $bytes_sent $bytes_received '
+                            '$session_time';
+    access_log  /var/log/nginx/access.log basic_stream;
+    error_log  /var/log/nginx/error.log warn;
+    
+	upstream n2_mumbai_80 {
+		server n2-mumbai.frappe.cloud:80;
+	}
+
+	upstream n2_mumbai_443 {
+		server n2-mumbai.frappe.cloud:443;
+	}
+
+    server {
+        listen 80;
+		proxy_bind $remote_addr transparent;
+		proxy_pass n2_mumbai_80;
+    }
+
+    server {
+        listen 443;
+		proxy_bind $remote_addr transparent;
+		proxy_pass n2_mumbai_443;
+    }
+}

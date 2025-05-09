@@ -13,7 +13,6 @@ map $http_upgrade $connection_upgrade {
 	'' close;
 }
 
-
 server {
 	listen 8443 ssl http2;
 	server_name {{ name }};
