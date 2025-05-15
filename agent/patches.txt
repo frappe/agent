@@ -1,3 +1,4 @@
 agent.patches.add_agent_id_field
 agent.patches.add_index_on_agent_job_id_field
 agent.patches.add_index_on_jobmodel_id_field
+agent.patches.create_binlog_index_folder
