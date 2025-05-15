@@ -153,7 +153,7 @@ class Proxy(Server):
             site_file = os.path.join(upstream_directory, domain)
             if os.path.exists(site_file):
                 self.remove_site_from_upstream(site_file)
-                
+
         if skip_reload:
             self.reload_nginx(defer=True)
             return
