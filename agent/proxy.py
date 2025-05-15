@@ -139,11 +139,21 @@ class Proxy(Server):
             shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
-    def remove_site_from_upstream_job(self, upstream, site, skip_reload=False):
+    def remove_site_from_upstream_job(self, upstream, site, skip_reload=False, extra_domains=None):
+        if not extra_domains:
+            extra_domains = []
+
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
+
         site_file = os.path.join(upstream_directory, site)
         if os.path.exists(site_file):
             self.remove_site_from_upstream(site_file)
+
+        for domain in extra_domains:
+            site_file = os.path.join(upstream_directory, domain)
+            if os.path.exists(site_file):
+                self.remove_site_from_upstream(site_file)
+
         if skip_reload:
             self.reload_nginx(defer=True)
             return

@@ -1066,7 +1066,9 @@ def proxy_add_upstream_site_domain(upstream):
 )
 def proxy_remove_upstream_site(upstream, site):
     data = request.json
-    job = Proxy().remove_site_from_upstream_job(upstream, site, data.get("skip_reload", False))
+    job = Proxy().remove_site_from_upstream_job(
+        upstream, site, data.get("skip_reload", False), data.get("extra_domains", [])
+    )
     return {"job": job}
 
 
