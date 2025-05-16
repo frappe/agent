@@ -982,7 +982,7 @@ def proxy_add_host():
         data["name"],
         data["target"],
         data["certificate"],
-        data.get("skip_reload", False),
+        data.get("skip_reload", True),
     )
     return {"job": job}
 
@@ -1036,14 +1036,14 @@ def proxy_rename_upstream(upstream):
 @application.route("/proxy/upstreams/<string:upstream>/sites", methods=["POST"])
 def proxy_add_upstream_site(upstream):
     data = request.json
-    job = Proxy().add_site_to_upstream_job(upstream, data["name"], data.get("skip_reload", False))
+    job = Proxy().add_site_to_upstream_job(upstream, data["name"], data.get("skip_reload", True))
     return {"job": job}
 
 
 @application.route("/proxy/upstreams/<string:upstream>/domains", methods=["POST"])
 def proxy_add_upstream_site_domain(upstream):
     data = request.json
-    job = Proxy().add_domain_to_upstream_job(upstream, data["domain"], data.get("skip_reload", False))
+    job = Proxy().add_domain_to_upstream_job(upstream, data["domain"], data.get("skip_reload", True))
     return {"job": job}
 
 
@@ -1054,7 +1054,7 @@ def proxy_add_upstream_site_domain(upstream):
 def proxy_remove_upstream_site(upstream, site):
     data = request.json
     job = Proxy().remove_site_from_upstream_job(
-        upstream, site, data.get("skip_reload", False), data.get("extra_domains", [])
+        upstream, site, data.get("skip_reload", True), data.get("extra_domains", [])
     )
     return {"job": job}
 
@@ -1070,7 +1070,7 @@ def proxy_rename_upstream_site(upstream, site):
         data["domains"],
         site,
         data["new_name"],
-        data.get("skip_reload", False),
+        data.get("skip_reload", True),
     )
     return {"job": job}
 
@@ -1082,7 +1082,7 @@ def proxy_rename_upstream_site(upstream, site):
 def update_site_status(upstream, site):
     data = request.json
     job = Proxy().update_site_status_job(
-        upstream, site, data["status"], data.get("skip_reload", False), data.get("extra_domains", [])
+        upstream, site, data["status"], data.get("skip_reload", True), data.get("extra_domains", [])
     )
     return {"job": job}
 
