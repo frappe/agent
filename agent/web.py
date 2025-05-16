@@ -265,7 +265,7 @@ def get_metrics():
 
                 Two Reasons -
                 1. Bench is not running, so we miss the metrics
-                2. By mistake, we have pushed `rq_metrics` to many config while bench update, that means we
+                2. By mistake, we have pushed `rq_port` to many config while bench update, that means we
                     don't have open port for this bench
                 """
                 pass
