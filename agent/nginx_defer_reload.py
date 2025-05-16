@@ -46,7 +46,7 @@ if __name__ == "__main__":
             try:
                 proxy._generate_proxy_config()
                 if not proxy.is_nginx_worker_shutting_down():
-                    proxy._reload_nginx()
+                    proxy._reload_nginx(defer=False)
             except Exception:
                 error_log = f"ERROR [{proxy.name}:{datetime.utcnow()}]: {get_traceback()}"
                 print(error_log, file=sys.stderr)
