@@ -259,10 +259,17 @@ def get_metrics():
             try:
                 metrics = get_metrics(name, rq_port)
                 benches_metrics.append(metrics)
-            except RedisConnectionError as e:
-                # This is to specifically catch the error on old benches that had their
-                # configs updated to render rq_port but the container doesn't actually
-                # expose the rq_port
+            except RedisConnectionError:
+                """
+                Ignore RedisConnectionError, don't log it
+
+                Two Reasons -
+                1. Bench is not running, so we miss the metrics
+                2. By mistake, we have pushed `rq_metrics` to many config while bench update, that means we
+                    don't have open port for this bench
+                """
+                pass
+            except Exception as e:
                 log.error(f"Failed to get metrics for {name} on port {rq_port}: {e}")
 
     return Response(benches_metrics, mimetype="text/plain")
