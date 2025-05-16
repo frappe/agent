@@ -281,26 +281,6 @@ def get_bench(bench):
     return Server().benches[bench].dump()
 
 
-@application.route("/benches/<string:bench_str>/metrics", methods=["GET"])
-def get_bench_metrics(bench_str):
-    from agent.exporter import get_metrics
-
-    bench = Server().benches[bench_str]
-    rq_port = bench.bench_config.get("rq_port")
-    if rq_port:
-        try:
-            res = get_metrics(bench_str, rq_port)
-        except RedisConnectionError as e:
-            # This is to specifically catch the error on old benches that had their
-            # configs updated to render rq_port but the container doesn't actually
-            # expose the rq_port
-            log.error(f"Failed to get metrics for {bench_str} on port {rq_port}: {e}")
-        else:
-            return Response(res, mimetype="text/plain")
-
-    return Response("Unavailable", status=400, mimetype="text/plain")
-
-
 @application.route("/benches/<string:bench>/info", methods=["POST", "GET"])
 @validate_bench
 def fetch_sites_info(bench):
