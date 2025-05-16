@@ -285,7 +285,7 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     @step("Reload NGINX")
-    def reload_nginx(self, defer: bool = True):
+    def reload_nginx(self, defer: bool = False):
         return self._reload_nginx(defer=defer)
 
     def _reload_nginx(self, defer: bool = False):
