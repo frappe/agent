@@ -1212,6 +1212,13 @@ def get_binlogs():
     return jsonify(DatabaseServer().get_binlogs())
 
 
+@application.route("/database/binlogs/upload", methods=["POST"])
+def upload_binlogs_to_s3():
+    data = request.json
+    job = DatabaseServer().upload_binlogs_to_s3_job(**data)
+    return {"job": job}
+
+
 @application.route("/database/binlogs/indexer/add", methods=["POST"])
 def add_binlogs_to_indexer():
     data = request.json

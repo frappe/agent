@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -356,6 +358,67 @@ class DatabaseServer(Server):
         data["unindexed_binlogs"] = unindexed_binlogs
         return data
 
+    @job("Upload Binlogs To S3", priority="low")
+    def upload_binlogs_to_s3_job(self, binlogs: list[str], offsite: dict) -> dict:
+        return self.upload_binlogs_to_s3(binlogs, offsite)
+
+    @step("Upload Binlogs To S3")
+    def upload_binlogs_to_s3(self, binlogs: list[str], offsite):
+        import boto3
+
+        offsite_files = {}
+        failed_uploads = {}
+
+        bucket, auth, prefix = (
+            offsite["bucket"],
+            offsite["auth"],
+            offsite["path"],
+        )
+        region = auth.get("REGION")
+
+        if region:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+                region_name=region,
+            )
+        else:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+            )
+
+        tmp_folder = get_tmp_folder_path()
+        for binlog in binlogs:
+            binlog_file_path = os.path.join(self.mariadb_directory, binlog)
+            binlog_gz_path = os.path.join(tmp_folder, f"{binlog}.gz")
+            offsite_path = os.path.join(prefix, f"{binlog}.gz")
+            try:
+                cmd = f"gzip -c {binlog_file_path} > {binlog_gz_path}"
+                subprocess.run(cmd, shell=True, check=True)
+                # Size in bytes of gzipped file
+                gzipped_size = os.path.getsize(binlog_gz_path)
+                # Upload gzipped file to S3
+                with open(binlog_gz_path, "rb") as f:
+                    s3.upload_fileobj(f, bucket, offsite_path)
+                offsite_files[binlog] = {
+                    "size": gzipped_size,
+                    "path": offsite_path,
+                }
+            except Exception as e:
+                failed_uploads[binlog] = str(e)
+            finally:
+                # Delete the gzipped file if it exists
+                with contextlib.suppress(Exception):
+                    os.remove(binlog_gz_path)
+
+        return {
+            "offsite_files": offsite_files,
+            "failed_uploads": failed_uploads,
+        }
+
     def _get_current_binlog(self) -> str | None:
         index_file = Path(self.mariadb_directory) / "mysql-bin.index"
         if index_file.exists():
@@ -393,3 +456,10 @@ class DatabaseServer(Server):
 
     def get_queries(self, row_ids: dict[str, list[int]], database: str):
         return self.binlog_indexer.get_queries(row_ids, database)
+
+
+def get_tmp_folder_path():
+    path = "/opt/volumes/mariadb/tmp/"
+    if not os.path.exists(path):
+        return "/tmp/"
+    return path
