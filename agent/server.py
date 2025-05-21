@@ -661,12 +661,13 @@ class Server(Base):
     def mariadb_processlist(self, mariadb_root_password):
         processes = []
         try:
+            db_port = self.config.get("db_port", 3306)
             mariadb = MySQLDatabase(
                 "mysql",
                 user="root",
                 password=mariadb_root_password,
                 host="localhost",
-                port=3306,
+                port=db_port,
             )
             cursor = mariadb.execute_sql("SHOW PROCESSLIST")
             rows = cursor.fetchall()

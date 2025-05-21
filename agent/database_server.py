@@ -85,6 +85,10 @@ class DatabaseServer(Server):
                 )
         return sorted(files, key=lambda x: x["name"])
 
+    @property
+    def db_port(self):
+        return self.config.get("db_port") or 3306
+
     def processes(self, private_ip, mariadb_root_password):
         try:
             mariadb = MySQLDatabase(
@@ -92,7 +96,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(mariadb, "SHOW FULL PROCESSLIST")
         except Exception:
@@ -108,7 +112,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(mariadb, "SHOW VARIABLES")
         except Exception:
@@ -124,7 +128,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(
                 mariadb,
@@ -148,7 +152,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             for process in processes:
                 if (
@@ -176,7 +180,7 @@ class DatabaseServer(Server):
             user="root",
             password=mariadb_root_password,
             host=private_ip,
-            port=3306,
+            port=self.db_port,
         )
 
         return self.sql(
@@ -211,7 +215,7 @@ class DatabaseServer(Server):
         return self.fetch_column_stats(schema, table, private_ip, mariadb_root_password)
 
     def fetch_column_stats(self, schema, table, private_ip, mariadb_root_password):
-        db = Database(private_ip, 3306, "root", mariadb_root_password, schema)
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, schema)
         results = db.fetch_database_column_statistics(table)
         return {"output": json.dumps(results)}
 
@@ -221,7 +225,7 @@ class DatabaseServer(Server):
             user="root",
             password=mariadb_root_password,
             host=private_ip,
-            port=3306,
+            port=self.db_port,
         )
 
         if not query.lower().startswith(("select", "update", "delete")):
@@ -270,7 +274,7 @@ class DatabaseServer(Server):
 
     def purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
         try:
-            mariadb = Database(private_ip, 3306, "root", mariadb_root_password, "mysql")
+            mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
             mariadb.execute_query(f"PURGE BINARY LOGS TO '{to_binlog}';", commit=True)
             return True
         except Exception:
