@@ -70,11 +70,12 @@ def ping_server(password: str):
 @setup.command()
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
+@click.option("--db-port", default=3306)
 @click.option("--workers", required=True, type=int)
 @click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 @click.option("--press-url", required=False, type=str)
-def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
+def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None, db_port=3306):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
@@ -86,6 +87,7 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
         "gunicorn_workers": 2,
         "web_port": 25052,
         "press_url": "https://frappecloud.com",
+        "db_port": db_port,
     }
     if press_url:
         config["press_url"] = press_url
