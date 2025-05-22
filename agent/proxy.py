@@ -24,16 +24,18 @@ class Proxy(Server):
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
-        self.nginx_defer_reload_file = os.path.join(self.nginx_directory, "nginx_reload")
-        self.nginx_defer_reload_lock_file = os.path.join(self.nginx_directory, "nginx_reload.lock")
         self.job = None
         self.step = None
 
+    def setup_proxy(self):
+        self._create_default_host()
+        self._generate_proxy_config()
+        self.execute("sudo systemctl reload nginx")
+
     @job("Add Host to Proxy")
-    def add_host_job(self, host, target, certificate, skip_reload=True):
+    def add_host_job(self, host, target, certificate):
         self.add_host(host, target, certificate)
-        self.generate_proxy_config()
-        self.reload_nginx(defer=skip_reload)
+        self.reload_nginx()
 
     @step("Add Host to Proxy")
     def add_host(self, host, target, certificate):
@@ -51,7 +53,6 @@ class Proxy(Server):
     @job("Add Wildcard Hosts to Proxy")
     def add_wildcard_hosts_job(self, wildcards):
         self.add_wildcard_hosts(wildcards)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Add Wildcard Hosts to Proxy")
@@ -71,22 +72,18 @@ class Proxy(Server):
             if wildcard.get("code_server"):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
-    def add_site_domain_to_upstream(self, upstream, site, skip_reload=True):
+    def add_site_domain_to_upstream(self, upstream, site):
         self.remove_conflicting_site(site)
         self.add_site_to_upstream(upstream, site)
-        if skip_reload:
-            self.reload_nginx(defer=True)
-            return
-        self.generate_proxy_config()
-        self.reload_nginx(defer=False)
+        self.reload_nginx()
 
     @job("Add Site to Upstream")
-    def add_site_to_upstream_job(self, upstream, site, skip_reload=True):
-        self.add_site_domain_to_upstream(upstream, site, skip_reload)
+    def add_site_to_upstream_job(self, upstream, site):
+        self.add_site_domain_to_upstream(upstream, site)
 
     @job("Add Domain to Upstream")
-    def add_domain_to_upstream_job(self, upstream, domain, skip_reload=True):
-        self.add_site_domain_to_upstream(upstream, domain, skip_reload)
+    def add_domain_to_upstream_job(self, upstream, domain):
+        self.add_site_domain_to_upstream(upstream, domain)
 
     @step("Remove Conflicting Site")
     def remove_conflicting_site(self, site):
@@ -106,7 +103,6 @@ class Proxy(Server):
     @job("Add Upstream to Proxy")
     def add_upstream_job(self, upstream):
         self.add_upstream(upstream)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Add Upstream Directory")
@@ -117,7 +113,6 @@ class Proxy(Server):
     @job("Rename Upstream")
     def rename_upstream_job(self, old, new):
         self.rename_upstream(old, new)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Rename Upstream Directory")
@@ -129,7 +124,6 @@ class Proxy(Server):
     @job("Remove Host from Proxy")
     def remove_host_job(self, host):
         self.remove_host(host)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Remove Host from Proxy")
@@ -139,7 +133,7 @@ class Proxy(Server):
             shutil.rmtree(host_directory)
 
     @job("Remove Site from Upstream")
-    def remove_site_from_upstream_job(self, upstream, site, skip_reload=True, extra_domains=None):
+    def remove_site_from_upstream_job(self, upstream, site, extra_domains=None):
         if not extra_domains:
             extra_domains = []
 
@@ -154,11 +148,7 @@ class Proxy(Server):
             if os.path.exists(site_file):
                 self.remove_site_from_upstream(site_file)
 
-        if skip_reload:
-            self.reload_nginx(defer=True)
-            return
-        self.generate_proxy_config()
-        self.reload_nginx(defer=False)
+        self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
     def remove_site_from_upstream(self, site_file):
@@ -171,7 +161,6 @@ class Proxy(Server):
         hosts: list[str],
         site: str,
         new_name: str,
-        skip_reload=True,
     ):
         self.remove_conflicting_site(new_name)
         self.rename_site_on_upstream(upstream, site, new_name)
@@ -181,11 +170,7 @@ class Proxy(Server):
             self.rename_site_in_host_dir(new_name, site, new_name)
         for host in hosts:
             self.rename_site_in_host_dir(host, site, new_name)
-        if skip_reload:
-            self.reload_nginx(defer=True)
-            return
-        self.generate_proxy_config()
-        self.reload_nginx(defer=False)
+        self.reload_nginx()
 
     def replace_str_in_json(self, file: str, old: str, new: str):
         """Replace quoted strings in json file."""
@@ -224,17 +209,13 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status, skip_reload=True, extra_domains=None):
+    def update_site_status_job(self, upstream, site, status, extra_domains=None):
         self.update_site_status(upstream, site, status)
         if not extra_domains:
             extra_domains = []
         for domain in extra_domains:
             self.update_site_status(upstream, domain, status)
-        if skip_reload:
-            self.reload_nginx(defer=True)
-            return
-        self.generate_proxy_config()
-        self.reload_nginx(defer=False)
+        self.reload_nginx()
 
     @step("Update Site File")
     def update_site_status(self, upstream, site, status):
@@ -250,7 +231,6 @@ class Proxy(Server):
             self.remove_redirect(target)
         for host in hosts:
             self.setup_redirect(host, target)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Setup Redirect on Host")
@@ -271,11 +251,10 @@ class Proxy(Server):
     def remove_redirects_job(self, hosts):
         for host in hosts:
             self.remove_redirect(host)
-        self.generate_proxy_config()
         self.reload_nginx()
 
     @step("Remove Redirect on Host")
-    def remove_redirect(self, host):
+    def remove_redirect(self, host:str):
         host_directory = os.path.join(self.hosts_directory, host)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
@@ -285,30 +264,12 @@ class Proxy(Server):
             os.rmdir(host_directory)
 
     @step("Reload NGINX")
-    def reload_nginx(self, defer: bool = True):
-        return self._reload_nginx(defer=defer)
-
-    def _reload_nginx(self, defer: bool = True):
-        if defer:
-            with filelock.FileLock(self.nginx_defer_reload_lock_file):  # noqa: SIM117
-                with open(self.nginx_defer_reload_file, "w") as f:
-                    f.write("1")
-            return {}
-
-        return self.execute("sudo systemctl reload nginx")
-
-    def is_nginx_worker_shutting_down(self):
-        output = self.execute("sudo systemctl status nginx").get("output", "")
-        return "shutting down" in output
+    def reload_nginx(self):
+        return self._reload_nginx()
 
     @job("Reload NGINX Job")
     def reload_nginx_job(self):
-        self.generate_proxy_config()
-        return self.reload_nginx(defer=False)
-
-    @step("Generate NGINX Configuration")
-    def generate_proxy_config(self):
-        return self._generate_proxy_config()
+        return self.reload_nginx()
 
     def _generate_proxy_config(self):
         proxy_config_file = os.path.join(self.nginx_directory, "proxy.conf")
@@ -327,10 +288,13 @@ class Proxy(Server):
             proxy_config_file,
         )
 
-    def setup_proxy(self):
-        self._create_default_host()
-        self._generate_proxy_config()
-        self._reload_nginx(defer=False)
+    def _reload_nginx(self):
+        from agent.nginx_reload_manager import NginxReloadManager
+
+        if not self.job:
+            raise Exception("NGINX Reload should be trigerred by a job")
+
+        return NginxReloadManager().request_reload(request_id=self.job_record.model.name)
 
     def _create_default_host(self):
         default_host = f"*.{self.config['domain']}"
