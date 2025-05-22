@@ -147,7 +147,6 @@ class Proxy(Server):
     @job("Remove Host from Proxy")
     def remove_host_job(self, host):
         self.remove_host(host)
-        self.reload_nginx()
 
     @step("Remove Host from Proxy")
     @with_proxy_config_lock()
@@ -172,8 +171,6 @@ class Proxy(Server):
                 site_file = os.path.join(upstream_directory, domain)
                 if os.path.exists(site_file):
                     self.remove_site_from_upstream(site_file)
-
-        self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
     @with_proxy_config_lock()
@@ -285,7 +282,6 @@ class Proxy(Server):
         with self.proxy_config_modification_lock:
             for host in hosts:
                 self.remove_redirect(host)
-        self.reload_nginx()
 
     @step("Remove Redirect on Host")
     @with_proxy_config_lock()
