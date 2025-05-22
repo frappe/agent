@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 from collections import defaultdict
+from functools import wraps
 from hashlib import sha512 as sha
 from pathlib import Path
 
@@ -12,6 +13,18 @@ import filelock
 from agent.job import job, step
 from agent.server import Server
 
+
+def with_proxy_config_lock(lock_name="proxy_config_modification_lock"):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if not hasattr(self, lock_name):
+                return func(self, *args, **kwargs)
+
+            with getattr(self, lock_name):
+                return func(self, *args, **kwargs)
+        return wrapper
+    return decorator
 
 class Proxy(Server):
     def __init__(self, directory=None):
@@ -24,6 +37,9 @@ class Proxy(Server):
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
+        self.proxy_config_modification_lock = filelock.FileLock(
+            os.path.join(self.nginx_directory, "proxy_config.lock")
+        )
         self.job = None
         self.step = None
 
@@ -38,6 +54,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Add Host to Proxy")
+    @with_proxy_config_lock()
     def add_host(self, host, target, certificate):
         host_directory = os.path.join(self.hosts_directory, host)
         os.makedirs(host_directory, exist_ok=True)
@@ -56,6 +73,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Add Wildcard Hosts to Proxy")
+    @with_proxy_config_lock()
     def add_wildcard_hosts(self, wildcards):
         for wildcard in wildcards:
             host = f"*.{wildcard['domain']}"
@@ -73,8 +91,9 @@ class Proxy(Server):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
     def add_site_domain_to_upstream(self, upstream, site):
-        self.remove_conflicting_site(site)
-        self.add_site_to_upstream(upstream, site)
+        with self.proxy_config_modification_lock:
+            self.remove_conflicting_site(site)
+            self.add_site_to_upstream(upstream, site)
         self.reload_nginx()
 
     @job("Add Site to Upstream")
@@ -86,6 +105,7 @@ class Proxy(Server):
         self.add_site_domain_to_upstream(upstream, domain)
 
     @step("Remove Conflicting Site")
+    @with_proxy_config_lock()
     def remove_conflicting_site(self, site):
         # Go through all upstreams and remove the site file matching the site name
         for upstream in self.upstreams:
@@ -94,6 +114,7 @@ class Proxy(Server):
                 os.remove(conflict)
 
     @step("Add Site File to Upstream Directory")
+    @with_proxy_config_lock()
     def add_site_to_upstream(self, upstream, site):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         os.makedirs(upstream_directory, exist_ok=True)
@@ -106,6 +127,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Add Upstream Directory")
+    @with_proxy_config_lock()
     def add_upstream(self, upstream):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         os.makedirs(upstream_directory, exist_ok=True)
@@ -116,6 +138,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Rename Upstream Directory")
+    @with_proxy_config_lock()
     def rename_upstream(self, old, new):
         old_upstream_directory = os.path.join(self.upstreams_directory, old)
         new_upstream_directory = os.path.join(self.upstreams_directory, new)
@@ -127,6 +150,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Remove Host from Proxy")
+    @with_proxy_config_lock()
     def remove_host(self, host):
         host_directory = os.path.join(self.hosts_directory, host)
         if os.path.exists(host_directory):
@@ -137,20 +161,22 @@ class Proxy(Server):
         if not extra_domains:
             extra_domains = []
 
-        upstream_directory = os.path.join(self.upstreams_directory, upstream)
+        with self.proxy_config_modification_lock:
+            upstream_directory = os.path.join(self.upstreams_directory, upstream)
 
-        site_file = os.path.join(upstream_directory, site)
-        if os.path.exists(site_file):
-            self.remove_site_from_upstream(site_file)
-
-        for domain in extra_domains:
-            site_file = os.path.join(upstream_directory, domain)
+            site_file = os.path.join(upstream_directory, site)
             if os.path.exists(site_file):
                 self.remove_site_from_upstream(site_file)
+
+            for domain in extra_domains:
+                site_file = os.path.join(upstream_directory, domain)
+                if os.path.exists(site_file):
+                    self.remove_site_from_upstream(site_file)
 
         self.reload_nginx()
 
     @step("Remove Site File from Upstream Directory")
+    @with_proxy_config_lock()
     def remove_site_from_upstream(self, site_file):
         os.remove(site_file)
 
@@ -162,14 +188,15 @@ class Proxy(Server):
         site: str,
         new_name: str,
     ):
-        self.remove_conflicting_site(new_name)
-        self.rename_site_on_upstream(upstream, site, new_name)
-        site_host_dir = os.path.join(self.hosts_directory, site)
-        if os.path.exists(site_host_dir):
-            self.rename_host_dir(site, new_name)
-            self.rename_site_in_host_dir(new_name, site, new_name)
-        for host in hosts:
-            self.rename_site_in_host_dir(host, site, new_name)
+        with self.proxy_config_modification_lock:
+            self.remove_conflicting_site(new_name)
+            self.rename_site_on_upstream(upstream, site, new_name)
+            site_host_dir = os.path.join(self.hosts_directory, site)
+            if os.path.exists(site_host_dir):
+                self.rename_host_dir(site, new_name)
+                self.rename_site_in_host_dir(new_name, site, new_name)
+            for host in hosts:
+                self.rename_site_in_host_dir(host, site, new_name)
         self.reload_nginx()
 
     def replace_str_in_json(self, file: str, old: str, new: str):
@@ -181,6 +208,7 @@ class Proxy(Server):
             f.write(text)
 
     @step("Rename Host Directory")
+    @with_proxy_config_lock()
     def rename_host_dir(self, old_name: str, new_name: str):
         """Rename site's host directory."""
         old_host_dir = os.path.join(self.hosts_directory, old_name)
@@ -188,6 +216,7 @@ class Proxy(Server):
         os.rename(old_host_dir, new_host_dir)
 
     @step("Rename Site in Host Directory")
+    @with_proxy_config_lock()
     def rename_site_in_host_dir(self, host: str, old_name: str, new_name: str):
         host_directory = os.path.join(self.hosts_directory, host)
 
@@ -200,6 +229,7 @@ class Proxy(Server):
             self.replace_str_in_json(redirect_file, old_name, new_name)
 
     @step("Rename Site File in Upstream Directory")
+    @with_proxy_config_lock()
     def rename_site_on_upstream(self, upstream: str, site: str, new_name: str):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         old_site_file = os.path.join(upstream_directory, site)
@@ -218,6 +248,7 @@ class Proxy(Server):
         self.reload_nginx()
 
     @step("Update Site File")
+    @with_proxy_config_lock()
     def update_site_status(self, upstream, site, status):
         upstream_directory = os.path.join(self.upstreams_directory, upstream)
         site_file = os.path.join(upstream_directory, site)
@@ -226,14 +257,16 @@ class Proxy(Server):
 
     @job("Setup Redirects on Hosts")
     def setup_redirects_job(self, hosts, target):
-        if target in hosts:
-            hosts.remove(target)
-            self.remove_redirect(target)
-        for host in hosts:
-            self.setup_redirect(host, target)
+        with self.proxy_config_modification_lock:
+            if target in hosts:
+                hosts.remove(target)
+                self.remove_redirect(target)
+            for host in hosts:
+                self.setup_redirect(host, target)
         self.reload_nginx()
 
     @step("Setup Redirect on Host")
+    @with_proxy_config_lock()
     def setup_redirect(self, host, target):
         host_directory = os.path.join(self.hosts_directory, host)
         os.makedirs(host_directory, exist_ok=True)
@@ -249,12 +282,14 @@ class Proxy(Server):
 
     @job("Remove Redirects on Hosts")
     def remove_redirects_job(self, hosts):
-        for host in hosts:
-            self.remove_redirect(host)
+        with self.proxy_config_modification_lock:
+            for host in hosts:
+                self.remove_redirect(host)
         self.reload_nginx()
 
     @step("Remove Redirect on Host")
-    def remove_redirect(self, host:str):
+    @with_proxy_config_lock()
+    def remove_redirect(self, host: str):
         host_directory = os.path.join(self.hosts_directory, host)
         redirect_file = os.path.join(host_directory, "redirect.json")
         if os.path.exists(redirect_file):
@@ -274,9 +309,8 @@ class Proxy(Server):
     def _generate_proxy_config(self):
         proxy_config_file = os.path.join(self.nginx_directory, "proxy.conf")
         config = self.get_config()
-        self._render_template(
-            "proxy/nginx.conf.jinja2",
-            {
+        with self.proxy_config_modification_lock:
+            data = {
                 "hosts": self.hosts,
                 "upstreams": self.upstreams,
                 "domain": config["domain"],
@@ -284,7 +318,11 @@ class Proxy(Server):
                 "nginx_directory": config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
                 "tls_protocols": config.get("tls_protocols"),
-            },
+            }
+
+        self._render_template(
+            "proxy/nginx.conf.jinja2",
+            data,
             proxy_config_file,
         )
 
