@@ -15,6 +15,7 @@ PROCESSING_QUEUE = "nginx||processing_queue"
 RELOAD_REQUEST_STATUS_FORMAT = "nginx_reload_status||{}"
 RELOAD_STATUS_TYPE = Literal["Queued", "Success", "Failure", "Skipped"]
 
+
 class NginxReloadManager:
     redis_instance = None
     batch_size = 10000
@@ -36,7 +37,7 @@ class NginxReloadManager:
             return "Failure"
         return s
 
-    def process_reload_requests(self):
+    def process_requests(self):
         # Handle Signals
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
@@ -70,6 +71,9 @@ class NginxReloadManager:
                 else:
                     self.log("No sleep time, moving to next iteration")
             except Exception as e:
+                import traceback
+
+                traceback.print_exc()
                 self.log(f"Error during processing requests : {e!s}")
 
     def _reload_nginx(self) -> RELOAD_STATUS_TYPE:
@@ -94,22 +98,16 @@ class NginxReloadManager:
         ├─983332 nginx: worker process is shutting down
         ├─983333 nginx: worker process is shutting down
         ├─983334 nginx: worker process is shutting down
-        ├─983335 nginx: worker process is shutting down
-        ├─983336 nginx: worker process is shutting down
-        ├─983337 nginx: worker process is shutting down
-        ├─983338 nginx: worker process is shutting down
         ├─983361 nginx: worker process
         ├─983362 nginx: worker process
         ├─983363 nginx: worker process
         ├─983364 nginx: worker process
-        ├─983365 nginx: worker process
-        ├─983366 nginx: worker process
-        ├─983367 nginx: worker process
-        ├─983368 nginx: worker process
         └─983369 nginx: cache manager process
         """
         try:
-            status = subprocess.run("sudo systemctl status nginx", capture_output=True, shell=True).stdout
+            status = subprocess.run(
+                "sudo systemctl status nginx", capture_output=True, shell=True
+            ).stdout.decode("utf-8")
             total_workers = status.count("nginx: worker process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
@@ -150,8 +148,6 @@ class NginxReloadManager:
     @property
     def redis(self):
         if not self.redis_instance:
-            with open(self.config_file, "r") as f:
-                self.config: dict = json.load(f)
             self.redis_instance = redis.Redis(
                 port=self.config.get("redis_port", 25025),
                 decode_responses=True,
@@ -177,3 +173,8 @@ class NginxReloadManager:
     def max_interval_without_reload_minutes(self) -> int:
         """Maximum allowed minutes without a reload before forcing a voluntary reload."""
         return self.config.get("max_interval_without_reload_minutes", 10)
+
+
+if __name__ == "__main__":
+    manager = NginxReloadManager(debug=True)
+    manager.process_requests()
