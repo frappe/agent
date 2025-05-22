@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+import glob
 import json
 import os
+import re
 import signal
 import subprocess
 import time
@@ -18,7 +21,7 @@ RELOAD_STATUS_TYPE = Literal["Queued", "Success", "Failure", "Skipped"]
 
 class NginxReloadManager:
     redis_instance = None
-    batch_size = 10000
+    batch_size = 1000
 
     def __init__(self, directory=None, debug=False):
         self.directory = directory or os.getcwd()
@@ -84,9 +87,37 @@ class NginxReloadManager:
         try:
             proxy = Proxy()
             proxy._generate_proxy_config()
-            subprocess.run("sudo systemctl reload nginx", shell=True, check=True)
+            subprocess.run("sudo nginx -s reload", shell=True, check=True)
             self.last_reload_at = datetime.now()
             return "Success"
+        except subprocess.CalledProcessError as e:
+            match = re.search(r'conflicting parameter "(.*?)"', e.stderr)
+            domain = None
+            if match:
+                domain = match.group(1)
+            if not domain:
+                raise e
+
+            self.log(f"Domain {domain} is conflicting, attempting auto fix", print_always=True)
+
+            # Find the paths
+            paths = glob.glob(os.path.join(self.directory, f"nginx/upstreams/*/{domain}"))
+            paths.sort(key=lambda x: os.path.getmtime(x))
+
+            if len(paths) >= 2:
+                # Keep newest file and delete the rest
+                to_keep = paths[-1]
+                self.log(f"Keeping {to_keep}")
+                to_delete = paths[:-1]
+                for path in to_delete:
+                    with contextlib.suppress(FileNotFoundError):
+                        # In case RQ worker removed the file
+                        # before we could delete it
+                        os.remove(path)
+                    self.log(f"Deleted {path}", print_always=True)
+                return "Skipped"  # Send skipped status to retry the job
+
+            raise Exception(f"Not able to auto fix the issue for domain : {domain!s}") from e
         except Exception as e:
             import traceback
 
@@ -113,7 +144,7 @@ class NginxReloadManager:
             total_workers = status.count("nginx: worker process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
-            return (dying_workers / active_workers) >= 3
+            return (dying_workers / active_workers) >= 2
         except Exception as e:
             self.log(f"Failed to check nginx status : {e!s}")
             return False
