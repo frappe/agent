@@ -14,14 +14,11 @@ from agent.job import job, step
 from agent.server import Server
 
 
-def with_proxy_config_lock(lock_name="proxy_config_modification_lock"):
+def with_proxy_config_lock():
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            if not hasattr(self, lock_name):
-                return func(self, *args, **kwargs)
-
-            with getattr(self, lock_name):
+            with self.proxy_config_modification_lock:
                 return func(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -37,9 +34,7 @@ class Proxy(Server):
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
-        self.proxy_config_modification_lock = filelock.FileLock(
-            os.path.join(self.nginx_directory, "proxy_config.lock")
-        )
+        self._proxy_config_modification_lock = None
         self.job = None
         self.step = None
 
@@ -400,3 +395,12 @@ class Proxy(Server):
             if "*" in host:
                 wildcards.append(host.strip("*."))
         return wildcards
+
+    @property
+    def proxy_config_modification_lock(self):
+        if self._proxy_config_modification_lock is None:
+            lock_path = os.path.join(self.nginx_directory, "proxy_config.lock")
+            self._proxy_config_modification_lock = filelock.FileLock(
+                lock_path,
+            )
+        return self._proxy_config_modification_lock.acquire()
