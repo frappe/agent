@@ -204,6 +204,7 @@ def usage():
         job.minute.on(30)
         cron.write()
 
+
 @setup.command()
 def registry():
     Server().setup_registry()

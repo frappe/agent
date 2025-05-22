@@ -53,6 +53,8 @@ class TestProxy(unittest.TestCase):
         with patch.object(Proxy, "__init__", new=lambda x: None):
             proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
+        proxy.nginx_directory = os.path.join(self.test_dir, "nginx")
+        proxy._proxy_config_modification_lock = None
         return proxy
 
     def test_hosts_redirects_default_domain(self):

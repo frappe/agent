@@ -111,7 +111,7 @@ class NginxReloadManager:
             total_workers = status.count("nginx: worker process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
-            return (dying_workers / active_workers) > 5
+            return (dying_workers / active_workers) >= 3
         except Exception as e:
             self.log(f"Failed to check nginx status : {e!s}")
             return False
@@ -167,7 +167,7 @@ class NginxReloadManager:
 
     @property
     def max_reloads_per_minute(self) -> int:
-        return self.config.get("max_reloads_per_minute", 20)
+        return self.config.get("max_reloads_per_minute", 30)
 
     @property
     def max_interval_without_reload_minutes(self) -> int:

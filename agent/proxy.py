@@ -20,8 +20,11 @@ def with_proxy_config_lock():
         def wrapper(self, *args, **kwargs):
             with self.proxy_config_modification_lock:
                 return func(self, *args, **kwargs)
+
         return wrapper
+
     return decorator
+
 
 class Proxy(Server):
     def __init__(self, directory=None):
