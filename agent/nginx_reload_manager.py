@@ -42,24 +42,23 @@ class NginxReloadManager:
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
+        # Set last_reload_at to current time
+        self.last_reload_at = datetime.now()
+
         # Start Loop
         while not self.exit_requested:
             try:
                 is_mandatory_reload_required = (
-                    (
-                        (datetime.now() - self.last_reload_at).total_seconds()
-                        >= self.max_interval_without_reload_minutes * 60
-                    )
-                    if self.last_reload_at
-                    else True
-                )
+                    datetime.now() - self.last_reload_at
+                ).total_seconds() >= self.max_interval_without_reload_minutes * 60
+
                 job_ids = self._dequeue_jobs()
                 self.log(f"Dequeued {len(job_ids)} jobs")
                 start = time.time()
 
                 if job_ids or is_mandatory_reload_required:
                     status = self._reload_nginx()
-                    self.log(f"Nginx reload : {status}")
+                    self.log(f"Nginx Reload : {status} | {len(job_ids)} Jobs", print_always=True)
                     if status != "Skipped":
                         self._update_status_and_cleanup(job_ids, status)
 
@@ -89,6 +88,9 @@ class NginxReloadManager:
             self.last_reload_at = datetime.now()
             return "Success"
         except Exception as e:
+            import traceback
+
+            traceback.print_exc()
             self.log(f"Error while reloading nginx : {e!s}")
             return "Failure"
 
@@ -135,8 +137,8 @@ class NginxReloadManager:
             self.redis.set(RELOAD_REQUEST_STATUS_FORMAT.format(job_id), status)
         self.redis.ltrim(PROCESSING_QUEUE, len(job_ids), -1)
 
-    def log(self, message: any):
-        if not self.debug:
+    def log(self, message, print_always=False):
+        if not self.debug and not print_always:
             return
         print(f"[{datetime.now()}] {message!s}")
 
