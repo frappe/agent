@@ -28,6 +28,7 @@ from agent.job import Job as AgentJob
 from agent.job import JobModel, connection
 from agent.minio import Minio
 from agent.monitor import Monitor
+from agent.nginx_reload_manager import NginxReloadManager
 from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
@@ -1313,11 +1314,14 @@ def get_status_from_rq(job, redis):
     return status
 
 
-def to_dict(model):
+def to_dict(model):  # noqa: C901
     redis = connection()
+    nginx_reload_manager = NginxReloadManager()
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         status_from_rq = get_status_from_rq(job, redis)
+        nginx_reload_status = None
+        job_status_depends_on_async_nginx_reload = False
         if status_from_rq:
             # Override status from JobModel if rq says the job is already ended
             TERMINAL_STATUSES = ["Success", "Failure"]
@@ -1338,6 +1342,28 @@ def to_dict(model):
                     -1,
                 )
             ]
+            if job["status"] == "Success" and step["name"] == "Reload NGINX" and step["status"] == "Success":
+                # If the `RQ Job` or `RQ Step` has been failed during queuing or at any part
+                # There we dont need to lookup the status of the NGINX reload from redis
+                if not nginx_reload_status:
+                    nginx_reload_status = nginx_reload_manager.get_status(
+                        job["agent_job_id"],
+                        not_found_status="Success",
+                        # If the job doesn't exist in redis, we assume it was successful
+                    )
+                job_status_depends_on_async_nginx_reload = True
+                if nginx_reload_status in ["Success", "Failure"]:
+                    step["status"] = nginx_reload_status
+                else:
+                    step["status"] = "Running"
+
+        if job_status_depends_on_async_nginx_reload:
+            # If status is Queued, mark as Running
+            if nginx_reload_status == "Queued":
+                job["status"] = "Running"
+            # If reload has failed, mark it as failure
+            elif nginx_reload_status == "Failure":
+                job["status"] = "Failure"
     else:
         job = list(map(model_to_dict, model))
     return job

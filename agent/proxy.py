@@ -326,7 +326,7 @@ class Proxy(Server):
         if not self.job:
             raise Exception("NGINX Reload should be trigerred by a job")
 
-        return NginxReloadManager().request_reload(request_id=self.job_record.model.name)
+        return NginxReloadManager().request_reload(request_id=self.job_record.model.agent_job_id)
 
     def _create_default_host(self):
         default_host = f"*.{self.config['domain']}"

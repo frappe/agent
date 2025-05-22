@@ -31,11 +31,11 @@ class NginxReloadManager:
         self.redis.rpush(PENDING_QUEUE, request_id)
         self.redis.set(RELOAD_REQUEST_STATUS_FORMAT.format(request_id), "Queued")
 
-    def get_status(self, request_id: str) -> RELOAD_STATUS_TYPE:
-        s = self.redis.get(RELOAD_REQUEST_STATUS_FORMAT.format(request_id))
-        if not s:
-            return "Failure"
-        return s
+    def get_status(self, request_id: str, not_found_status: RELOAD_STATUS_TYPE) -> RELOAD_STATUS_TYPE | None:
+        status = self.redis.get(RELOAD_REQUEST_STATUS_FORMAT.format(request_id))
+        if status is None:
+            return not_found_status
+        return status
 
     def process_requests(self):
         # Handle Signals
