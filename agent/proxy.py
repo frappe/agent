@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 from collections import defaultdict
+from contextlib import contextmanager
 from functools import wraps
 from hashlib import sha512 as sha
 from pathlib import Path
@@ -400,10 +401,13 @@ class Proxy(Server):
         return wildcards
 
     @property
+    @contextmanager
     def proxy_config_modification_lock(self):
         if self._proxy_config_modification_lock is None:
             lock_path = os.path.join(self.nginx_directory, "proxy_config.lock")
             self._proxy_config_modification_lock = filelock.FileLock(
                 lock_path,
             )
-        return self._proxy_config_modification_lock.acquire()
+
+        with self._proxy_config_modification_lock:
+            yield

@@ -37,7 +37,7 @@ command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_
 environment=PYTHONUNBUFFERED=1
 autostart=true
 autorestart=true
-stopwaitsecs=10
+stopwaitsecs=20
 stdout_logfile={{ directory }}/logs/nginx_reload_manager.log
 stderr_logfile={{ directory }}/logs/nginx_reload_manager.error.log
 user={{ user }}
