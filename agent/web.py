@@ -241,6 +241,13 @@ def cleanup_unused_files():
     return {"job": job}
 
 
+@application.route("/server/pull-images", methods=["POST"])
+def pull_docker_images():
+    data = request.json
+    job = Server().pull_docker_images(data.get("image_tags"), data.get("registry"))
+    return {"job": job}
+
+
 @application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}

@@ -400,6 +400,18 @@ class Server(Base):
             command, directory=directory, skip_output_log=skip_output_log, non_zero_throw=non_zero_throw
         )
 
+    @job("Pull Docker Images", priority="high")
+    def pull_docker_images(self, image_tags: list[str], registry: dict[str, str]) -> None:
+        self._pull_docker_images(image_tags, registry)
+
+    @step("Pull Docker Images")
+    def _pull_docker_images(self, image_tags: list[str], registry: dict[str, str]) -> None:
+        self.docker_login(registry)
+
+        for image_tag in image_tags:
+            command = f"docker pull {image_tag}"
+            self.execute(command, directory=self.directory)
+
     @job("Reload NGINX")
     def restart_nginx(self):
         return self.reload_nginx()
