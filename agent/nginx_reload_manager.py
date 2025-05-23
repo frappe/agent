@@ -10,7 +10,7 @@ import subprocess
 import time
 import traceback
 from datetime import datetime
-from enum import Enum
+from enum import Enum, auto
 
 import redis
 
@@ -26,6 +26,16 @@ class ReloadStatus(Enum):
     Skipped = "Skipped"
 
 
+class ManagerState(Enum):
+    INIT = auto()
+    FETCH_JOBS = auto()
+    RELOAD_PENDING = auto()
+    RELOAD_SUCCESS = auto()
+    RELOAD_FAILURE = auto()
+    AUTO_FIX_CONFIG = auto()
+    WAIT = auto()
+
+
 class NginxReloadManager:
     redis_instance = None
     batch_size = 1000
@@ -36,6 +46,7 @@ class NginxReloadManager:
         self.last_reload_at: datetime = None
         self.exit_requested = False
         self.debug = debug
+        self.state = ManagerState.INIT
 
     def request_reload(self, request_id: str):
         self.redis.rpush(PENDING_QUEUE, request_id)
@@ -52,42 +63,71 @@ class NginxReloadManager:
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-        # Set last_reload_at to current time
         self.last_reload_at = datetime.now()
+        self.start_time = datetime.now()
+        self.state: ReloadStatus = ManagerState.FETCH_JOBS
+        self.job_ids = []
+        self.error = None
 
         while not self.exit_requested:
             try:
-                start_time = datetime.now()
-
-                # Fetch jobs from Redis
-                job_ids = self._dequeue_jobs()
-
-                # Reload NGINX
-                if job_ids or self.is_mandatory_reload_required:
-                    status = self._reload_nginx()
-                    self.log(f"Nginx Reload : {status}", print_always=True)
-                    if status != ReloadStatus.Skipped:
-                        self._update_status_and_cleanup(job_ids, status)
-
-                # Wait for the next iteration
-                elapsed_time = datetime.now() - start_time
-
-                if (sleep_time := self.max_permissible_wait_time - elapsed_time.total_seconds()) > 0:
-                    self.log(f"Waiting for {sleep_time:.2f} seconds before next check")
-                    time.sleep(sleep_time)
-                else:
-                    self.log("No sleep time, moving to next iteration")
-
-            except Exception as e:
+                self._process_state()
+            except Exception:
                 traceback.print_exc()
-                self.log(f"Error during processing requests : {e!s}")
+                self.state = ManagerState.WAIT
+
+    def _process_state(self):  # noqa: C901
+        if self.state == ManagerState.FETCH_JOBS:
+            self.start_time = datetime.now()
+            self.job_ids = self._dequeue_jobs()
+            if self.job_ids or self.is_mandatory_reload_required:
+                self.state = ManagerState.RELOAD_PENDING
+                return
+
+            self.state = ManagerState.WAIT
+
+        elif self.state == ManagerState.RELOAD_PENDING:
+            if self._should_skip_nginx_reload():
+                self.state = ManagerState.WAIT
+                return
+
+            status = self._reload_nginx()
+            self.state = (
+                ManagerState.RELOAD_SUCCESS
+                if status == ReloadStatus.Success
+                else ManagerState.AUTO_FIX_CONFIG
+            )
+
+        elif self.state == ManagerState.RELOAD_SUCCESS:
+            self._update_status_and_cleanup(self.job_ids, ReloadStatus.Success)
+            self.last_reload_at = datetime.now()
+            self.state = ManagerState.WAIT
+
+        elif self.state == ManagerState.RELOAD_FAILURE:
+            self._update_status_and_cleanup(self.job_ids, ReloadStatus.Failure)
+            self.state = ManagerState.WAIT
+
+        elif self.state == ManagerState.AUTO_FIX_CONFIG:
+            if isinstance(self.error, subprocess.CalledProcessError):
+                error_msg = (self.error.output or "")
+                domain = self._find_conflicting_domain_from_error_message(error_msg)
+                if domain and self._fix_conflicting_domain_in_config(domain):
+                    self.state = ManagerState.RELOAD_PENDING
+                    return
+
+            self.state = ManagerState.RELOAD_FAILURE
+
+        elif self.state == ManagerState.WAIT:
+            elapsed_time = datetime.now() - self.start_time
+            if (sleep_time := self.max_permissible_wait_time - elapsed_time.total_seconds()) > 0:
+                self.log(f"Waiting for {sleep_time:.2f} seconds before next check")
+                time.sleep(sleep_time)
+
+            self.state = ManagerState.FETCH_JOBS
 
     # Private methods
     def _reload_nginx(self) -> ReloadStatus:
         from agent.proxy import Proxy
-
-        if self._should_skip_nginx_reload():
-            return ReloadStatus.Skipped
 
         try:
             proxy = Proxy()
@@ -97,12 +137,9 @@ class NginxReloadManager:
 
             self.last_reload_at = datetime.now()
             return ReloadStatus.Success
-        except subprocess.CalledProcessError as e:
-            if conflicting_domain := self._find_conflicting_domain_from_error_message(e.stderr):
-                self._auto_fix_conflicting_domain(conflicting_domain)
-                return ReloadStatus.Skipped
-            raise e
         except Exception as e:
+            self.error = e
+
             traceback.print_exc()
             self.log(f"Error while reloading nginx : {e!s}")
             return ReloadStatus.Failure
@@ -126,7 +163,7 @@ class NginxReloadManager:
             total_workers = status.count("nginx: worker process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
-            return (dying_workers / active_workers) >= 1
+            return dying_workers >= active_workers
         except Exception as e:
             self.log(f"Failed to check nginx status : {e!s}")
             return False
@@ -137,19 +174,20 @@ class NginxReloadManager:
             return None
         return match.group(1)
 
-    def _auto_fix_conflicting_domain(self, domain: str):
+    def _fix_conflicting_domain_in_config(self, domain: str) -> bool:
         self.log(f"Domain {domain} is conflicting, attempting auto fix", print_always=True)
 
         # Find the paths
         paths = glob.glob(os.path.join(self.directory, f"nginx/upstreams/*/{domain}"))
         paths.sort(key=lambda x: os.path.getmtime(x))
 
-        if len(paths) >= 2:
-            raise Exception(f"Not able to auto fix the issue for domain : {domain!s}")
+        if len(paths) < 2:
+            self.log(f"Not able to auto fix the issue for domain : {domain!s}", print_always=True)
+            return False
 
         # Keep newest file and delete the rest
         to_keep = paths[-1]
-        self.log(f"Keeping {to_keep}")
+        self.log(f"Keeping {to_keep}", print_always=True)
         to_delete = paths[:-1]
         for path in to_delete:
             with contextlib.suppress(FileNotFoundError):
@@ -157,6 +195,8 @@ class NginxReloadManager:
                 # before we could delete it
                 os.remove(path)
             self.log(f"Deleted {path}", print_always=True)
+
+        return True
 
     def _dequeue_jobs(self) -> list[str]:
         # Fetch up to 10000 jobs, which might not be hit ever
@@ -183,7 +223,6 @@ class NginxReloadManager:
         if self.exit_requested:
             self.log("Stopping forefully")
             exit(0)
-            return
 
         self.exit_requested = True
         self.log("Requested to exit gracefully")
@@ -234,5 +273,5 @@ class NginxReloadManager:
 
 
 if __name__ == "__main__":
-    manager = NginxReloadManager(debug=True)
+    manager = NginxReloadManager()
     manager.process_requests()
