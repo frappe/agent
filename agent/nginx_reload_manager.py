@@ -109,7 +109,7 @@ class NginxReloadManager:
 
         elif self.state == ManagerState.AUTO_FIX_CONFIG:
             if isinstance(self.error, subprocess.CalledProcessError):
-                error_msg = (self.error.output or "")
+                error_msg = self.error.stderr or ""
                 domain = self._find_conflicting_domain_from_error_message(error_msg)
                 if domain and self._fix_conflicting_domain_in_config(domain):
                     self.state = ManagerState.RELOAD_PENDING
@@ -133,7 +133,13 @@ class NginxReloadManager:
             proxy = Proxy()
 
             proxy._generate_proxy_config()
-            subprocess.run("sudo nginx -s reload", shell=True, check=True)
+            subprocess.run(
+                "sudo nginx -s reload",
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
             self.last_reload_at = datetime.now()
             return ReloadStatus.Success
