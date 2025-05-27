@@ -28,6 +28,8 @@ from agent.job import Job as AgentJob
 from agent.job import JobModel, connection
 from agent.minio import Minio
 from agent.monitor import Monitor
+from agent.nginx_reload_manager import NginxReloadManager
+from agent.nginx_reload_manager import ReloadStatus as NginxReloadStatus
 from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
@@ -989,7 +991,6 @@ def proxy_add_host():
         data["name"],
         data["target"],
         data["certificate"],
-        data.get("skip_reload", True),
     )
     return {"job": job}
 
@@ -1043,14 +1044,14 @@ def proxy_rename_upstream(upstream):
 @application.route("/proxy/upstreams/<string:upstream>/sites", methods=["POST"])
 def proxy_add_upstream_site(upstream):
     data = request.json
-    job = Proxy().add_site_to_upstream_job(upstream, data["name"], data.get("skip_reload", True))
+    job = Proxy().add_site_to_upstream_job(upstream, data["name"])
     return {"job": job}
 
 
 @application.route("/proxy/upstreams/<string:upstream>/domains", methods=["POST"])
 def proxy_add_upstream_site_domain(upstream):
     data = request.json
-    job = Proxy().add_domain_to_upstream_job(upstream, data["domain"], data.get("skip_reload", True))
+    job = Proxy().add_domain_to_upstream_job(upstream, data["domain"])
     return {"job": job}
 
 
@@ -1060,9 +1061,7 @@ def proxy_add_upstream_site_domain(upstream):
 )
 def proxy_remove_upstream_site(upstream, site):
     data = request.json
-    job = Proxy().remove_site_from_upstream_job(
-        upstream, site, data.get("skip_reload", True), data.get("extra_domains", [])
-    )
+    job = Proxy().remove_site_from_upstream_job(upstream, site, data.get("extra_domains", []))
     return {"job": job}
 
 
@@ -1077,7 +1076,6 @@ def proxy_rename_upstream_site(upstream, site):
         data["domains"],
         site,
         data["new_name"],
-        data.get("skip_reload", True),
     )
     return {"job": job}
 
@@ -1088,9 +1086,7 @@ def proxy_rename_upstream_site(upstream, site):
 )
 def update_site_status(upstream, site):
     data = request.json
-    job = Proxy().update_site_status_job(
-        upstream, site, data["status"], data.get("skip_reload", True), data.get("extra_domains", [])
-    )
+    job = Proxy().update_site_status_job(upstream, site, data["status"], data.get("extra_domains", []))
     return {"job": job}
 
 
@@ -1326,11 +1322,14 @@ def get_status_from_rq(job, redis):
     return status
 
 
-def to_dict(model):
+def to_dict(model):  # noqa: C901
     redis = connection()
+    nginx_reload_manager = NginxReloadManager()
     if isinstance(model, JobModel):
         job = model_to_dict(model, backrefs=True)
         status_from_rq = get_status_from_rq(job, redis)
+        nginx_reload_status: NginxReloadStatus = None
+        job_status_depends_on_async_nginx_reload = False
         if status_from_rq:
             # Override status from JobModel if rq says the job is already ended
             TERMINAL_STATUSES = ["Success", "Failure"]
@@ -1351,6 +1350,28 @@ def to_dict(model):
                     -1,
                 )
             ]
+            if job["status"] == "Success" and step["name"] == "Reload NGINX" and step["status"] == "Success":
+                # If the `RQ Job` or `RQ Step` has been failed during queuing or at any part
+                # There we dont need to lookup the status of the NGINX reload from redis
+                if not nginx_reload_status:
+                    nginx_reload_status = nginx_reload_manager.get_status(
+                        job["agent_job_id"],
+                        not_found_status=NginxReloadStatus.Success,
+                        # If the job doesn't exist in redis, we assume it was successful
+                    )
+                job_status_depends_on_async_nginx_reload = True
+                if nginx_reload_status in [NginxReloadStatus.Success, NginxReloadStatus.Failure]:
+                    step["status"] = nginx_reload_status.value
+                else:
+                    step["status"] = "Running"
+
+        if job_status_depends_on_async_nginx_reload:
+            # If status is Queued, mark as Running
+            if nginx_reload_status == NginxReloadStatus.Queued:
+                job["status"] = "Running"
+            # If reload has failed, mark it as failure
+            elif nginx_reload_status == NginxReloadStatus.Failure:
+                job["status"] = "Failure"
     else:
         job = list(map(model_to_dict, model))
     return job
