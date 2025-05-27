@@ -9,6 +9,8 @@ from agent.server import Server
 
 class SSHProxy(Server):
     def __init__(self, directory=None):
+        super().__init__(directory=directory)
+
         self.directory = directory or os.getcwd()
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]

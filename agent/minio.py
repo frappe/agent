@@ -8,6 +8,8 @@ from agent.server import Server
 
 class Minio(Server):
     def __init__(self, directory=None):
+        super().__init__(directory=directory)
+
         self.directory = directory or os.getcwd()
         self.policy_path = "/home/frappe/minio/tmp_policy.json"
         self.host = "localhost"
