@@ -308,11 +308,15 @@ def bench():
 
 
 @bench.command()
-@click.argument("bench", required=False)
-def start(bench):
+@click.argument("bench", nargs=-1)
+def start(bench: tuple[str]):
+    server = Server()
+
     if bench:
-        return Server().benches[bench].start()
-    return Server().start_all_benches()
+        for b in bench:
+            server.benches[b].start()
+    else:
+        server.start_all_benches()
 
 
 @bench.command()
