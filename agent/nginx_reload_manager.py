@@ -92,6 +92,7 @@ class NginxReloadManager:
                 return
 
             status = self._reload_nginx()
+            self.log(f"Reload {status.name} | {len(self.job_ids)} requests", print_always=True)
             self.state = (
                 ManagerState.RELOAD_SUCCESS
                 if status == ReloadStatus.Success
