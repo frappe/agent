@@ -235,13 +235,14 @@ class Proxy(Server):
         os.rename(old_site_file, new_site_file)
 
     @job("Update Site Status")
-    def update_site_status_job(self, upstream, site, status, extra_domains=None):
+    def update_site_status_job(self, upstream, site, status, extra_domains=None, skip_reload=False):
         self.update_site_status(upstream, site, status)
         if not extra_domains:
             extra_domains = []
         for domain in extra_domains:
             self.update_site_status(upstream, domain, status)
-        self.reload_nginx()
+        if not skip_reload:
+            self.reload_nginx()
 
     @step("Update Site File")
     @with_proxy_config_lock()
