@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import traceback
@@ -224,7 +225,8 @@ class Base:
             os.fsync(temp_file.fileno())
             temp_file.close()
 
-        os.rename(temp_file.name, self.config_file)
+        shutil.copy2(temp_file.name, self.config_file)
+        os.remove(temp_file.name)
 
         if release_lock and self._config_file_lock:
             self._config_file_lock.release()
