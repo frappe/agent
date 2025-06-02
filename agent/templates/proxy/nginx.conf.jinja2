@@ -72,22 +72,22 @@ proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 
 
 {% for host, host_options in hosts.items() %}
 
-{% set ns = namespace(host=host) %}
+{% set ns = namespace(host=host, cert_host=host) %}
 
 server {
 	listen 443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ ns.host }};
 
-
 	{%- for wildcard_domain in wildcards -%}
 		{%- if ns.host.endswith("." + wildcard_domain) -%}
-			{% set ns.host = "*." + wildcard_domain %}
+			{% set ns.cert_host = "*." + wildcard_domain %}
 			{# use same certificate as root domain #}
 		{%- endif %}
 	{%- endfor %}
-	ssl_certificate {{ nginx_directory }}/hosts/{{ ns.host }}/fullchain.pem;
-	ssl_certificate_key {{ nginx_directory }}/hosts/{{ ns.host }}/privkey.pem;
-	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ ns.host }}/chain.pem;
+
+	ssl_certificate {{ nginx_directory }}/hosts/{{ ns.cert_host }}/fullchain.pem;
+	ssl_certificate_key {{ nginx_directory }}/hosts/{{ ns.cert_host }}/privkey.pem;
+	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ ns.cert_host }}/chain.pem;
 
 	ssl_session_timeout 1d;
 	ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
