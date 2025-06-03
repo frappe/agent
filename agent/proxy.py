@@ -310,7 +310,7 @@ class Proxy(Server):
                 "hosts": self.hosts,
                 "upstreams": self.upstreams,
                 "domain": config["domain"],
-                "wildcards": self.wildcards,
+                "wildcards": sorted(self.wildcards, key=lambda x: len(x)),
                 "nginx_directory": config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
                 "tls_protocols": config.get("tls_protocols"),
