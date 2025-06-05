@@ -835,6 +835,10 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def apps(self):
         return self.bench_execute("list-apps")["output"]
+    
+    @property
+    def apps_as_json(self):
+        return json.loads(self.bench_execute("list-apps -f json")["output"])[self.name]
 
     @job("Add Database Index")
     def add_database_index(self, doctype, columns=None):

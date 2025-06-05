@@ -943,7 +943,11 @@ def add_database_index(bench, site):
 )
 @validate_bench_and_site
 def get_site_apps(bench, site):
-    return {"data": Server().benches[bench].sites[site].apps}
+    format = request.args.get("format")
+    if not format:
+        return {"data": Server().benches[bench].sites[site].apps}
+    if format == "json":
+        return {"data": Server().benches[bench].sites[site].apps_as_json}
 
 
 @application.route(
