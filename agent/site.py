@@ -834,8 +834,8 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def apps(self):
-        return self.bench_execute("list-apps")["output"]
-    
+        return self.bench_execute("frappe.get_installed_apps")["output"]
+
     @property
     def apps_as_json(self):
         return json.loads(self.bench_execute("list-apps -f json")["output"])[self.name]
