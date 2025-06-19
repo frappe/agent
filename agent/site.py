@@ -247,8 +247,7 @@ class Site(Base):
 
     @job("Add Domain", priority="high")
     def add_domain(self, domain):
-        config = self.get_config(for_update=True)
-        domains = set(config.get("domains", []))
+        domains = set(self.config.get("domains", []))
         domains.add(domain)
         self.update_config({"domains": list(domains)})
         self.bench.setup_nginx()
@@ -256,8 +255,7 @@ class Site(Base):
 
     @job("Remove Domain", priority="high")
     def remove_domain(self, domain):
-        config = self.get_config(for_update=True)
-        domains = set(config.get("domains", []))
+        domains = set(self.config.get("domains", []))
         domains.discard(domain)
         self.update_config({"domains": list(domains)})
         self.bench.setup_nginx()
