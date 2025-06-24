@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -424,34 +425,39 @@ class Site(Base):
         import boto3
 
         offsite_files = {}
-        bucket, auth, prefix = (
-            offsite["bucket"],
-            offsite["auth"],
-            offsite["path"],
-        )
-        region = auth.get("REGION")
-
-        if region:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-                region_name=region,
+        try:
+            bucket, auth, prefix = (
+                offsite["bucket"],
+                offsite["auth"],
+                offsite["path"],
             )
-        else:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-            )
+            region = auth.get("REGION")
 
-        for backup_file in backup_files.values():
-            file_name = backup_file["file"].split(os.sep)[-1]
-            offsite_path = os.path.join(prefix, file_name)
-            offsite_files[file_name] = offsite_path
+            if region:
+                s3 = boto3.client(
+                    "s3",
+                    aws_access_key_id=auth["ACCESS_KEY"],
+                    aws_secret_access_key=auth["SECRET_KEY"],
+                    region_name=region,
+                )
+            else:
+                s3 = boto3.client(
+                    "s3",
+                    aws_access_key_id=auth["ACCESS_KEY"],
+                    aws_secret_access_key=auth["SECRET_KEY"],
+                )
 
-            with open(backup_file["path"], "rb") as data:
-                s3.upload_fileobj(data, bucket, offsite_path)
+            for backup_file in backup_files.values():
+                file_name = backup_file["file"].split(os.sep)[-1]
+                offsite_path = os.path.join(prefix, file_name)
+                offsite_files[file_name] = offsite_path
+
+                with open(backup_file["path"], "rb") as data:
+                    s3.upload_fileobj(data, bucket, offsite_path)
+        finally:
+            for backup_file in backup_files.values():
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(backup_file["path"])
 
         return offsite_files
 
