@@ -405,7 +405,7 @@ class Bench(Base):
         site = Site(name, self)
         site.update_config(default_config)
         try:
-            site.restore(
+            site.restore_site(
                 mariadb_root_password,
                 admin_password,
                 files["database"],
@@ -447,7 +447,7 @@ class Bench(Base):
         if not os.path.exists(download_directory):
             os.mkdir(download_directory)
         directory = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}", dir=download_directory)
-        database_file = download_file(database_url, prefix=directory)
+        database_file = download_file(database_url, prefix=directory) if database_url else ""
         private_file = download_file(private_url, prefix=directory) if private_url else ""
         public_file = download_file(public_url, prefix=directory) if public_url else ""
         return {

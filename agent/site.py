@@ -100,7 +100,7 @@ class Site(Base):
         return self.bench_execute(f"uninstall-app {app} --yes --force")
 
     @step("Restore Site")
-    def restore(
+    def restore_site(
         self,
         mariadb_root_password,
         admin_password,
@@ -131,6 +131,27 @@ class Site(Base):
             )
         finally:
             self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
+
+    @step("Restore Files")
+    def restore_files(
+        self,
+        public_file=None,
+        private_file=None,
+    ):
+        """Restore files from the given paths."""
+        sites_directory = self.bench.sites_directory
+
+        if public_file:
+            self.execute(
+                f"tar {'z' if public_file.endswith('.tgz') else ''}xvf {public_file} --strip 2",
+                directory=os.path.join(sites_directory, self.name),
+            )
+
+        if private_file:
+            self.execute(
+                f"tar {'z' if private_file.endswith('.tgz') else ''}xvf {private_file} --strip 2",
+                directory=os.path.join(sites_directory, self.name, "private"),
+            )
 
     @step("Checksum of Downloaded Backup Files")
     def calculate_checksum_of_backup_files(self, database_file, public_file, private_file):
@@ -165,13 +186,19 @@ class Site(Base):
     ):
         files = self.bench.download_files(self.name, database, public, private)
         try:
-            self.restore(
-                mariadb_root_password,
-                admin_password,
-                files["database"],
-                files["public"],
-                files["private"],
-            )
+            if files["database"]:
+                self.restore_site(
+                    mariadb_root_password,
+                    admin_password,
+                    files["database"],
+                    files["public"],
+                    files["private"],
+                )
+            else:
+                self.restore_files(
+                    files["public"],
+                    files["private"],
+                )
         except Exception:
             self.calculate_checksum_of_backup_files(files["database"], files["public"], files["private"])
             raise
