@@ -124,6 +124,8 @@ class Base:
         for char in iter(partial(process.stdout.read, 1), b""):
             if char == b"" and process.poll() is not None:
                 break
+            if char == b"\r":
+                continue  # Ignore carriage return; handled in next iteration
             if char == b"\n":
                 lines.append(line.decode(errors="replace"))
                 line = b""
