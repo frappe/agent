@@ -117,6 +117,7 @@ class Base:
 
         line = b""
         lines = []
+        prev_char = None
         # This is equivalent of remove_crs
         # Make sure output matches what'll be shown in the terminal
         # This won't work for top, htop etc, but good enough to handle progress bars
@@ -124,16 +125,19 @@ class Base:
             if char == b"" and process.poll() is not None:
                 break
             if char == b"\r":
-                # Publish output and then wipe current line.
-                # Include the overwritten line in the output
-                self.publish_lines([*lines, line.decode(errors="replace")])
-                line = b""
-            elif char == b"\n":
+                prev_char = char
+                continue  # Ignore carriage return; handled in next iteration
+            if char == b"\n":
                 lines.append(line.decode(errors="replace"))
                 line = b""
                 self.publish_lines(lines)
+            elif prev_char == b"\r":
+                self.publish_lines([*lines, line.decode(errors="replace")])
+                line = b""
+                line += char
             else:
                 line += char
+            prev_char = char
 
         if line:
             lines.append(line.decode(errors="replace"))
