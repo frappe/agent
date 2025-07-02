@@ -125,6 +125,7 @@ class Base:
             if char == b"" and process.poll() is not None:
                 break
             if char == b"\r":
+                prev_char = char
                 continue  # Ignore carriage return; handled in next iteration
             if char == b"\n":
                 lines.append(line.decode(errors="replace"))
