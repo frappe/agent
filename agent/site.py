@@ -142,15 +142,24 @@ class Site(Base):
         sites_directory = self.bench.sites_directory
 
         if public_file:
-            # Delete the existing public files directory
-            shutil.rmtree(os.path.join(sites_directory, self.name, "public"), ignore_errors=True)
+            dir_path = os.path.join(sites_directory, self.name, "public", "files")
+            try:
+                shutil.rmtree(dir_path, ignore_errors=True)
+            finally:
+                os.makedirs(dir_path, exist_ok=True)
+
             self.execute(
                 f"tar {'z' if public_file.endswith('.tgz') else ''}xvf {public_file} --strip 2",
                 directory=os.path.join(sites_directory, self.name),
             )
 
         if private_file:
-            shutil.rmtree(os.path.join(sites_directory, self.name, "private"), ignore_errors=True)
+            dir_path = os.path.join(sites_directory, self.name, "private", "files")
+            try:
+                shutil.rmtree(dir_path, ignore_errors=True)
+            finally:
+                os.makedirs(dir_path, exist_ok=True)
+
             self.execute(
                 f"tar {'z' if private_file.endswith('.tgz') else ''}xvf {private_file} --strip 2",
                 directory=os.path.join(sites_directory, self.name),
