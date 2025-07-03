@@ -170,7 +170,7 @@ class NginxReloadManager:
             total_workers = status.count("nginx: worker process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
-            return dying_workers >= active_workers
+            return dying_workers >= active_workers or dying_workers >= 4
         except Exception as e:
             self.log(f"Failed to check nginx status : {e!s}")
             return False
