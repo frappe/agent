@@ -18,7 +18,7 @@ from agent.database_physical_backup import (
 )
 from agent.database_server import DatabaseServer
 from agent.job import job, step
-from agent.utils import compute_file_hash, get_mariadb_table_name_from_path
+from agent.utils import compute_file_hash, generate_random_string, get_mariadb_table_name_from_path
 
 
 class DatabasePhysicalRestore(DatabaseServer):
@@ -33,20 +33,42 @@ class DatabasePhysicalRestore(DatabaseServer):
         target_db_base_directory: str = "/var/lib/mysql",
         restore_specific_tables: bool = False,
         tables_to_restore: list[str] | None = None,
+        in_place_restore: bool = False,
     ):
+        """
+        In case of in-place restore, we are going to restore the files in the target database.
+        It has a risk of data loss, so use it with caution.
+
+        In case the backup medium is corrupted, it can lead to data loss of production database.
+
+        It's much safer to not use this option until unless it's not restoring a non-critical database
+        or from application level it's ensured that backup medium / snapshot / disk is not corrupted.
+
+        Also, if you are concerned regarding the storage space, then only consider using in place restore.
+        """
         if tables_to_restore is None:
             tables_to_restore = []
+
+        self.in_place_restore = in_place_restore
+
+        # Generate the intermediate database regardless of in-place restore
+        self.intermediate_db = "tmp" + target_db + generate_random_string(20)
+        self.intermediate_db_directory = os.path.join(target_db_base_directory, self.intermediate_db)
+        self.final_db = target_db
+        self.final_db_directory = os.path.join(target_db_base_directory, target_db)
 
         self._target_db_instance: CustomPeeweeDB = None
         self._target_db_instance_connection_id: int = None
         self._target_db_instance_for_myisam: CustomPeeweeDB = None
         self._target_db_instance_for_myisam_connection_id: int = None
-        self.target_db = target_db
+        self.target_db = self.intermediate_db if in_place_restore else target_db
         self.target_db_user = "root"
         self.target_db_password = target_db_root_password
         self.target_db_host = target_db_host
         self.target_db_port = target_db_port
-        self.target_db_directory = os.path.join(target_db_base_directory, target_db)
+        self.target_db_directory = (
+            self.intermediate_db_directory if in_place_restore else self.final_db_directory
+        )
 
         self.backup_db = backup_db
         self.backup_db_base_directory = backup_db_base_directory
@@ -68,22 +90,56 @@ class DatabasePhysicalRestore(DatabaseServer):
         from filewarmer import FWUP
 
         self.fwup = FWUP()
-        self.validate_backup_files()
-        self.validate_connection_to_target_db()
-        self.warmup_myisam_files()
-        self.check_and_fix_myisam_table_files()
-        self.warmup_innodb_files()
-        # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
-        self.prepare_target_db_for_restore()
-        self.create_tables_from_table_schema()
-        self.discard_innodb_tablespaces_from_target_db()
-        self.perform_innodb_file_operations()
-        self.import_tablespaces_in_target_db()
-        self.hold_write_lock_on_myisam_tables()
-        self.perform_myisam_file_operations()
-        self.unlock_all_tables()
+        if self.in_place_restore:
+            self.create_intermediate_database()
+
+        try:
+            self.validate_backup_files()
+            self.validate_connection_to_target_db()
+            self.warmup_myisam_files()
+            self.check_and_fix_myisam_table_files()
+            self.warmup_innodb_files()
+            # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
+            self.prepare_target_db_for_restore()
+            self.create_tables_from_table_schema()
+            self.discard_innodb_tablespaces_from_target_db()
+            self.perform_innodb_file_operations()
+            self.import_tablespaces_in_target_db()
+            self.hold_write_lock_on_myisam_tables()
+            self.perform_myisam_file_operations()
+            self.unlock_all_tables()
+            self._close_db_connections()
+            if not self.in_place_restore:
+                self.move_restored_tables_to_target_db()
+            self.perform_post_restoration_validation_and_fixes()
+        finally:
+            if not self.in_place_restore:
+                self.cleanup_intermediate_database()
+
+    @step("Create Intermediate Database")
+    def create_intermediate_database(self):
+        """
+        Create a temporary database to restore the files there.
+        This is required to restore the InnoDB tablespaces.
+        """
+        if self.in_place_restore:
+            return
+
+        db = CustomPeeweeDB(
+            self.final_db,
+            user=self.target_db_user,
+            password=self.target_db_password,
+            host=self.target_db_host,
+            port=self.target_db_port,
+        )
+        db.connect()
+
+        # Create the intermediate database
+        db.execute_sql(f"CREATE DATABASE IF NOT EXISTS `{self.intermediate_db}`;")
+        db.close()
+
+        # Ensure that all db conections are closed before proceeding
         self._close_db_connections()
-        self.perform_post_restoration_validation_and_fixes()
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
@@ -302,6 +358,30 @@ class DatabasePhysicalRestore(DatabaseServer):
         self._get_target_db().execute_sql("UNLOCK TABLES;")
         self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
 
+    @step("Move Restored Tables to Target Database")
+    def move_restored_tables_to_target_db(self):
+        """
+        If in-place restore is enabled, then we are already restoring the files in the target database.
+        So, no need to move the tables.
+        """
+        if self.in_place_restore:
+            return
+
+        db = self._get_target_db(raise_error_on_connection_closed=False)
+
+        if len(self.innodb_tables) == 0 and len(self.myisam_tables) == 0:
+            return
+
+        query = "RENAME TABLE "
+        for table in self.innodb_tables:
+            query += f"`{self.target_db}`.`{table}` TO `{self.final_db}`.`{table}`, "
+        for table in self.myisam_tables:
+            query += f"`{self.target_db}`.`{table}` TO `{self.final_db}`.`{table}`, "
+
+        # Move the restored tables to the final database
+        db.execute_sql(query.rstrip(", ") + ";")
+        db.close()
+
     @step("Validate And Fix Tables")
     def perform_post_restoration_validation_and_fixes(self):
         innodb_tables_with_fts = self._get_innodb_tables_with_fts_index()
@@ -334,6 +414,30 @@ class DatabasePhysicalRestore(DatabaseServer):
         for table in self.myisam_tables:
             if self.is_table_corrupted(table) and not self.repair_myisam_table(table):
                 raise Exception(f"Failed to repair table {table}")
+
+    @step("Cleanup Intermediate Database")
+    def cleanup_intermediate_database(self):
+        """
+        Cleanup the intermediate database after restoration is done.
+        This is required to avoid any conflicts with the final database.
+        """
+        if self.in_place_restore:
+            return
+
+        db = CustomPeeweeDB(
+            self.final_db,
+            user=self.target_db_user,
+            password=self.target_db_password,
+            host=self.target_db_host,
+            port=self.target_db_port,
+        )
+        db.connect()
+        # Drop the intermediate database
+        db.execute_sql(f"DROP DATABASE IF EXISTS `{self.intermediate_db}`;")
+        db.close()
+
+        # Ensure that all db connections are closed after cleanup
+        self._close_db_connections()
 
     def _warmup_files(self, file_paths: list[str]):
         """
