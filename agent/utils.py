@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import string
 import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -218,3 +219,11 @@ def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
         return dict(nested_status)
     except Exception:
         return {}
+
+
+def generate_random_string(length: int = 16) -> str:
+    """Generate a random alphanumeric string of specified length using os.urandom."""
+
+    characters = string.ascii_letters + string.digits
+    random_bytes = os.urandom(length)
+    return "".join(characters[b % len(characters)] for b in random_bytes)

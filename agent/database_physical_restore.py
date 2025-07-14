@@ -18,7 +18,17 @@ from agent.database_physical_backup import (
 )
 from agent.database_server import DatabaseServer
 from agent.job import job, step
-from agent.utils import compute_file_hash, get_mariadb_table_name_from_path
+from agent.utils import compute_file_hash, generate_random_string, get_mariadb_table_name_from_path
+
+"""
+Some Notes:
+- Assume all the operations are performed on Intermediary Database unless otherwise mentioned.
+- Don't try even dropping the backup tables from target database until the restoration is successful.
+  - There is a slight chance that the backup tables left behind due to some weird reason, and that blocking next restoration.
+    Even in that case, do cleanup manually.
+  - Trying to attempt to drop backup tables before starting restoration might not be a good idea.
+    Because, in case of multiple failed restoration attempts, the backup tables will be dropped.
+"""  # noqa: E501
 
 
 class DatabasePhysicalRestore(DatabaseServer):
@@ -37,6 +47,8 @@ class DatabasePhysicalRestore(DatabaseServer):
         if tables_to_restore is None:
             tables_to_restore = []
 
+        self.target_db_backup_prefix = "fc_bk_"  # FC table backup
+
         self._target_db_instance: CustomPeeweeDB = None
         self._target_db_instance_connection_id: int = None
         self._target_db_instance_for_myisam: CustomPeeweeDB = None
@@ -47,6 +59,19 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.target_db_host = target_db_host
         self.target_db_port = target_db_port
         self.target_db_directory = os.path.join(target_db_base_directory, target_db)
+
+        self._intermediary_db_instance: CustomPeeweeDB = None
+        self._intermediary_db_instance_connection_id: int = None
+        self._intermediary_db_instance_for_myisam: CustomPeeweeDB = None
+        self._intermediary_db_instance_for_myisam_connection_id: int = None
+        self._intermediary_db_created: bool = False
+
+        self.intermediary_db = f"tmp{target_db}_{generate_random_string(16)}"
+        self.intermediary_db_user = "root"
+        self.intermediary_db_password = target_db_root_password
+        self.intermediary_db_host = target_db_host
+        self.intermediary_db_port = target_db_port
+        self.intermediary_db_directory = os.path.join(target_db_base_directory, self.intermediary_db)
 
         self.backup_db = backup_db
         self.backup_db_base_directory = backup_db_base_directory
@@ -69,21 +94,32 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         self.fwup = FWUP()
         self.validate_backup_files()
-        self.validate_connection_to_target_db()
+        self.create_intermediary_db()
+        self.validate_connection_to_db()
         self.warmup_myisam_files()
         self.check_and_fix_myisam_table_files()
         self.warmup_innodb_files()
-        # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
-        self.prepare_target_db_for_restore()
-        self.create_tables_from_table_schema()
-        self.discard_innodb_tablespaces_from_target_db()
-        self.perform_innodb_file_operations()
-        self.import_tablespaces_in_target_db()
-        self.hold_write_lock_on_myisam_tables()
-        self.perform_myisam_file_operations()
-        self.unlock_all_tables()
-        self._close_db_connections()
-        self.perform_post_restoration_validation_and_fixes()
+        try:
+            # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
+            self.create_tables_from_table_schema()
+            self.discard_innodb_tablespaces_from_intermediary_db()
+            self.perform_innodb_file_operations()
+            self.import_tablespaces_in_intermediary_db()
+            self.hold_write_lock_on_myisam_tables()
+            self.perform_myisam_file_operations()
+            self.unlock_all_tables()
+            self._close_db_connections()
+            self.perform_post_restoration_validation_and_fixes()
+            self.lock_target_db_tables_for_renaming()
+            self.backup_existing_target_database_tables()
+            self.move_restored_tables_to_target_database()
+            self.unlock_target_db_tables()
+            self.drop_backup_tables_from_target_database()
+        except Exception as e:
+            self.rollback_backup_tables_in_target_database()
+            raise AgentException({"output": str(e)}) from e
+        finally:
+            self.drop_intermediary_database()
 
     @step("Validate Backup Files")
     def validate_backup_files(self):  # noqa: C901
@@ -147,10 +183,29 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         return {"output": output}
 
-    @step("Validate Connection to Target Database")
-    def validate_connection_to_target_db(self):
+    @step("Create Intermediary Database")
+    def create_intermediary_db(self):
+        """
+        Create an intermediary database to restore the tables
+        This is required to restore the InnoDB tablespaces
+        """
+        db = self._get_intermediary_db(raise_error_on_connection_closed=False)
+        db.execute_sql(f"DROP DATABASE IF EXISTS `{self.intermediary_db}`;")
+        db.execute_sql(f"CREATE DATABASE `{self.intermediary_db}`;")
+        """
+        It's very important to close connections
+        So that old db connection object get lost and new connection have default schema
+        set to the newly created intermediary database
+        """
+        self._close_db_connections(target_db=False, intermediary_db=True)
+        self._intermediary_db_created = True
+
+    @step("Validate Connection to Database")
+    def validate_connection_to_db(self):
         self._get_target_db().execute_sql("SELECT 1;")
         self._get_target_db_for_myisam().execute_sql("SELECT 1;")
+        self._get_intermediary_db().execute_sql("SELECT 1;")
+        self._get_intermediary_db_for_myisam().execute_sql("SELECT 1;")
         self._kill_other_active_db_connections()
 
     @step("Warmup MyISAM Files")
@@ -198,34 +253,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         file_paths = [file for file in file_paths if self.is_db_file_need_to_be_restored(file)]
         self._warmup_files(file_paths)
 
-    @step("Prepare Database for Restoration")
-    def prepare_target_db_for_restore(self):
-        # Only perform this, if we are restoring all tables
-        if self.restore_specific_tables:
-            return
-
-        """
-        Prepare the database for import
-        - fetch existing tables list in database
-        - delete all tables
-        """
-        tables = self._get_target_db().get_tables()
-        # before start dropping tables, disable foreign key checks
-        # it will reduce the time to drop tables and will not cause any block while dropping tables
-        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
-        for table in tables:
-            self._kill_other_active_db_connections()
-            self._get_target_db().execute_sql(self.get_drop_table_statement(table))
-        self._get_target_db().execute_sql(
-            "SET SESSION FOREIGN_KEY_CHECKS = 1;"
-        )  # re-enable foreign key checks
-
-    @step("Create Tables from Table Schema")
+    @step("Create Tables from Schema in Intermediary Database")
     def create_tables_from_table_schema(self):
         if self.restore_specific_tables:
             sql_stmts = []
             for table in self.tables_to_restore:
-                sql_stmts.append(self.get_drop_table_statement(table))
                 sql_stmts.append(self.get_create_table_statement(self.table_schema, table))
         else:
             # https://github.com/frappe/frappe/pull/26855
@@ -245,41 +277,41 @@ class DatabasePhysicalRestore(DatabaseServer):
 
         # before start dropping tables, disable foreign key checks
         # it will reduce the time to drop tables and will not cause any block while dropping tables
-        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
+        self._get_intermediary_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 0;")
 
         # kill other active db connections
         self._kill_other_active_db_connections()
 
-        # Drop and re-create the tables
+        # Create the tables
         for sql_stmt in sql_stmts:
             if sql_stmt.strip():
-                self._get_target_db().execute_sql(sql_stmt)
+                self._get_intermediary_db().execute_sql(sql_stmt)
 
         # re-enable foreign key checks
-        self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 1;")
+        self._get_intermediary_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 1;")
 
-    @step("Discard InnoDB Tablespaces")
-    def discard_innodb_tablespaces_from_target_db(self):
+    @step("Discard InnoDB Tablespaces from Intermediary Database")
+    def discard_innodb_tablespaces_from_intermediary_db(self):
         # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#foreign-key-constraints
-        self._get_target_db().execute_sql("SET SESSION foreign_key_checks = 0;")
+        self._get_intermediary_db().execute_sql("SET SESSION foreign_key_checks = 0;")
         for table in self.innodb_tables:
             self._kill_other_active_db_connections()
-            self._get_target_db().execute_sql(f"ALTER TABLE `{table}` DISCARD TABLESPACE;")
-        self._get_target_db().execute_sql(
+            self._get_intermediary_db().execute_sql(f"ALTER TABLE `{table}` DISCARD TABLESPACE;")
+        self._get_intermediary_db().execute_sql(
             "SET SESSION foreign_key_checks = 1;"
         )  # re-enable foreign key checks
 
-    @step("Copying InnoDB Table Files")
+    @step("Copying InnoDB Table Files to Intermediary Database")
     def perform_innodb_file_operations(self):
         self._perform_file_operations(engine="innodb")
 
-    @step("Import InnoDB Tablespaces")
-    def import_tablespaces_in_target_db(self):
+    @step("Import InnoDB Tablespaces in Intermediary Database")
+    def import_tablespaces_in_intermediary_db(self):
         for table in self.innodb_tables:
             self._kill_other_active_db_connections()
-            self._get_target_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
+            self._get_intermediary_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
 
-    @step("Hold Write Lock on MyISAM Tables")
+    @step("Hold Write Lock on MyISAM Tables in Intermediary Database")
     def hold_write_lock_on_myisam_tables(self):
         """
         MyISAM doesn't support foreign key constraints
@@ -291,18 +323,18 @@ class DatabasePhysicalRestore(DatabaseServer):
             return
         tables = [f"`{table}` WRITE" for table in self.myisam_tables]
         self._kill_other_active_db_connections()
-        self._get_target_db_for_myisam().execute_sql("LOCK TABLES {};".format(", ".join(tables)))
+        self._get_intermediary_db_for_myisam().execute_sql("LOCK TABLES {};".format(", ".join(tables)))
 
-    @step("Copying MyISAM Table Files")
+    @step("Copying MyISAM Table Files to Intermediary Database")
     def perform_myisam_file_operations(self):
         self._perform_file_operations(engine="myisam")
 
-    @step("Unlock All Tables")
+    @step("Unlock All Tables of Intermediary Database")
     def unlock_all_tables(self):
-        self._get_target_db().execute_sql("UNLOCK TABLES;")
-        self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
+        self._get_intermediary_db().execute_sql("UNLOCK TABLES;")
+        self._get_intermediary_db_for_myisam().execute_sql("UNLOCK TABLES;")
 
-    @step("Validate And Fix Tables")
+    @step("Validate And Fix Tables of Intermediary Database")
     def perform_post_restoration_validation_and_fixes(self):
         innodb_tables_with_fts = self._get_innodb_tables_with_fts_index()
         """
@@ -335,6 +367,80 @@ class DatabasePhysicalRestore(DatabaseServer):
             if self.is_table_corrupted(table) and not self.repair_myisam_table(table):
                 raise Exception(f"Failed to repair table {table}")
 
+    @step("Lock Target Database Tables for Renaming")
+    def lock_target_db_tables_for_renaming(self):
+        tables = [f"`{table}` WRITE" for table in self.myisam_tables + self.innodb_tables]
+        self._kill_other_active_db_connections()
+        self._get_target_db().execute_sql("LOCK TABLES {};".format(", ".join(tables)))
+
+    @step("Backup Existing Target Database Tables")
+    def backup_existing_target_database_tables(self):
+        if not self.innodb_tables and not self.myisam_tables:
+            return
+
+        query = "RENAME TABLE IF EXISTS"
+        for table in self.innodb_tables + self.myisam_tables:
+            if not query.endswith("IF EXISTS"):
+                query += ", "
+            query += (
+                f"`{self.target_db}`.`{table}` TO `{self.target_db}`.`{self.target_db_backup_prefix}{table}`"
+            )
+
+        query += ";"
+        self._get_target_db().execute_sql(query)
+
+    @step("Unlock Target Database Tables")
+    def unlock_target_db_tables(self):
+        self._get_target_db().execute_sql("UNLOCK TABLES;")
+        self._get_target_db_for_myisam().execute_sql("UNLOCK TABLES;")
+
+    @step("Move Restored Tables to Target Database")
+    def move_restored_tables_to_target_database(self):
+        query = "RENAME TABLE IF EXISTS"
+        for table in self.innodb_tables + self.myisam_tables:
+            if not query.endswith("IF EXISTS"):
+                query += ", "
+            query += f"`{self.intermediary_db}`.`{table}` TO `{self.target_db}`.`{table}`"
+        query += ";"
+        self._get_intermediary_db().execute_sql(query)
+
+    @step("Drop Backup Tables From Target Database")
+    def drop_backup_tables_from_target_database(self):
+        if not self.innodb_tables and not self.myisam_tables:
+            return
+
+        query = "DROP TABLE IF EXISTS"
+        for table in self.innodb_tables + self.myisam_tables:
+            if not query.endswith("IF EXISTS"):
+                query += ", "
+            query += f"`{self.target_db}`.`{self.target_db_backup_prefix}{table}`"
+
+        query += ";"
+        self._get_target_db().execute_sql(query)
+
+    @step("Drop Intermediary Database")
+    def drop_intermediary_database(self):
+        """
+        Drop the intermediary database
+        This is required to clean up the intermediary database after restoration
+        """
+        self._get_intermediary_db().execute_sql(f"DROP DATABASE IF EXISTS {self.intermediary_db};")
+
+    @step("Rollback Backup Tables In Target Database")
+    def rollback_backup_tables_in_target_database(self):
+        if not self.innodb_tables or not self.myisam_tables:
+            return
+
+        query = "RENAME TABLE IF EXISTS"
+        for table in self.innodb_tables + self.myisam_tables:
+            if not query.endswith("IF EXISTS"):
+                query += ", "
+            query += (
+                f"`{self.target_db}`.`{self.target_db_backup_prefix}{table}` TO `{self.target_db}`.`{table}`"
+            )
+        query += ";"
+        self._get_target_db().execute_sql(query)
+
     def _warmup_files(self, file_paths: list[str]):
         """
         Once the snapshot is converted to disk and attached to the instance,
@@ -366,7 +472,7 @@ class DatabasePhysicalRestore(DatabaseServer):
 
             shutil.copyfile(
                 os.path.join(self.backup_db_directory, file),
-                os.path.join(self.target_db_directory, file),
+                os.path.join(self.intermediary_db_directory, file),
             )
 
     def is_table_need_to_be_restored(self, table_name: str) -> bool:
@@ -410,7 +516,7 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def is_table_corrupted(self, table_name: str) -> bool:
         result = run_sql_query(
-            self._get_target_db(raise_error_on_connection_closed=False),
+            self._get_intermediary_db(raise_error_on_connection_closed=False),
             f"CHECK TABLE `{table_name}` QUICK;",
         )
         """
@@ -440,7 +546,7 @@ class DatabasePhysicalRestore(DatabaseServer):
     def repair_myisam_table(self, table_name: str) -> bool:
         self._kill_other_active_db_connections()
         result = run_sql_query(
-            self._get_target_db(raise_error_on_connection_closed=False),
+            self._get_intermediary_db(raise_error_on_connection_closed=False),
             f"REPAIR TABLE `{table_name}` USE_FRM;",
         )
         """
@@ -465,25 +571,25 @@ class DatabasePhysicalRestore(DatabaseServer):
         for index_name, _ in fts_indexes.items():
             self._kill_other_active_db_connections()
             run_sql_query(
-                self._get_target_db(raise_error_on_connection_closed=False),
+                self._get_intermediary_db(raise_error_on_connection_closed=False),
                 f"ALTER TABLE `{table}` DROP INDEX IF EXISTS `{index_name}`;",
             )
         # Optimize table to fix existing corruptions
         self._kill_other_active_db_connections()
         run_sql_query(
-            self._get_target_db(raise_error_on_connection_closed=False), f"OPTIMIZE TABLE `{table}`;"
+            self._get_intermediary_db(raise_error_on_connection_closed=False), f"OPTIMIZE TABLE `{table}`;"
         )
         # Recreate the indexes
         for index_name, columns in fts_indexes.items():
             self._kill_other_active_db_connections()
             run_sql_query(
-                self._get_target_db(raise_error_on_connection_closed=False),
+                self._get_intermediary_db(raise_error_on_connection_closed=False),
                 f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns});",
             )
 
     def _get_innodb_tables_with_fts_index(self):
         rows = run_sql_query(
-            self._get_target_db(raise_error_on_connection_closed=False),
+            self._get_intermediary_db(raise_error_on_connection_closed=False),
             f"""
         SELECT
             DISTINCT(t.TABLE_NAME)
@@ -495,7 +601,7 @@ class DatabasePhysicalRestore(DatabaseServer):
             AND s.TABLE_NAME = t.TABLE_NAME
         WHERE
             s.INDEX_TYPE = 'FULLTEXT'
-            AND t.TABLE_SCHEMA = '{self.target_db}'
+            AND t.TABLE_SCHEMA = '{self.intermediary_db}'
             AND t.ENGINE = 'InnoDB';
         """,
         )
@@ -503,14 +609,14 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def _get_fts_indexes_of_table(self, table: str) -> dict[str, str]:
         rows = run_sql_query(
-            self._get_target_db(raise_error_on_connection_closed=False),
+            self._get_intermediary_db(raise_error_on_connection_closed=False),
             f"""
         SELECT
             INDEX_NAME, group_concat(column_name ORDER BY seq_in_index) AS columns
         FROM
             information_schema.statistics
         WHERE
-            TABLE_SCHEMA = '{self.target_db}'
+            TABLE_SCHEMA = '{self.intermediary_db}'
             AND TABLE_NAME = '{table}'
             AND INDEX_TYPE = 'FULLTEXT'
         GROUP BY
@@ -568,13 +674,74 @@ class DatabasePhysicalRestore(DatabaseServer):
         )
         return self._target_db_instance_for_myisam
 
-    def _close_db_connections(self):
-        if self._target_db_instance is not None:
-            with suppress(Exception):
-                self._target_db_instance.close()
-        if self._target_db_instance_for_myisam is not None:
-            with suppress(Exception):
-                self._target_db_instance_for_myisam.close()
+    def _get_intermediary_db(self, raise_error_on_connection_closed: bool = True) -> CustomPeeweeDB:
+        if self._intermediary_db_instance is not None and not is_db_connection_usable(
+            self._intermediary_db_instance
+        ):
+            if raise_error_on_connection_closed:
+                raise DatabaseConnectionClosedWithDatabase()
+            self._intermediary_db_instance = None
+            self._intermediary_db_instance_connection_id = None
+
+        if self._intermediary_db_instance is not None:
+            return self._intermediary_db_instance
+
+        self._intermediary_db_instance = CustomPeeweeDB(
+            self.intermediary_db if self._intermediary_db_created else "",
+            user=self.intermediary_db_user,
+            password=self.intermediary_db_password,
+            host=self.intermediary_db_host,
+            port=self.intermediary_db_port,
+        )
+        self._intermediary_db_instance.connect()
+        # Set session wait timeout to 4 hours [EXPERIMENTAL]
+        self._intermediary_db_instance.execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._intermediary_db_instance_connection_id = int(
+            self._intermediary_db_instance.execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
+        return self._intermediary_db_instance
+
+    def _get_intermediary_db_for_myisam(self) -> CustomPeeweeDB:
+        if self._intermediary_db_instance_for_myisam is not None:
+            if not is_db_connection_usable(self._intermediary_db_instance_for_myisam):
+                raise DatabaseConnectionClosedWithDatabase()
+            return self._intermediary_db_instance_for_myisam
+
+        self._intermediary_db_instance_for_myisam = CustomPeeweeDB(
+            self.intermediary_db,
+            user=self.intermediary_db_user,
+            password=self.intermediary_db_password,
+            host=self.intermediary_db_host,
+            port=self.intermediary_db_port,
+            autocommit=False,
+        )
+        self._intermediary_db_instance_for_myisam.connect()
+        # Set session wait timeout to 4 hours [EXPERIMENTAL]
+        self._intermediary_db_instance_for_myisam.execute_sql("SET SESSION wait_timeout = 14400;")
+        # Fetch the connection id
+        self._intermediary_db_instance_for_myisam_connection_id = int(
+            self._intermediary_db_instance_for_myisam.execute_sql("SELECT CONNECTION_ID();").fetchone()[0]
+        )
+        return self._intermediary_db_instance_for_myisam
+
+    def _close_db_connections(self, target_db: bool = True, intermediary_db: bool = True):
+        """Close all the database connections"""
+        if target_db:
+            if self._target_db_instance is not None:
+                with suppress(Exception):
+                    self._target_db_instance.close()
+            if self._target_db_instance_for_myisam is not None:
+                with suppress(Exception):
+                    self._target_db_instance_for_myisam.close()
+
+        if intermediary_db:
+            if self._intermediary_db_instance is not None:
+                with suppress(Exception):
+                    self._intermediary_db_instance.close()
+            if self._intermediary_db_instance_for_myisam is not None:
+                with suppress(Exception):
+                    self._intermediary_db_instance_for_myisam.close()
 
     def _kill_other_active_db_connections(self):
         current_connection_ids = []
@@ -582,6 +749,11 @@ class DatabasePhysicalRestore(DatabaseServer):
             current_connection_ids.append(self._target_db_instance_connection_id)
         if self._target_db_instance_for_myisam is not None:
             current_connection_ids.append(self._target_db_instance_for_myisam_connection_id)
+
+        if self._intermediary_db_instance is not None:
+            current_connection_ids.append(self._intermediary_db_instance_connection_id)
+        if self._intermediary_db_instance_for_myisam is not None:
+            current_connection_ids.append(self._intermediary_db_instance_for_myisam_connection_id)
 
         if not current_connection_ids:
             return
