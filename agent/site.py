@@ -912,7 +912,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -p {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
+        command = f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
         database_size = self.execute(command).get("output")
 
         try:
@@ -931,7 +931,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
             command = (
-                f"mysql -sN -h {self.host} -p {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
+                f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
             )
             output = self.execute(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
