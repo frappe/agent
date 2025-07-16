@@ -167,7 +167,7 @@ class NginxReloadManager:
             status = subprocess.run(
                 "sudo systemctl status nginx", capture_output=True, shell=True
             ).stdout.decode("utf-8")
-            total_workers = status.count("nginx: worker process")
+            total_workers = status.count("nginx: worker process") + status.count("nginx: master process")
             dying_workers = status.count("nginx: worker process is shutting down")
             active_workers = max(1, total_workers - dying_workers)
             return dying_workers >= active_workers or dying_workers >= 4
