@@ -170,20 +170,22 @@ class Bench(Base):
             non_zero_throw=non_zero_throw,
         )
 
-    def docker_execute(self, command, input=None, subdir=None, non_zero_throw=True):
+    def docker_execute(self, command, input=None, subdir=None, non_zero_throw=True, as_root: bool = False):
         interactive = "-i" if input else ""
+        as_root = "-u root" if as_root else ""
         workdir = "/home/frappe/frappe-bench"
         if subdir:
             workdir = os.path.join(workdir, subdir)
 
         if self.bench_config.get("single_container"):
-            command = f"docker exec -w {workdir} {interactive} {self.name} {command}"
+            command = f"docker exec {as_root} -w {workdir} {interactive} {self.name} {command}"
         else:
             service = f"{self.name}_worker_default"
             task = self.execute(f"docker service ps -f desired-state=Running -q --no-trunc {service}")[
                 "output"
             ].split()[0]
-            command = f"docker exec -w {workdir} {interactive} {service}.1.{task} {command}"
+            command = f"docker exec {as_root} -w {workdir} {interactive} {service}.1.{task} {command}"
+
         return self.execute(command, input=input, non_zero_throw=non_zero_throw)
 
     @step("New Site")

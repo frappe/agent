@@ -1604,6 +1604,7 @@ def docker_execute(bench: str):
         command=data.get("command"),
         subdir=data.get("subdir"),
         non_zero_throw=False,
+        as_root=data.get("as_root"),
     )
 
     result["start"] = result["start"].isoformat()
