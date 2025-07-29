@@ -212,12 +212,12 @@ class Server(Base):
     @job("Update Site Pull", priority="low")
     def update_site_pull_job(self, name, source, target, activate):
         source = Bench(source, self)
-        target = Bench(target, self)
         site = Site(name, source)
 
         site.enable_maintenance_mode()
         site.wait_till_ready()
 
+        target = Bench(target, self)
         self.move_site(site, target)
         source.setup_nginx()
         target.setup_nginx_target()
@@ -246,7 +246,6 @@ class Server(Base):
             before_migrate_scripts = {}
 
         source = Bench(source, self)
-        target = Bench(target, self)
         site = Site(name, source)
 
         site.enable_maintenance_mode()
@@ -256,6 +255,7 @@ class Server(Base):
             site.clear_backup_directory()
             site.tablewise_backup()
 
+        target = Bench(target, self)
         self.move_site(site, target)
 
         source.setup_nginx()
@@ -353,13 +353,13 @@ class Server(Base):
         # Dangerous method (no backup),
         # use update_site_migrate if you don't know what you're doing
         source = Bench(source, self)
-        target = Bench(target, self)
         site = Site(name, source)
 
         if deactivate:  # cases when python is broken in bench
             site.enable_maintenance_mode()
             site.wait_till_ready()
 
+        target = Bench(target, self)
         self.move_site(site, target)
 
         source.setup_nginx()
