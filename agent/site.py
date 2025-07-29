@@ -464,7 +464,7 @@ class Site(Base):
         return self.fetch_latest_backup(with_files=with_files)
 
     @step("Upload Site Backup to S3")
-    def upload_offsite_backup(self, backup_files, offsite):
+    def upload_offsite_backup(self, backup_files, offsite, keep_files_locally_after_offsite_backup: bool):
         import boto3
 
         offsite_files = {}
@@ -498,9 +498,10 @@ class Site(Base):
                 with open(backup_file["path"], "rb") as data:
                     s3.upload_fileobj(data, bucket, offsite_path)
         finally:
-            for backup_file in backup_files.values():
-                with contextlib.suppress(FileNotFoundError):
-                    os.remove(backup_file["path"])
+            if not keep_files_locally_after_offsite_backup:
+                for backup_file in backup_files.values():
+                    with contextlib.suppress(FileNotFoundError):
+                        os.remove(backup_file["path"])
 
         return offsite_files
 
@@ -780,10 +781,14 @@ print(">>>" + frappe.session.sid + "<<<")
             return self.previous_tables
 
     @job("Backup Site", priority="low")
-    def backup_job(self, with_files=False, offsite=None):
+    def backup_job(
+        self, with_files=False, offsite=None, keep_files_locally_after_offsite_backup: bool = False
+    ):
         backup_files = self.backup(with_files)
         uploaded_files = (
-            self.upload_offsite_backup(backup_files, offsite) if (offsite and backup_files) else {}
+            self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
+            if (offsite and backup_files)
+            else {}
         )
         return {"backups": backup_files, "offsite": uploaded_files}
 
