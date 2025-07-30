@@ -243,7 +243,7 @@ def cleanup_unused_files():
     return {"job": job}
 
 
-@application.route("/server/storage-breakdown", method=["GET"])
+@application.route("/server/storage-breakdown", methods=["GET"])
 def get_storage_breakdown():
     return Server().get_storage_breakdown()
 

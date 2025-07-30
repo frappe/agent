@@ -590,7 +590,7 @@ class Server(Base):
         if not skip_patches:
             run_patches()
 
-    def get_storage_breakdown(self) -> dict | None:
+    def get_storage_breakdown(self) -> dict:
         failed_message = "Failed to analyze storage"
         try:
             process = subprocess.run(
