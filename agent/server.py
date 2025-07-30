@@ -4,6 +4,7 @@ import json
 import os
 import platform
 import shutil
+import subprocess
 import tempfile
 import time
 from contextlib import suppress
@@ -13,6 +14,7 @@ from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
 
+from agent.application_storage_analyzer import analyze_ncdu_output
 from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException
@@ -587,6 +589,32 @@ class Server(Base):
 
         if not skip_patches:
             run_patches()
+
+    def get_storage_breakdown(self) -> dict | None:
+        failed_message = "Failed to analyze storage"
+        try:
+            process = subprocess.run(
+                [
+                    "ncdu",
+                    "/home/frappe/benches/",
+                    "--exclude",
+                    "node_modules",
+                    "--exclude",
+                    "env",
+                    "--exclude",
+                    "assets",
+                    "-o",
+                    "/dev/stdout",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return analyze_ncdu_output(process.stdout) or {
+                "error": failed_message
+            }  # If for some reason tree does not exist
+        except subprocess.TimeoutExpired:
+            return {"error": failed_message}
 
     def get_agent_version(self):
         directory = os.path.join(self.directory, "repo")
