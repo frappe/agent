@@ -95,7 +95,17 @@ def build_tree_structure(  # noqa: C901
     return node
 
 
-def analyze_ncdu_output(json_data: str, display_depth: int = 5, max_children: int = 5) -> dict | None:
+def analyze_docker_structure(json_data: str) -> dict:
+    data = json.loads(json_data)
+    root_entry = data[3]
+    total_docker_size = calculate_directory_size(root_entry)
+    return {
+        "size": total_docker_size,
+        "size_formatted": format_size(total_docker_size),
+    }
+
+
+def analyze_benches_structure(json_data: str, display_depth: int = 5, max_children: int = 5) -> dict | None:
     data = json.loads(json_data)
 
     if isinstance(data, list) and len(data) >= 4:
