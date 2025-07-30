@@ -14,7 +14,7 @@ from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
 
-from agent.application_storage_analyzer import analyze_ncdu_output
+from agent.application_storage_analyzer import analyze_benches_structure, analyze_docker_structure
 from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException
@@ -590,31 +590,46 @@ class Server(Base):
         if not skip_patches:
             run_patches()
 
-    def get_storage_breakdown(self) -> dict:
-        failed_message = "Failed to analyze storage"
+    @staticmethod
+    def run_ncdu_command(path: str, excludes: list | None = None, as_root: bool = False) -> str | None:
+        cmd = ["ncdu", path, "-o", "/dev/stdout"]
+        if as_root:
+            cmd.insert(0, "sudo")
+        if excludes:
+            for item in excludes:
+                cmd.extend(["--exclude", item])
+
         try:
-            process = subprocess.run(
-                [
-                    "ncdu",
-                    "/home/frappe/benches/",
-                    "--exclude",
-                    "node_modules",
-                    "--exclude",
-                    "env",
-                    "--exclude",
-                    "assets",
-                    "-o",
-                    "/dev/stdout",
-                ],
+            result = subprocess.run(
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-            return analyze_ncdu_output(process.stdout) or {
-                "error": failed_message
-            }  # If for some reason tree does not exist
+            return result.stdout if result.returncode == 0 else None
         except subprocess.TimeoutExpired:
-            return {"error": failed_message}
+            return None
+
+    def get_storage_breakdown(self) -> dict:
+        app_storage_analysis = {}
+        failed_message = "Failed to analyze storage"
+
+        benches_output = self.run_ncdu_command(
+            "/home/frappe/benches/", excludes=["node_modules", "env", "assets"]
+        )
+        docker_output = self.run_ncdu_command("/var/lib/docker/overlay2", as_root=True)
+
+        if benches_output:
+            benches_data = analyze_benches_structure(benches_output)
+            if benches_data:
+                app_storage_analysis["benches"] = benches_data
+
+        if docker_output:
+            docker_data = analyze_docker_structure(docker_output)
+            if docker_data:
+                app_storage_analysis["docker"] = docker_data
+
+        return app_storage_analysis or {"error": failed_message}
 
     def get_agent_version(self):
         directory = os.path.join(self.directory, "repo")
