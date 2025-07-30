@@ -245,7 +245,9 @@ def cleanup_unused_files():
 
 @application.route("/server/storage-breakdown", methods=["GET"])
 def get_storage_breakdown():
-    return Server().get_storage_breakdown()
+    output = Server().get_storage_breakdown()
+    json_output = json.dumps(output, indent=2)
+    return Response(json_output, mimetype="application/json")
 
 
 @application.route("/server/pull-images", methods=["POST"])
