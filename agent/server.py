@@ -14,7 +14,7 @@ from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
 
-from agent.application_storage_analyzer import analyze_benches_structure, analyze_docker_structure
+from agent.application_storage_analyzer import analyze_benches_structure, parse_docker_df_output
 from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException
@@ -591,10 +591,8 @@ class Server(Base):
             run_patches()
 
     @staticmethod
-    def run_ncdu_command(path: str, excludes: list | None = None, as_root: bool = False) -> str | None:
+    def run_ncdu_command(path: str, excludes: list | None = None) -> str | None:
         cmd = ["ncdu", path, "-o", "/dev/stdout"]
-        if as_root:
-            cmd.insert(0, "sudo")
         if excludes:
             for item in excludes:
                 cmd.extend(["--exclude", item])
@@ -617,7 +615,7 @@ class Server(Base):
         benches_output = self.run_ncdu_command(
             "/home/frappe/benches/", excludes=["node_modules", "env", "assets"]
         )
-        docker_output = self.run_ncdu_command("/var/lib/docker/overlay2", as_root=True)
+        docker_output = self.execute("docker system df --format '{{.Size}}'").get("output")
 
         if benches_output:
             benches_data = analyze_benches_structure(benches_output)
@@ -625,9 +623,8 @@ class Server(Base):
                 app_storage_analysis["benches"] = benches_data
 
         if docker_output:
-            docker_data = analyze_docker_structure(docker_output)
-            if docker_data:
-                app_storage_analysis["docker"] = docker_data
+            docker_data = parse_docker_df_output(docker_output)
+            app_storage_analysis["docker"] = docker_data
 
         return app_storage_analysis or {"error": failed_message}
 

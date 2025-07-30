@@ -95,13 +95,37 @@ def build_tree_structure(  # noqa: C901
     return node
 
 
-def analyze_docker_structure(json_data: str) -> dict:
-    data = json.loads(json_data)
-    root_entry = data[3]
-    total_docker_size = calculate_directory_size(root_entry)
+def parse_docker_df_output(output: str):
+    """
+    Example output:
+        38.64GB  # Image
+        830.4MB  # Container
+        0B       # Local Volumes
+        0B       # Build Cache
+    """
+
+    def size_to_gb(size_str):
+        size_str = size_str.strip().upper()
+        if size_str.endswith("GB"):
+            return float(size_str[:-2].strip())
+        if size_str.endswith("MB"):
+            return float(size_str[:-2].strip()) / 1024
+        if size_str.endswith("KB"):
+            return float(size_str[:-2].strip()) / (1024**2)
+        return float(size_str[:-1].strip()) / (1024**3)
+
+    lines = output.strip().splitlines()
+
+    image_size = size_to_gb(lines[0])
+    container_size = size_to_gb(lines[1])
+    local_volume_size = size_to_gb(lines[2])
+    build_cache_size = size_to_gb(lines[3])
+
     return {
-        "size": total_docker_size,
-        "size_formatted": format_size(total_docker_size),
+        "image": image_size,
+        "container": container_size if container_size >= 1 else 0,
+        "local_volume": local_volume_size if local_volume_size >= 1 else 0,
+        "build_cache": build_cache_size if build_cache_size >= 1 else 0,
     }
 
 
