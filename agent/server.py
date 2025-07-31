@@ -621,7 +621,7 @@ class Server(Base):
         )
         docker_output = self.execute("docker system df --format '{{.Size}}'").get("output")
         total_output = self.execute(
-            f"df -1B {'/opt/volumes/benches' if os.path.exists('/opt/volumes/benches') else '/'}"
+            f"df -B1 {'/opt/volumes/benches' if os.path.exists('/opt/volumes/benches') else '/'}"
         ).get("output")
 
         if total_output:
