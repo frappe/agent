@@ -14,7 +14,11 @@ from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from peewee import MySQLDatabase
 
-from agent.application_storage_analyzer import analyze_benches_structure, parse_docker_df_output
+from agent.application_storage_analyzer import (
+    analyze_benches_structure,
+    parse_docker_df_output,
+    parse_total_disk_usage_output,
+)
 from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException
@@ -616,6 +620,13 @@ class Server(Base):
             "/home/frappe/benches/", excludes=["node_modules", "env", "assets"]
         )
         docker_output = self.execute("docker system df --format '{{.Size}}'").get("output")
+        total_output = self.execute(
+            f"df -1B {'/opt/volumes/benches' if os.path.exists('/opt/volumes/benches') else '/'}"
+        ).get("output")
+
+        if total_output:
+            total_data = parse_total_disk_usage_output(total_output)
+            app_storage_analysis["total"] = total_data
 
         if benches_output:
             benches_data = analyze_benches_structure(benches_output)
