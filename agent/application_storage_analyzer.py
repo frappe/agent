@@ -104,29 +104,12 @@ def parse_docker_df_output(output: str):
         0B       # Build Cache
     """
 
-    def size_to_gb(size_str):
-        size_str = size_str.strip().upper()
-        if size_str.endswith("GB"):
-            return float(size_str[:-2].strip())
-        if size_str.endswith("MB"):
-            return float(size_str[:-2].strip()) / 1024
-        if size_str.endswith("KB"):
-            return float(size_str[:-2].strip()) / (1024**2)
-        return float(size_str[:-1].strip()) / (1024**3)
-
     lines = output.strip().splitlines()
 
-    image_size = size_to_gb(lines[0])
-    container_size = size_to_gb(lines[1])
-    local_volume_size = size_to_gb(lines[2])
-    build_cache_size = size_to_gb(lines[3])
+    image_size = lines[0]
+    container_size = lines[1]
 
-    return {
-        "image": image_size,
-        "container": container_size if container_size >= 1 else 0,
-        "local_volume": local_volume_size if local_volume_size >= 1 else 0,
-        "build_cache": build_cache_size if build_cache_size >= 1 else 0,
-    }
+    return {"image": image_size, "container": container_size}
 
 
 def analyze_benches_structure(json_data: str, display_depth: int = 5, max_children: int = 5) -> dict | None:
