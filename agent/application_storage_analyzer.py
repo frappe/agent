@@ -4,7 +4,7 @@ import json
 
 
 def format_size(bytes_val):
-    thresholds = [(1024**3, "G"), (1024**2, "M"), (1024, "K")]
+    thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
 
     for factor, suffix in thresholds:
         if bytes_val >= factor:
