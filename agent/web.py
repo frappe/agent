@@ -34,6 +34,7 @@ from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
+from agent.snapshot_recovery import SnapshotRecovery
 from agent.ssh import SSHProxy
 from agent.utils import check_installed_pyspy
 
@@ -1691,4 +1692,34 @@ def recover_update_inplace(bench: str):
         request.json.get("sites"),
         request.json.get("image"),
     )
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/search_sites", methods=["POST"])
+def search_sites():
+    data = request.json
+    sites = data.get("sites", [])
+    job = SnapshotRecovery().search_sites_in_snapshot(sites)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_files", methods=["POST"])
+def backup_files():
+    data = request.json
+    site = data.get("site")
+    bench = data.get("bench")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_files(site, bench, offsite)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_database", methods=["POST"])
+def backup_db():
+    data = request.json
+    site = data.get("site")
+    database_ip = data.get("database_ip")
+    mariadb_root_password = data.get("mariadb_root_password")
+    database_name = data.get("database_name")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}
