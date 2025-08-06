@@ -59,10 +59,12 @@ class SnapshotRecovery(Server):
                     continue
 
                 db_name = site_config_json.get("db_name", "")
+                encryption_key = site_config_json.get("encryption_key", "")
 
                 site_info[site_name] = {
                     "bench": str(bench),
                     "db_name": db_name,
+                    "encryption_key": encryption_key,
                 }
 
         return site_info
