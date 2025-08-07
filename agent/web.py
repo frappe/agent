@@ -1283,6 +1283,30 @@ def get_queries():
     return jsonify(DatabaseServer().get_queries(**data))
 
 
+@application.route("/database/replication/status", methods=["POST"])
+def get_replication_status():
+    data = request.json
+    return DatabaseServer().get_slave_status(**data)
+
+
+@application.route("/database/replication/config", methods=["POST"])
+def set_replication_config():
+    data = request.json
+    return DatabaseServer().configure_replication(**data)
+
+
+@application.route("/database/replication/start", methods=["POST"])
+def start_replication():
+    data = request.json
+    return DatabaseServer().start_replication(**data)
+
+
+@application.route("/database/replication/stop", methods=["POST"])
+def stop_replication():
+    data = request.json
+    return DatabaseServer().stop_replication(**data)
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json
