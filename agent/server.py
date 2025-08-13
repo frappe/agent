@@ -26,7 +26,7 @@ from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status
-
+from agent.application_storage_analyzer import to_bytes
 
 class Server(Base):
     def __init__(self, directory=None):
@@ -118,9 +118,14 @@ class Server(Base):
 
     def get_image_size(self, image_tag: str):
         try:
-            return self.execute("docker image ls --format '{{.Tag}} {{.Size}}'" + f" | grep {image_tag}")[
-                "output"
-            ].split()[-1]
+            return (
+                to_bytes(
+                    self.execute("docker image ls --format '{{.Tag}} {{.Size}}'" + f" | grep {image_tag}")[
+                        "output"
+                    ].split()[-1]
+                )
+                / 1024**3
+            )
         except AgentException:
             pass
 
