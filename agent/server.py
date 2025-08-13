@@ -116,6 +116,14 @@ class Server(Base):
         else:
             raise Exception("Container exists")
 
+    def get_image_size(self, image_tag: str):
+        try:
+            return self.execute("docker image ls --format '{{.Tag}} {{.Size}}'" + f" | grep {image_tag}")[
+                "output"
+            ].split()[-1]
+        except AgentException:
+            pass
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench_directory = os.path.join(self.benches_directory, name)
