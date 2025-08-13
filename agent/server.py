@@ -120,9 +120,9 @@ class Server(Base):
         try:
             return (
                 to_bytes(
-                    self.execute("docker image ls --format '{{.Tag}} {{.Size}}'" + f" | grep {image_tag}")[
-                        "output"
-                    ].split()[-1]
+                    self.execute(
+                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E "^{image_tag} "'
+                    )["output"].split()[-1]
                 )
                 / 1024**3
             )
