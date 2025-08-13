@@ -252,7 +252,6 @@ def get_storage_breakdown():
 
 @application.route("/server/image-size/<string:image_tag>", methods=["GET"])
 def get_docker_image_size(image_tag: str):
-    print(image_tag)
     size = Server().get_image_size(image_tag)
     return {"size": size}
 
