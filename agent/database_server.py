@@ -87,6 +87,137 @@ class DatabaseServer(Server):
                 )
         return sorted(files, key=lambda x: x["name"])
 
+    def get_slave_status(self, private_ip, mariadb_root_password):
+        """Get the slave status of the MariaDB server."""
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            gtid_binlog_pos = self.sql(mariadb, "SELECT @@GLOBAL.gtid_binlog_pos;")[0][
+                "@@GLOBAL.gtid_binlog_pos"
+            ]
+            gtid_current_pos = self.sql(mariadb, "SELECT @@GLOBAL.gtid_current_pos;")[0][
+                "@@GLOBAL.gtid_current_pos"
+            ]
+            gtid_slave_pos = self.sql(mariadb, "SELECT @@GLOBAL.gtid_slave_pos;")
+            if len(gtid_slave_pos) > 0:
+                gtid_slave_pos = gtid_slave_pos[0].get("@@GLOBAL.gtid_slave_pos", "")
+            else:
+                gtid_slave_pos = ""
+
+            rows = self.sql(mariadb, "SHOW SLAVE STATUS;")
+            return {
+                "success": True,
+                "message": "Slave status retrieved successfully.",
+                "data": {
+                    "gtid_binlog_pos": gtid_binlog_pos,
+                    "gtid_current_pos": gtid_current_pos,
+                    "gtid_slave_pos": gtid_slave_pos,
+                    "slave_status": rows[0] if rows else {},
+                },
+            }
+        except Exception:
+            import traceback
+
+            return {
+                "success": False,
+                "message": "Failed to retrieve slave status.",
+                "error": traceback.format_exc(),
+            }
+
+    def configure_replication(
+        self,
+        private_ip,
+        mariadb_root_password,
+        master_private_ip,
+        master_mariadb_root_password,
+        gtid_slave_pos=None,
+    ):
+        try:
+            """Configure replication on the MariaDB server."""
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.execute_sql("STOP SLAVE;")
+            mariadb.execute_sql("RESET SLAVE ALL;")
+            if gtid_slave_pos:
+                mariadb.execute_sql(f"SET GLOBAL gtid_slave_pos = '{gtid_slave_pos}';")
+            mariadb.execute_sql(f"""CHANGE MASTER TO
+                MASTER_HOST = '{master_private_ip}',
+                MASTER_PORT = 3306,
+                MASTER_USER = 'root',
+                MASTER_PASSWORD = '{master_mariadb_root_password}',
+                MASTER_USE_GTID=slave_pos;
+            """)
+            return {
+                "success": True,
+                "message": "Replication configured successfully.",
+            }
+        except Exception:
+            import traceback
+
+            return {
+                "success": False,
+                "message": "Failed to configure replication.",
+                "error": traceback.format_exc(),
+            }
+
+    def start_replication(self, private_ip, mariadb_root_password):
+        """Start replication on the MariaDB server."""
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.execute_sql("START SLAVE;")
+            return {
+                "success": True,
+                "message": "Replication resumed successfully.",
+            }
+        except Exception:
+            import traceback
+
+            return {
+                "success": False,
+                "message": "Failed to resume replication.",
+                "error": traceback.format_exc(),
+            }
+
+    def stop_replication(self, private_ip, mariadb_root_password) -> bool:
+        """Stop replication on the MariaDB server."""
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.execute_sql("STOP SLAVE;")
+            return {
+                "success": True,
+                "message": "Replication stopped successfully.",
+            }
+        except Exception:
+            import traceback
+
+            return {
+                "success": False,
+                "message": "Failed to stop replication.",
+                "error": traceback.format_exc(),
+            }
+
     def processes(self, private_ip, mariadb_root_password):
         try:
             mariadb = MySQLDatabase(
