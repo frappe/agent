@@ -18,6 +18,7 @@ from agent.application_storage_analyzer import (
     analyze_benches_structure,
     parse_docker_df_output,
     parse_total_disk_usage_output,
+    to_bytes,
 )
 from agent.base import AgentException, Base
 from agent.bench import Bench
@@ -26,7 +27,6 @@ from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status
-from agent.application_storage_analyzer import to_bytes
 
 class Server(Base):
     def __init__(self, directory=None):
