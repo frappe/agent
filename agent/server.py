@@ -28,6 +28,7 @@ from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status
 
+
 class Server(Base):
     def __init__(self, directory=None):
         super().__init__()
@@ -110,7 +111,7 @@ class Server(Base):
         Throw if container exists
         """
         try:
-            self.execute(f"""docker ps --filter "name=^{name}$" | grep {name}""")
+            self.execute(f'docker ps --format "{{{{.Names}}}}" | grep -E "^{name}$"')
         except AgentException:
             pass  # container does not exist
         else:
