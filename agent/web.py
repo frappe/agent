@@ -1719,6 +1719,15 @@ def recover_update_inplace(bench: str):
     return {"job": job}
 
 
+@application.route("/benches/database_host", methods=["POST"])
+def update_database_host():
+    data = request.json
+
+    job = Server().update_database_host_job(data["db_host"])
+
+    return {"job": job}
+
+
 @application.route("/snapshot_recovery/search_sites", methods=["POST"])
 def search_sites():
     data = request.json
