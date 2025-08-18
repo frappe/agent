@@ -430,6 +430,15 @@ class Server(Base):
     def update_supervisor(self):
         return self._update_supervisor()
 
+    @job("Update Database Host", priority="high")
+    def update_database_host_job(self, db_host: str):
+        self.update_database_host_step(db_host)
+
+    @step("Update Database Host")
+    def update_database_host_step(self, db_host: str):
+        for b in self.benches.values():
+            b._update_database_host(db_host)
+
     def setup_authentication(self, password):
         self.update_config({"access_token": pbkdf2.hash(password)})
 
