@@ -31,6 +31,24 @@ class DatabaseServer(Server):
         self.job = None
         self.step = None
 
+    def ping(self, private_ip, mariadb_root_password):
+        """Ping the MariaDB server to check if it is reachable."""
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.connect(reuse_if_open=True)
+            mariadb.execute_sql("SELECT 1;")
+            # Close the connection to avoid leaving it open
+            mariadb.close()
+            return True
+        except Exception:
+            return False
+
     def search_binary_log(
         self,
         log,

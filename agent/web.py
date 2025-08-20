@@ -1283,6 +1283,12 @@ def get_queries():
     return jsonify(DatabaseServer().get_queries(**data))
 
 
+@application.route("/database/ping", methods=["POST"])
+def ping_database():
+    data = request.json or {}
+    return jsonify({"reachable": DatabaseServer().ping(**data)})
+
+
 @application.route("/database/replication/status", methods=["POST"])
 def get_replication_status():
     data = request.json
