@@ -1295,6 +1295,12 @@ def get_replication_status():
     return DatabaseServer().get_slave_status(**data)
 
 
+@application.route("/database/replication/reset", methods=["POST"])
+def reset_replication():
+    data = request.json
+    return DatabaseServer().reset_replication(**data)
+
+
 @application.route("/database/replication/config", methods=["POST"])
 def set_replication_config():
     data = request.json
