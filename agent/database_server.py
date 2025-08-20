@@ -188,6 +188,31 @@ class DatabaseServer(Server):
                 "error": traceback.format_exc(),
             }
 
+    def reset_replication(self, private_ip, mariadb_root_password):
+        """Reset the replication configuration on the MariaDB server."""
+        try:
+            mariadb = MySQLDatabase(
+                "mysql",
+                user="root",
+                password=mariadb_root_password,
+                host=private_ip,
+                port=3306,
+            )
+            mariadb.execute_sql("STOP SLAVE;")
+            mariadb.execute_sql("RESET SLAVE ALL;")
+            return {
+                "success": True,
+                "message": "Slave configuration reset successfully.",
+            }
+        except Exception:
+            import traceback
+
+            return {
+                "success": False,
+                "message": "Failed to reset replication configuration.",
+                "error": traceback.format_exc(),
+            }
+
     def start_replication(self, private_ip, mariadb_root_password):
         """Start replication on the MariaDB server."""
         try:
