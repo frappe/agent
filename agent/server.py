@@ -28,6 +28,7 @@ from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status
 
+
 class Server(Base):
     def __init__(self, directory=None):
         super().__init__()
