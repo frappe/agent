@@ -34,6 +34,7 @@ from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
+from agent.snapshot_recovery import SnapshotRecovery
 from agent.ssh import SSHProxy
 from agent.utils import check_installed_pyspy
 
@@ -1282,6 +1283,42 @@ def get_queries():
     return jsonify(DatabaseServer().get_queries(**data))
 
 
+@application.route("/database/ping", methods=["POST"])
+def ping_database():
+    data = request.json or {}
+    return jsonify({"reachable": DatabaseServer().ping(**data)})
+
+
+@application.route("/database/replication/status", methods=["POST"])
+def get_replication_status():
+    data = request.json
+    return DatabaseServer().get_slave_status(**data)
+
+
+@application.route("/database/replication/reset", methods=["POST"])
+def reset_replication():
+    data = request.json
+    return DatabaseServer().reset_replication(**data)
+
+
+@application.route("/database/replication/config", methods=["POST"])
+def set_replication_config():
+    data = request.json
+    return DatabaseServer().configure_replication(**data)
+
+
+@application.route("/database/replication/start", methods=["POST"])
+def start_replication():
+    data = request.json
+    return DatabaseServer().start_replication(**data)
+
+
+@application.route("/database/replication/stop", methods=["POST"])
+def stop_replication():
+    data = request.json
+    return DatabaseServer().stop_replication(**data)
+
+
 @application.route("/ssh/users", methods=["POST"])
 def ssh_add_user():
     data = request.json
@@ -1691,4 +1728,43 @@ def recover_update_inplace(bench: str):
         request.json.get("sites"),
         request.json.get("image"),
     )
+    return {"job": job}
+
+
+@application.route("/benches/database_host", methods=["POST"])
+def update_database_host():
+    data = request.json
+
+    job = Server().update_database_host_job(data["db_host"])
+
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/search_sites", methods=["POST"])
+def search_sites():
+    data = request.json
+    sites = data.get("sites", [])
+    job = SnapshotRecovery().search_sites_in_snapshot(sites)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_files", methods=["POST"])
+def backup_files():
+    data = request.json
+    site = data.get("site")
+    bench = data.get("bench")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_files(site, bench, offsite)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_database", methods=["POST"])
+def backup_db():
+    data = request.json
+    site = data.get("site")
+    database_ip = data.get("database_ip")
+    mariadb_root_password = data.get("mariadb_root_password")
+    database_name = data.get("database_name")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}

@@ -797,6 +797,9 @@ class Bench(Base):
             cmd += f" --cpus={vcpu}"
         return self.execute(cmd)
 
+    def _update_database_host(self, db_host: str):
+        self._update_config({"db_host": db_host})
+
     @property
     def job_record(self):
         return self.server.job_record
