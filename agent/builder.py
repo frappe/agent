@@ -3,13 +3,16 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import time
 from datetime import datetime
 from subprocess import Popen
 from typing import TYPE_CHECKING
 
 import docker
+import requests
 
 from agent.base import Base
+from agent.exceptions import RegistryDownException
 from agent.job import Job, Step, job, step
 
 if TYPE_CHECKING:
@@ -135,29 +138,71 @@ class ImageBuilder(Base):
             self._publish_throttled_output(False)
         self._publish_throttled_output(True)
 
+    def is_registry_healthy(self) -> bool:
+        """Check if production registry (only) is healthy in the push cycle"""
+        headers = {"Accept": "application/vnd.docker.distribution.manifest.v2+json"}
+
+        if self.registry["url"] != "registry.frappe.cloud":
+            return True
+
+        response = requests.get(
+            f"https://{self.registry['url']}/v2",
+            auth=(self.registry["username"], self.registry["password"]),
+            headers=headers,
+        )
+
+        return response.ok
+
+    def _wait_for_registry_recovery(self):
+        """Wait for registry to recover after restart"""
+        time.sleep(60)
+
     @step("Push Docker Image")
     def _push_docker_image(self):
+        max_retries = 3
         environment = os.environ.copy()
         client = docker.from_env(environment=environment, timeout=5 * 60)
+
+        for attempt in range(max_retries):
+            try:
+                if not self.is_registry_healthy():
+                    raise RegistryDownException("Registry is currently down")
+
+                self._push_image(client)
+
+                if not self.is_registry_healthy():
+                    raise RegistryDownException("Registry became unhealthy after push")
+
+                return self.output["push"]
+
+            except RegistryDownException as e:
+                if attempt == max_retries - 1:
+                    self._publish_throttled_output(True)
+                    raise Exception("Failed to push image after multiple attempts") from e
+
+                self._wait_for_registry_recovery()
+
+            except Exception:
+                self._publish_throttled_output(True)
+                raise
+
+        return None
+
+    def _push_image(self, client):
         auth_config = {
             "username": self.registry["username"],
             "password": self.registry["password"],
             "serveraddress": self.registry["url"],
         }
-        try:
-            for line in client.images.push(
-                self.image_repository,
-                self.image_tag,
-                stream=True,
-                decode=True,
-                auth_config=auth_config,
-            ):
-                self.output["push"].append(line)
-                self._publish_throttled_output(False)
-        except Exception:
-            self._publish_throttled_output(True)
-            raise
-        return self.output["push"]
+        for line in client.images.push(
+            self.image_repository,
+            self.image_tag,
+            stream=True,
+            decode=True,
+            auth_config=auth_config,
+        ):
+            self.output["push"].append(line)
+            self._publish_throttled_output(False)
 
     def _publish_throttled_output(self, flush: bool):
         if flush:
