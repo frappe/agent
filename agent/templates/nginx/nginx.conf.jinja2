@@ -65,7 +65,12 @@ http {
 	variables_hash_bucket_size 128;
 	map_hash_bucket_size 2048;
 
-	 open_file_cache max=65000 inactive=1m;
+	# proxy buffer settings
+	proxy_buffer_size 8k;
+	proxy_buffers 8 8k;
+	proxy_busy_buffers_size 8k;
+
+	open_file_cache max=65000 inactive=1m;
 	open_file_cache_valid 5s;
 	open_file_cache_min_uses 1;
 	open_file_cache_errors on;

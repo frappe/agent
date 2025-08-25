@@ -18,6 +18,7 @@ from agent.application_storage_analyzer import (
     analyze_benches_structure,
     parse_docker_df_output,
     parse_total_disk_usage_output,
+    to_bytes,
 )
 from agent.base import AgentException, Base
 from agent.bench import Bench
@@ -115,6 +116,19 @@ class Server(Base):
             pass  # container does not exist
         else:
             raise Exception("Container exists")
+
+    def get_image_size(self, image_tag: str):
+        try:
+            return (
+                to_bytes(
+                    self.execute(
+                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E "^{image_tag} "'
+                    )["output"].split()[-1]
+                )
+                / 1024**3
+            )
+        except AgentException:
+            pass
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):

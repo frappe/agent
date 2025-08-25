@@ -251,6 +251,12 @@ def get_storage_breakdown():
     return Response(json_output, mimetype="application/json")
 
 
+@application.route("/server/image-size/<string:image_tag>", methods=["GET"])
+def get_docker_image_size(image_tag: str):
+    size = Server().get_image_size(image_tag)
+    return {"size": size}
+
+
 @application.route("/server/pull-images", methods=["POST"])
 def pull_docker_images():
     data = request.json
