@@ -27,3 +27,8 @@ class InvalidSiteConfigException(AgentException):
     def __init__(self, data: dict, site=None):
         self.site = site
         super().__init__(data)
+
+
+class RegistryDownException(Exception):
+    def __init__(self, data):
+        self.data = data
