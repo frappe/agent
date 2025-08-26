@@ -130,6 +130,18 @@ class Server(Base):
         except AgentException:
             pass
 
+    def _check_site_on_bench(self, bench_name: str):
+        """Check if sites are present on the benches"""
+        sites_directory = f"/home/frappe/benches/{bench_name}/sites"
+        for possible_site in os.listdir(sites_directory):
+            if os.path.exists(os.path.join(sites_directory, possible_site, "site_config.json")):
+                raise Exception(f"Bench {bench_name} has sites")
+
+    def disable_production_on_bench(self, name: str):
+        """In case of corrupted bench / site config don't stall archive"""
+        self._check_site_on_bench()
+        self.execute(f"docker rm {name} --force")
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench_directory = os.path.join(self.benches_directory, name)
@@ -138,7 +150,7 @@ class Server(Base):
         try:
             bench = Bench(name, self)
         except json.JSONDecodeError:
-            pass
+            self.disable_production_on_bench(name)
         except FileNotFoundError as e:
             if not e.filename.endswith("common_site_config.json"):
                 raise
@@ -146,6 +158,7 @@ class Server(Base):
             if bench.sites:
                 raise Exception(f"Bench has sites: {bench.sites}")
             bench.disable_production()
+
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
 
