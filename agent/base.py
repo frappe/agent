@@ -229,8 +229,14 @@ class Base:
             os.fsync(temp_file.fileno())
             temp_file.close()
 
-        shutil.copy2(temp_file.name, self.config_file)
-        os.remove(temp_file.name)
+        os.rename(self.config_file, self.config_file + ".bak")
+
+        try:
+            shutil.copy2(temp_file.name, self.config_file)
+            os.remove(temp_file.name)
+        except Exception as e:
+            os.rename(self.config_file + ".bak", self.config_file)
+            raise e
 
         if release_lock and self._config_file_lock:
             self._config_file_lock.release()
