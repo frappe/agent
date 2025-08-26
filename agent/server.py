@@ -130,6 +130,14 @@ class Server(Base):
         except AgentException:
             pass
 
+    def disable_production_on_bench(self, name: str):
+        """In case of corrupted bench / site config don't stall archive"""
+        with suppress(AgentException):
+            # Even if the container does not stop try and rm
+            self.execute(f"docker stop {name}")
+
+        self.execute(f"docker rm {name}")
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench_directory = os.path.join(self.benches_directory, name)
@@ -138,7 +146,7 @@ class Server(Base):
         try:
             bench = Bench(name, self)
         except json.JSONDecodeError:
-            pass
+            self.disable_production_on_bench(name)
         except FileNotFoundError as e:
             if not e.filename.endswith("common_site_config.json"):
                 raise
@@ -146,6 +154,7 @@ class Server(Base):
             if bench.sites:
                 raise Exception(f"Bench has sites: {bench.sites}")
             bench.disable_production()
+
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
 
