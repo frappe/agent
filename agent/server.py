@@ -132,7 +132,7 @@ class Server(Base):
 
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""
-        sites_directory = f"/home/frappe/benches{bench_name}/sites"
+        sites_directory = f"/home/frappe/benches/{bench_name}/sites"
         for possible_site in os.listdir(sites_directory):
             if os.path.exists(os.path.join(sites_directory, possible_site, "site_config.json")):
                 raise Exception(f"Bench {bench_name} has sites")
