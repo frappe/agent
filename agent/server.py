@@ -130,13 +130,17 @@ class Server(Base):
         except AgentException:
             pass
 
+    def _check_site_on_bench(self, bench_name: str):
+        """Check if sites are present on the benches"""
+        sites_directory = f"/home/frappe/benches{bench_name}/sites"
+        for possible_site in os.listdir(sites_directory):
+            if os.path.exists(os.path.join(sites_directory, possible_site, "site_config.json")):
+                raise Exception(f"Bench {bench_name} has sites")
+
     def disable_production_on_bench(self, name: str):
         """In case of corrupted bench / site config don't stall archive"""
-        with suppress(AgentException):
-            # Even if the container does not stop try and rm
-            self.execute(f"docker stop {name} -s SIGKILL")
-
-        self.execute(f"docker rm {name}")
+        self._check_site_on_bench()
+        self.execute(f"docker rm {name} --force")
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
