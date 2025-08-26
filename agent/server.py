@@ -134,7 +134,7 @@ class Server(Base):
         """In case of corrupted bench / site config don't stall archive"""
         with suppress(AgentException):
             # Even if the container does not stop try and rm
-            self.execute(f"docker stop {name}")
+            self.execute(f"docker stop {name} -s SIGKILL")
 
         self.execute(f"docker rm {name}")
 
