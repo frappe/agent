@@ -72,6 +72,18 @@ def get_size(folder, ignore_dirs=None):
     return total_size
 
 
+def is_registry_healthy(url: str, username: str, password: str) -> bool:
+    """Check if production registry (only) is healthy in the push cycle"""
+    headers = {"Accept": "application/vnd.docker.distribution.manifest.v2+json"}
+
+    if url != "registry.frappe.cloud":
+        return True
+
+    response = requests.get(f"https://{url}/v2", auth=(username, password), headers=headers)
+
+    return response.ok
+
+
 def cint(x):
     """Convert to integer"""
     if x is None:
