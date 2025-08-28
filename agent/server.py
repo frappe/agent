@@ -121,16 +121,19 @@ class Server(Base):
         bench.deploy()
         bench.setup_nginx()
 
-    def container_exists(self, name: str):
+    def container_exists(self, name: str, max_retries: int = 5):
         """
-        Throw if container exists
+        Throw if container exists; after 5 retries with backoff of 5 seconds
         """
-        try:
-            self.execute(f'docker ps --format "{{{{.Names}}}}" | grep -E "^{name}$"')
-        except AgentException:
-            pass  # container does not exist
-        else:
-            raise Exception("Container exists")
+        for attempt in range(max_retries):
+            try:
+                self.execute(f"""docker ps --filter "name=^{name}$" | grep {name}""")
+            except AgentException:
+                break  # container does not exist
+            else:
+                if attempt == max_retries - 1:
+                    raise Exception("Container exists")
+                time.sleep(5)
 
     def get_image_size(self, image_tag: str):
         try:
