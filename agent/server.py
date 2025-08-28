@@ -22,11 +22,11 @@ from agent.application_storage_analyzer import (
 )
 from agent.base import AgentException, Base
 from agent.bench import Bench
-from agent.exceptions import BenchNotExistsException
+from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
-from agent.utils import get_supervisor_processes_status
+from agent.utils import get_supervisor_processes_status, is_registry_healthy
 
 
 class Server(Base):
@@ -55,8 +55,22 @@ class Server(Base):
         password = registry["password"]
         return self.execute(f"docker login -u {username} -p {password} {url}")
 
+    def establish_connection_with_registry(self, max_retries: int, registry: dict[str, str]):
+        """Given the attempt count try and establish connection with the registry else Raise"""
+        for attempt in range(max_retries):
+            try:
+                if not is_registry_healthy(registry["url"], registry["username"], registry["password"]):
+                    raise RegistryDownException("Registry is not available")
+                break
+            except RegistryDownException as e:
+                if attempt == max_retries - 1:
+                    raise Exception("Failed to pull image") from e
+
+                time.sleep(60)
+
     @step("Initialize Bench")
-    def bench_init(self, name, config):
+    def bench_init(self, name, config, registry: dict[str, str]):
+        self.establish_connection_with_registry(max_retries=3, registry=registry)
         bench_directory = os.path.join(self.benches_directory, name)
         os.mkdir(bench_directory)
         directories = ["logs", "sites", "config"]
@@ -98,7 +112,7 @@ class Server(Base):
     @job("New Bench", priority="low")
     def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
         self.docker_login(registry)
-        self.bench_init(name, bench_config)
+        self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
         if bench.bench_config.get("single_container"):
