@@ -121,7 +121,7 @@ class Server(Base):
         bench.deploy()
         bench.setup_nginx()
 
-    def container_exists(self, name: str, max_retries: int = 5):
+    def container_exists(self, name: str, max_retries: int = 3):
         """
         Throw if container exists; after 5 retries with backoff of 5 seconds
         """
