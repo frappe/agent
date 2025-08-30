@@ -29,7 +29,6 @@ from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
 
 
-
 class Server(Base):
     def __init__(self, directory=None):
         super().__init__()
@@ -157,7 +156,7 @@ class Server(Base):
 
     def disable_production_on_bench(self, name: str):
         """In case of corrupted bench / site config don't stall archive"""
-        self._check_site_on_bench()
+        self._check_site_on_bench(name)
         self.execute(f"docker rm {name} --force")
 
     @job("Archive Bench", priority="low")
