@@ -69,8 +69,7 @@ class Server(Base):
                 time.sleep(60)
 
     @step("Initialize Bench")
-    def bench_init(self, name, config, registry: dict[str, str]):
-        self.establish_connection_with_registry(max_retries=3, registry=registry)
+    def bench_init(self, name, config):
         bench_directory = os.path.join(self.benches_directory, name)
         os.mkdir(bench_directory)
         directories = ["logs", "sites", "config"]
@@ -111,8 +110,9 @@ class Server(Base):
 
     @job("New Bench", priority="low")
     def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
+        self.establish_connection_with_registry(max_retries=3, registry=registry)
         self.docker_login(registry)
-        self.bench_init(name, bench_config, registry)
+        self.bench_init(name, bench_config)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
         if bench.bench_config.get("single_container"):
