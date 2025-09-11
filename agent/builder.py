@@ -149,7 +149,9 @@ class ImageBuilder(Base):
         client = docker.from_env(environment=environment, timeout=5 * 60)
 
         for attempt in range(max_retries):
-            self.output["push"].append(f"Starting Push Attempt {attempt}")
+            self.output["push"].append(
+                {"id": "Retry", "output": f"Starting Push Attempt {attempt}", "status": "Success"}
+            )
             try:
                 if not is_registry_healthy(
                     self.registry["url"], self.registry["username"], self.registry["password"]
