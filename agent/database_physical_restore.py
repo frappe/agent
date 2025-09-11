@@ -369,6 +369,16 @@ class DatabasePhysicalRestore(DatabaseServer):
                 os.path.join(self.target_db_directory, file),
             )
 
+            # Change permission of copied file to mysql:mysql
+            """
+            frappe user has been allowed to chown files in /var/lib/mysql through sudoers file
+            So, use subprocess to change the ownership
+            """
+            subprocess.run(
+                ["sudo", "chown", "mysql:mysql", os.path.join(self.target_db_directory, file)],
+                check=True,
+            )
+
     def is_table_need_to_be_restored(self, table_name: str) -> bool:
         if not self.restore_specific_tables:
             # Ensure the tale_name is not a FTS table
