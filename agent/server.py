@@ -649,7 +649,7 @@ class Server(Base):
 
     @staticmethod
     def run_ncdu_command(path: str, excludes: list | None = None) -> str | None:
-        cmd = ["ncdu", path, "-o", "/dev/stdout"]
+        cmd = ["ncdu", path, "-x", "-o", "/dev/stdout"]
         if excludes:
             for item in excludes:
                 cmd.extend(["--exclude", item])
