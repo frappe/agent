@@ -180,9 +180,9 @@ class Server(Base):
         self.move_bench_to_archived_directory(name)
 
     @job("Cleanup Unused Files", priority="low")
-    def cleanup_unused_files(self):
-        self.remove_archived_benches()
-        self.remove_temporary_files()
+    def cleanup_unused_files(self, force: bool = False):
+        self.remove_archived_benches(force)
+        self.remove_temporary_files(force)
         self.remove_unused_docker_artefacts()
 
     def remove_benches_without_container(self, benches: list[str]):
@@ -194,13 +194,13 @@ class Server(Base):
                     self.move_to_archived_directory(Bench(bench, self))
 
     @step("Remove Archived Benches")
-    def remove_archived_benches(self):
+    def remove_archived_benches(self, force: bool = False):
         now = datetime.now().timestamp()
         removed = []
         if os.path.exists(self.archived_directory):
             for bench in os.listdir(self.archived_directory):
                 bench_path = os.path.join(self.archived_directory, bench)
-                if now - os.stat(bench_path).st_mtime > 86400:
+                if force or (now - os.stat(bench_path).st_mtime > 86400):
                     removed.append(
                         {
                             "bench": bench,
@@ -214,7 +214,7 @@ class Server(Base):
         return {"benches": removed[:100]}
 
     @step("Remove Temporary Files")
-    def remove_temporary_files(self):
+    def remove_temporary_files(self, force: bool = False):
         temp_directory = tempfile.gettempdir()
         now = datetime.now().timestamp()
         removed = []
@@ -224,7 +224,7 @@ class Server(Base):
                 if not list(filter(lambda x: x in file, patterns)):
                     continue
                 file_path = os.path.join(temp_directory, file)
-                if now - os.stat(file_path).st_mtime > 7200:
+                if force or (now - os.stat(file_path).st_mtime > 7200):
                     removed.append({"file": file, "size": self._get_tree_size(file_path)})
                     if os.path.isfile(file_path):
                         os.remove(file_path)
