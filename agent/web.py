@@ -241,7 +241,7 @@ def get_server_status():
 @application.route("/server/cleanup", methods=["POST"])
 def cleanup_unused_files():
     data = request.json
-    job = Server().cleanup_unused_files(data.get("force"))
+    job = Server().cleanup_unused_files(force=data.get("force", False))
     return {"job": job}
 
 
