@@ -2,25 +2,7 @@ from __future__ import annotations
 
 import json
 
-
-def format_size(bytes_val):
-    thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
-
-    for factor, suffix in thresholds:
-        if bytes_val >= factor:
-            value = bytes_val / factor
-            return f"{value:.2f}{suffix}"
-
-    return f"{bytes_val}B"
-
-
-def to_bytes(size_str: str) -> float:
-    size_str = size_str.strip().upper()
-    units = [("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1)]
-    for suffix, factor in units:
-        if size_str.endswith(suffix):
-            return float(size_str.replace(suffix, "").strip()) * factor
-    return 0
+from agent.utils import format_size, to_bytes
 
 
 def calculate_directory_size(entry: list) -> int:
