@@ -258,6 +258,11 @@ def get_docker_image_size(image_tag: str):
     return {"size": size}
 
 
+@application.route("/server/reclaimable-size", methods=["GET"])
+def get_reclaimable_size():
+    return Server().get_reclaimable_size()
+
+
 @application.route("/server/pull-images", methods=["POST"])
 def pull_docker_images():
     data = request.json

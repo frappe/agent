@@ -26,7 +26,7 @@ from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
-from agent.utils import get_supervisor_processes_status, is_registry_healthy
+from agent.utils import get_supervisor_processes_status, is_registry_healthy, format_reclaimable_size
 
 
 class Server(Base):
@@ -146,6 +146,22 @@ class Server(Base):
             )
         except AgentException:
             pass
+
+    def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
+        """Checks archived and unused docker artefacts size"""
+        archived_folder_size = self.execute("du -sB1 /home/frappe/archived/ | awk '{print $1}'").get("output")
+        docker_reclaimable_size = self.execute("docker system df --format {{.Reclaimable}}").get("output")
+
+        formatted_archived_folder_size = f"{round(float(archived_folder_size) / 1024**3, 2)}GB"
+        formatted_docker_reclaimable_size, total_docker_size = format_reclaimable_size(
+            docker_reclaimable_size
+        )
+
+        return {
+            "archived": formatted_archived_folder_size,
+            "docker": formatted_docker_reclaimable_size,
+            "total": round((total_docker_size + float(archived_folder_size)) / 1024**3, 2),
+        }
 
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""
