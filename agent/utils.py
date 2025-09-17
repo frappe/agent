@@ -252,7 +252,7 @@ def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
         return {}
 
 
-def format_reclaimable_size(output: str) -> [dict[str, float], float]:
+def format_reclaimable_size(output: str) -> tuple[dict[str, float], float]:
     """
     Example Output:
         72.81MB (1%)
