@@ -250,25 +250,3 @@ def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
         return dict(nested_status)
     except Exception:
         return {}
-
-
-def format_reclaimable_size(output: str) -> tuple[dict[str, float], float]:
-    """
-    Example Output:
-        72.81MB (1%)
-        0B (0%)
-        0B
-        0B
-    """
-    reclaimable_size = {}
-    parts = ["images", "containers"]
-    output = output.split("\n")
-    total_size = 0
-
-    for idx, part in enumerate(parts, start=0):
-        size = output[idx]
-        size = size.split()[0]
-        reclaimable_size[part] = format_size(to_bytes(size))
-        total_size += to_bytes(size)
-
-    return reclaimable_size, total_size
