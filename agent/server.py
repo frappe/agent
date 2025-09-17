@@ -155,13 +155,13 @@ class Server(Base):
         images_present = [image.split() for image in images_present]
         images_in_use = self.execute("docker container ls --format {{.Image}}")["output"].split("\n")
 
-        return [
-            to_bytes(size) for image_name, size in images_present if image_name not in images_in_use
-        ]
+        return [to_bytes(size) for image_name, size in images_present if image_name not in images_in_use]
 
     def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
         """Checks archived and unused docker artefacts size"""
-        archived_folder_size = self.execute("du -sB1 /home/frappe/archived/ | awk '{print $1}'").get("output")
+        archived_folder_size = self.execute(
+            "du -sB1 /home/frappe/archived/ --exclude assets | awk '{print $1}'"
+        ).get("output")
         unused_images_size = sum(self.unused_image_size())
 
         formatted_archived_folder_size = f"{round(float(archived_folder_size) / 1024**3, 2)}GB"
@@ -277,6 +277,12 @@ class Server(Base):
         if os.path.exists(target):
             shutil.rmtree(target)
         bench_directory = os.path.join(self.benches_directory, bench_name)
+        assets_directory = os.path.join(bench_directory, "sites", "assets")
+
+        # Dropping assets we don't restore that anyways
+        if os.path.exists(assets_directory):
+            shutil.rmtree(assets_directory)
+
         self.execute(f"mv {bench_directory} {self.archived_directory}")
 
     @job("Update Site Pull", priority="low")
