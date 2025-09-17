@@ -26,7 +26,7 @@ from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
-from agent.utils import get_supervisor_processes_status, is_registry_healthy
+from agent.utils import get_supervisor_processes_status, is_registry_healthy, format_reclaimable_size
 
 
 class Server(Base):
@@ -147,6 +147,22 @@ class Server(Base):
         except AgentException:
             pass
 
+    def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
+        """Checks archived and unused docker artefacts size"""
+        archived_folder_size = self.execute("du -sB1 /home/frappe/archived/ | awk '{print $1}'").get("output")
+        docker_reclaimable_size = self.execute("docker system df --format {{.Reclaimable}}").get("output")
+
+        formatted_archived_folder_size = f"{round(float(archived_folder_size) / 1024**3, 2)}GB"
+        formatted_docker_reclaimable_size, total_docker_size = format_reclaimable_size(
+            docker_reclaimable_size
+        )
+
+        return {
+            "archived": formatted_archived_folder_size,
+            "docker": formatted_docker_reclaimable_size,
+            "total": round((total_docker_size + float(archived_folder_size)) / 1024**3, 2),
+        }
+
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""
         sites_directory = f"/home/frappe/benches/{bench_name}/sites"
@@ -180,9 +196,9 @@ class Server(Base):
         self.move_bench_to_archived_directory(name)
 
     @job("Cleanup Unused Files", priority="low")
-    def cleanup_unused_files(self):
-        self.remove_archived_benches()
-        self.remove_temporary_files()
+    def cleanup_unused_files(self, force: bool = False):
+        self.remove_archived_benches(force)
+        self.remove_temporary_files(force)
         self.remove_unused_docker_artefacts()
 
     def remove_benches_without_container(self, benches: list[str]):
@@ -194,13 +210,13 @@ class Server(Base):
                     self.move_to_archived_directory(Bench(bench, self))
 
     @step("Remove Archived Benches")
-    def remove_archived_benches(self):
+    def remove_archived_benches(self, force: bool = False):
         now = datetime.now().timestamp()
         removed = []
         if os.path.exists(self.archived_directory):
             for bench in os.listdir(self.archived_directory):
                 bench_path = os.path.join(self.archived_directory, bench)
-                if now - os.stat(bench_path).st_mtime > 86400:
+                if force or (now - os.stat(bench_path).st_mtime > 86400):
                     removed.append(
                         {
                             "bench": bench,
@@ -214,7 +230,7 @@ class Server(Base):
         return {"benches": removed[:100]}
 
     @step("Remove Temporary Files")
-    def remove_temporary_files(self):
+    def remove_temporary_files(self, force: bool = False):
         temp_directory = tempfile.gettempdir()
         now = datetime.now().timestamp()
         removed = []
@@ -224,7 +240,7 @@ class Server(Base):
                 if not list(filter(lambda x: x in file, patterns)):
                     continue
                 file_path = os.path.join(temp_directory, file)
-                if now - os.stat(file_path).st_mtime > 7200:
+                if force or (now - os.stat(file_path).st_mtime > 7200):
                     removed.append({"file": file, "size": self._get_tree_size(file_path)})
                     if os.path.isfile(file_path):
                         os.remove(file_path)

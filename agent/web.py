@@ -240,7 +240,8 @@ def get_server_status():
 
 @application.route("/server/cleanup", methods=["POST"])
 def cleanup_unused_files():
-    job = Server().cleanup_unused_files()
+    data = request.json
+    job = Server().cleanup_unused_files(force=data.get("force", False))
     return {"job": job}
 
 
@@ -255,6 +256,11 @@ def get_storage_breakdown():
 def get_docker_image_size(image_tag: str):
     size = Server().get_image_size(image_tag)
     return {"size": size}
+
+
+@application.route("/server/reclaimable-size", methods=["GET"])
+def get_reclaimable_size():
+    return Server().get_reclaimable_size()
 
 
 @application.route("/server/pull-images", methods=["POST"])

@@ -34,6 +34,26 @@ if TYPE_CHECKING:
         traceback: str | None
 
 
+def format_size(bytes_val):
+    thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
+
+    for factor, suffix in thresholds:
+        if bytes_val >= factor:
+            value = bytes_val / factor
+            return f"{value:.2f}{suffix}"
+
+    return f"{bytes_val}B"
+
+
+def to_bytes(size_str: str) -> float:
+    size_str = size_str.strip().upper()
+    units = [("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1)]
+    for suffix, factor in units:
+        if size_str.endswith(suffix):
+            return float(size_str.replace(suffix, "").strip()) * factor
+    return 0
+
+
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
     filename = urlparse(url).path.split("/")[-1]
@@ -230,3 +250,25 @@ def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
         return dict(nested_status)
     except Exception:
         return {}
+
+
+def format_reclaimable_size(output: str) -> tuple[dict[str, float], float]:
+    """
+    Example Output:
+        72.81MB (1%)
+        0B (0%)
+        0B
+        0B
+    """
+    reclaimable_size = {}
+    parts = ["images", "containers"]
+    output = output.split("\n")
+    total_size = 0
+
+    for idx, part in enumerate(parts, start=0):
+        size = output[idx]
+        size = size.split()[0]
+        reclaimable_size[part] = format_size(to_bytes(size))
+        total_size += to_bytes(size)
+
+    return reclaimable_size, total_size
