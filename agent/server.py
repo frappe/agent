@@ -155,10 +155,9 @@ class Server(Base):
         images_present = [image.split() for image in images_present]
         images_in_use = self.execute("docker container ls --format {{.Image}}")["output"].split("\n")
 
-        reclaimable_size = [
+        return [
             to_bytes(size) for image_name, size in images_present if image_name not in images_in_use
         ]
-        return reclaimable_size
 
     def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
         """Checks archived and unused docker artefacts size"""
