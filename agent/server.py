@@ -10,12 +10,9 @@ import time
 from contextlib import suppress
 from datetime import datetime
 
-from jinja2 import Environment, PackageLoader
-from passlib.hash import pbkdf2_sha256 as pbkdf2
-from peewee import MySQLDatabase
-
 from agent.application_storage_analyzer import (
     analyze_benches_structure,
+    format_size,
     parse_docker_df_output,
     parse_total_disk_usage_output,
     to_bytes,
@@ -26,7 +23,10 @@ from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
-from agent.utils import get_supervisor_processes_status, is_registry_healthy, format_reclaimable_size
+from agent.utils import get_supervisor_processes_status, is_registry_healthy
+from jinja2 import Environment, PackageLoader
+from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import MySQLDatabase
 
 
 class Server(Base):
@@ -147,20 +147,30 @@ class Server(Base):
         except AgentException:
             pass
 
+    def unused_image_size(self) -> list[float]:
+        """Get the sizes of all the images that are not in use in bytes"""
+        images_present = self.execute("docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}'")[
+            "output"
+        ].split("\n")
+        images_present = [image.split() for image in images_present]
+        images_in_use = self.execute("docker container ls --format {{.Image}}")["output"].split("\n")
+
+        return [
+            to_bytes(size) for image_name, size in images_present if image_name not in images_in_use
+        ]
+
     def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
         """Checks archived and unused docker artefacts size"""
         archived_folder_size = self.execute("du -sB1 /home/frappe/archived/ | awk '{print $1}'").get("output")
-        docker_reclaimable_size = self.execute("docker system df --format {{.Reclaimable}}").get("output")
+        unused_images_size = sum(self.unused_image_size())
 
         formatted_archived_folder_size = f"{round(float(archived_folder_size) / 1024**3, 2)}GB"
-        formatted_docker_reclaimable_size, total_docker_size = format_reclaimable_size(
-            docker_reclaimable_size
-        )
+        formatted_unused_image_size = format_size(unused_images_size)
 
         return {
             "archived": formatted_archived_folder_size,
-            "docker": formatted_docker_reclaimable_size,
-            "total": round((total_docker_size + float(archived_folder_size)) / 1024**3, 2),
+            "images": formatted_unused_image_size,
+            "total": round((unused_images_size + float(archived_folder_size)) / 1024**3, 2),
         }
 
     def _check_site_on_bench(self, bench_name: str):
