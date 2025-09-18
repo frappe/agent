@@ -230,7 +230,3 @@ def get_supervisor_processes_status() -> dict[str, str | dict[str, str]]:
         return dict(nested_status)
     except Exception:
         return {}
-
-
-def escape_bash_string(s: str) -> str:
-    return re.sub(r'([ "\'!#$&\'()*;<>?[\]\\^`{|}])', r"\\\1", s)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -16,7 +17,7 @@ import redis
 
 from agent.exceptions import AgentException
 from agent.job import connection
-from agent.utils import escape_bash_string, get_execution_result
+from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
     from typing import Any
@@ -92,7 +93,7 @@ class Base:
     def run_subprocess(self, command, directory, input, executable, non_zero_throw=True):
         # Start a child process and start reading output immediately
         with subprocess.Popen(
-            escape_bash_string(command),
+            shlex.quote(command),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE if input else None,
