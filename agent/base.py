@@ -289,6 +289,6 @@ class Base:
 
     def __del__(self):
         # Release lock at the end of the object's lifetime
-        if self._config_file_lock:
+        if hasattr(self, "_config_file_lock") and self._config_file_lock:
             with suppress(Exception):
                 self._config_file_lock.release()
