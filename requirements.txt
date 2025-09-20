@@ -28,9 +28,5 @@ sentry-sdk[flask, rq]==2.1.1
 sql_metadata==2.15.0
 py-spy==0.4.0
 mariadb-binlog-indexer==0.0.8
-<<<<<<< HEAD
-psutil==7.0.0
-=======
 psutil==7.0.0
 filelock
->>>>>>> 6dbb1a7 (fix: Fix filelock version in requirements.txt)
