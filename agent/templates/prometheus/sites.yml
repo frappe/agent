@@ -1,0 +1,13 @@
+- targets:
+
+## for bench in benches ##
+- targets:
+    ##- for site in bench.sites ##
+    - https://{{ site }}/api/method/ping
+    ##- endfor ##
+  labels:
+    cluster: "{{ bench.cluster }}"
+    server: "{{ bench.server }}"
+    group: "{{ bench.group }}"
+    bench: "{{ bench.name }}"
+## endfor ##

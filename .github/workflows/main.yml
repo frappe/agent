@@ -1,0 +1,70 @@
+name: Agent Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - "*"
+  workflow_dispatch:
+
+jobs:
+  lint-and-format:
+    name: "Lint and Format"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff
+
+      - name: Lint Check
+        run: |
+          ruff check --output-format github
+
+      - name: Format Check
+        run: |
+          ruff format --check
+
+  unit-tests:
+    name: "Unit Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      - name: Install agent
+        run: |
+          python -m venv env
+          env/bin/pip install -e .
+
+      - name: Install development packages
+        run: |
+          env/bin/pip install -r dev-requirements.txt
+
+      - name: Setup agent
+        run: |
+          source env/bin/activate
+          agent setup config --name test.frappe.agent --user abdul --workers 1
+          agent setup authentication --password password
+
+      - name: Run Tests
+        run: |
+          source env/bin/activate
+          python --version
+          python -m unittest discover

@@ -1,0 +1,48 @@
+os: linux
+language: python
+dist: bionic
+
+git:
+  depth: 1
+
+python:
+  - 3.7
+
+cache:
+  - pip
+
+before_install:
+  - mkdir /home/travis/agent
+  - cd /home/travis/agent
+  - virtualenv -p python3 env
+  - cp -R $TRAVIS_BUILD_DIR repo
+  - source /home/travis/agent/env/bin/activate
+
+install:
+  - pip install -e /home/travis/agent/repo
+  - cd /home/travis/agent
+
+jobs:
+  include:
+  - name: Agent Setup
+    addons:
+      apt:
+        packages:
+        - supervisor
+      hosts:
+        - test.frappe.agent
+
+    script:
+      - sudo ln -s /home/travis/agent/supervisor.conf /etc/supervisor/conf.d/agent.conf
+      - mkdir /home/travis/agent/logs
+      - agent setup config --name test.frappe.agent --user travis --workers 1
+      - agent setup authentication --password password
+      - agent setup supervisor
+      - agent ping-server --password password
+      - pip install black flake8
+      - black -l 79 repo --check --diff
+      - flake8 repo
+
+  - name: Run Tests
+    script:
+      - python -m unittest discover repo

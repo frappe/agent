@@ -1,0 +1,302 @@
+## Set a variable to help us decide if we need to add the
+## 'Docker-Distribution-Api-Version' header.
+## The registry always sets this header.
+## In the case of nginx performing auth, the header is unset
+## since nginx is auth-ing before proxying.
+map $upstream_http_docker_distribution_api_version $docker_distribution_api_version {
+	'' 'registry/2.0';
+}
+
+## this is required to proxy Grafana Live WebSocket connections
+map $http_upgrade $connection_upgrade {
+	default upgrade;
+	'' close;
+}
+
+
+server {
+	listen 443 ssl http2;
+	server_name {{ name }};
+
+	ssl_certificate {{ tls_directory }}/fullchain.pem;
+	ssl_certificate_key {{ tls_directory }}/privkey.pem;
+	ssl_trusted_certificate {{ tls_directory }}/chain.pem;
+
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+	ssl_session_tickets off;
+
+	ssl_protocols {{ tls_protocols or 'TLSv1.3' }};
+	ssl_prefer_server_ciphers off;
+
+	ssl_stapling on;
+	ssl_stapling_verify on;
+
+	resolver 1.1.1.1 1.0.0.1 8.8.8.8 8.8.4.4 208.67.222.222 208.67.220.220 valid=60s;
+	resolver_timeout 2s;
+
+	# disable any limits to avoid HTTP 413 for large image uploads
+	client_max_body_size 0;
+
+	# required to avoid HTTP 411: see Issue #1486 (https://github.com/moby/moby/issues/1486)
+	chunked_transfer_encoding on;
+
+	# Allow press signup pages to check browser-proxy latency
+	{% if press_url -%}
+	more_set_headers "Access-Control-Allow-Origin: {{ press_url }}";
+	{%- endif %}
+
+	location /agent/ {
+		proxy_http_version 1.1;
+		proxy_cache_bypass $http_upgrade;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+		location /agent/benches/metrics {
+			return 301 /metrics/rq;
+		}
+
+		proxy_pass http://127.0.0.1:{{ web_port }}/;
+	}
+
+	{% if nginx_vts_module_enabled %}
+	location /status {
+		auth_basic "NGINX VTS";
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
+
+		vhost_traffic_status_display;
+		vhost_traffic_status_display_format html;
+	}
+	{% endif %}
+
+	location /metrics {
+		auth_basic "Prometheus";
+		auth_basic_user_file {{ nginx_directory }}/monitoring.htpasswd;
+
+		location /metrics/node {
+			proxy_pass http://127.0.0.1:9100/metrics;
+		}
+
+		location /metrics/docker {
+			proxy_pass http://127.0.0.1:9323/metrics;
+		}
+
+		location /metrics/cadvisor {
+			proxy_pass http://127.0.0.1:9338/metrics;
+		}
+
+		{% if nginx_vts_module_enabled %}
+		location /metrics/nginx {
+			vhost_traffic_status_display;
+			vhost_traffic_status_display_format prometheus;
+		}
+		{% endif %}
+
+		location /metrics/mariadb {
+			proxy_pass http://127.0.0.1:9104/metrics;
+		}
+	
+		location /metrics/mariadb_proxy {
+			proxy_pass http://127.0.0.1:9104/metrics;
+		}
+
+		location /metrics/gunicorn {
+			proxy_pass http://127.0.0.1:9102/metrics;
+		}
+
+		location /metrics/registry {
+			proxy_pass http://127.0.0.1:5001/metrics;
+		}
+
+		location /metrics/prometheus {
+			proxy_pass http://127.0.0.1:9090/prometheus/metrics;
+		}
+
+		location /metrics/alertmanager {
+			proxy_pass http://127.0.0.1:9093/alertmanager/metrics;
+		}
+
+		location /metrics/blackbox {
+			proxy_pass http://127.0.0.1:9115/blackbox/metrics;
+		}
+	
+		location /metrics/grafana {
+			proxy_pass http://127.0.0.1:3000/grafana/metrics;
+		}
+
+		location /metrics/proxysql {
+			proxy_pass http://127.0.0.1:6070/metrics;
+		}
+
+		location /metrics/elasticsearch {
+			proxy_pass http://127.0.0.1:9114/metrics;
+		}
+
+		location /metrics/rq {
+			proxy_pass http://127.0.0.1:{{ web_port }}/benches/metrics;
+		}
+
+	}
+
+	{% if registry %}
+
+	location /v2/ {
+		# Do not allow connections from docker 1.5 and earlier
+		# docker pre-1.6.0 did not properly set the user agent on ping, catch "Go *" user agents
+		if ($http_user_agent ~ "^(docker\/1\.(3|4|5(?!\.[0-9]-dev))|Go ).*$" ) {
+			return 404;
+		}
+
+		# To add basic authentication to v2 use auth_basic setting.
+		auth_basic "Registry realm";
+		auth_basic_user_file /home/frappe/registry/registry.htpasswd;
+
+		## If $docker_distribution_api_version is empty, the header is not added.
+		## See the map directive above where this variable is defined.
+		add_header 'Docker-Distribution-Api-Version' $docker_distribution_api_version always;
+
+		add_header Access-Control-Allow-Origin          '*';
+		add_header Access-Control-Allow-Credentials     'true';
+		add_header Access-Control-Allow-Headers         'Authorization, Accept';
+		add_header Access-Control-Allow-Methods         'HEAD, GET, OPTIONS, DELETE';
+		add_header Access-Control-Expose-Headers        'Docker-Content-Digest';
+
+		proxy_pass                          http://127.0.0.1:5000;
+		proxy_set_header  Host              $http_host;   # required for docker client's sake
+		proxy_set_header  X-Real-IP         $remote_addr; # pass on real client's IP
+		proxy_set_header  X-Forwarded-For   $remote_addr;
+		proxy_set_header  X-Forwarded-Proto $scheme;
+		proxy_read_timeout                  900;
+	}
+
+	location / {
+		# To add basic authentication to v2 use auth_basic setting.
+		auth_basic "Registry realm";
+		auth_basic_user_file /home/frappe/registry/registry.htpasswd;
+
+		proxy_pass                          http://127.0.0.1:6000;
+		proxy_set_header  Host              $http_host;   # required for docker client's sake
+		proxy_set_header  X-Real-IP         $remote_addr; # pass on real client's IP
+		proxy_set_header  X-Forwarded-For   $remote_addr;
+		proxy_set_header  X-Forwarded-Proto $scheme;
+		proxy_read_timeout                  900;
+	}
+
+	{% elif monitor %}
+
+	location /prometheus {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9090/prometheus;
+		proxy_read_timeout 1500;
+	}
+
+	location /alertmanager {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9093/alertmanager;
+	}
+
+	location /blackbox {
+		auth_basic "Monitoring";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
+		proxy_pass http://127.0.0.1:9115/blackbox;
+	}
+	
+	location /grafana {
+		auth_basic "Grafana UI";
+		auth_basic_user_file /home/frappe/agent/nginx/grafana-ui.htpasswd;
+
+		proxy_pass http://127.0.0.1:3000/grafana;
+
+		location /grafana/metrics {
+			return 307 https://$host/metrics/grafana;
+		}
+
+		# Proxy Grafana Live WebSocket connections.
+		location /grafana/api/live/ {
+			rewrite  ^/grafana/(.*)  /$1 break;
+			proxy_http_version 1.1;
+			proxy_set_header Upgrade $http_upgrade;
+			proxy_set_header Connection $connection_upgrade;
+			proxy_set_header Host $http_host;
+			proxy_pass http://127.0.0.1:3000/grafana;
+		}
+	}
+
+	location / {
+		return 307 https://$host/grafana;
+	}
+
+	{% elif log %}
+
+	location /kibana/ {
+		auth_basic "Kibana";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+		
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+
+		proxy_pass http://127.0.0.1:5601/;
+	}
+
+	location /elasticsearch/ {
+		auth_basic "Elasticsearch";
+		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header X-Forwarded-Host $host;
+		proxy_set_header X-Forwarded-Port $server_port;
+
+		proxy_pass http://127.0.0.1:9200/;
+	}
+
+	location / {
+		return 307 https://$host/kibana;
+	}
+
+	{% elif analytics %}
+
+	location / {
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_pass http://127.0.0.1:8000/;
+	}
+
+	{% elif trace %}
+
+	location / {
+		proxy_buffer_size 32k;
+		proxy_buffers 8 16k;
+		proxy_busy_buffers_size 32k;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_pass http://127.0.0.1:9000/;
+	}
+
+	{% else %}
+
+	location / {
+		root {{ pages_directory }};
+		try_files /home.html /dev/null;
+	}
+
+	{% endif %}
+}

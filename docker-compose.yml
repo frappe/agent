@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+    redis:
+        image: redis:5.0.8
+        restart: always
+
+    nginx:
+        image: nginx:1.17.9
+        restart: always
+
+    web:
+        image: frappe:agent
+        restart: always
+    
+    worker:
+        image: frappe:agent
+        restart: always
+    

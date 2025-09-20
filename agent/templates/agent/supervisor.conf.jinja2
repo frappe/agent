@@ -1,0 +1,48 @@
+[program:web]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application"
+environment=PYTHONUNBUFFERED=1{% if sentry_dsn %}, SENTRY_DSN="{{ sentry_dsn }}"{% endif %}
+autostart=true
+autorestart=true
+stdout_logfile={{ directory }}/logs/web.log
+stderr_logfile={{ directory }}/logs/web.error.log
+user={{ user }}
+directory={{ directory }}
+
+[program:redis]
+command=redis-server redis.conf
+autostart=true
+autorestart=true
+stdout_logfile={{ directory }}/logs/redis.log
+stderr_logfile={{ directory }}/logs/redis.error.log
+user={{ user }}
+directory={{ directory }}
+
+[program:worker]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{ directory }}/env/bin/rq worker {% if sentry_dsn %}--sentry-dsn '{{ sentry_dsn }}'{% endif %} --url redis://127.0.0.1:{{ redis_port }} high default low"
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stopwaitsecs=1500
+killasgroup=true
+numprocs={{ workers }}
+process_name=%(program_name)s-%(process_num)d
+stdout_logfile={{ directory }}/logs/worker.log
+stderr_logfile={{ directory }}/logs/worker.error.log
+user={{ user }}
+directory={{ directory }}
+
+{% if is_proxy_server %}
+[program:nginx_reload_manager]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{directory}}/env/bin/python {{ directory }}/repo/agent/nginx_reload_manager.py"
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stopwaitsecs=20
+stdout_logfile={{ directory }}/logs/nginx_reload_manager.log
+stderr_logfile={{ directory }}/logs/nginx_reload_manager.error.log
+user={{ user }}
+directory={{ directory }}
+{% endif %}
+
+[group:agent]
+{% if is_proxy_server %}programs=web, redis, worker, nginx_reload_manager{% else %}programs=web, redis, worker{% endif %}

@@ -1,0 +1,6 @@
+- targets:
+
+## for server in servers ##
+- targets:
+      - https://{{ server.name }}
+## endfor ##

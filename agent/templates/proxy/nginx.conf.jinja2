@@ -1,0 +1,268 @@
+map $host $subdomain_map {
+    ~^(?<subdomain>[^.]*).*$ $subdomain.{{ domain }};
+}
+
+{% for name, upstream in upstreams.items() %}
+upstream {{ upstream["hash"] }} {
+	server {{ name }}:80;
+	keepalive 100;
+}
+{% endfor %}
+
+upstream site_not_found {
+	server 127.0.0.1:10090;
+	keepalive 100;
+}
+
+upstream deactivated {
+	server 127.0.0.1:10091;
+	keepalive 100;
+}
+
+upstream suspended {
+	server 127.0.0.1:10092;
+	keepalive 100;
+}
+
+upstream suspended_saas {
+	server 127.0.0.1:10093;
+	keepalive 100;
+}
+
+map $actual_host $upstream_server_hash {
+{% for upstream in upstreams.values() -%}
+	{% for site in upstream["sites"] %}
+	{{ site.name }} http://{{ site.upstream }};
+	{%- endfor %}
+{% endfor %}
+	default http://site_not_found;
+}
+
+map $host $actual_host {
+{% for host in hosts.values() -%}
+	{% for from, to in host.items() if from != 'redirect'%}
+	{% if from != 'codeserver' %}
+	{{ from }} {{ to }};
+	{% endif %}
+	{%- endfor %}
+{%- endfor %}
+}
+
+map $upstream_http_access_control_allow_origin $access_control_allow_origin {
+	default $upstream_http_access_control_allow_origin;
+	"" "https://$host";
+}
+
+map $upstream_http_access_control_allow_headers $access_control_allow_headers {
+	default $upstream_http_access_control_allow_headers;
+	"" "'Origin, Content-Type, Accept";
+}
+
+map $upstream_http_access_control_allow_credentials $access_control_allow_credentials {
+	default $upstream_http_access_control_allow_credentials;
+	"" "true";
+}
+
+map $upstream_http_access_control_allow_methods $access_control_allow_methods {
+	default $upstream_http_access_control_allow_methods;
+	"" "'GET, POST, OPTIONS";
+}
+
+proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;
+
+{% for host, host_options in hosts.items() %}
+
+{% set ns = namespace(host=host, cert_host=host) %}
+
+server {
+	listen 443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
+	server_name {{ ns.host }};
+
+	{%- for wildcard_domain in wildcards -%}
+		{%- if ns.host.endswith("." + wildcard_domain) -%}
+			{% set ns.cert_host = "*." + wildcard_domain %}
+			{# use same certificate as root domain #}
+		{%- endif %}
+	{%- endfor %}
+
+	ssl_certificate {{ nginx_directory }}/hosts/{{ ns.cert_host }}/fullchain.pem;
+	ssl_certificate_key {{ nginx_directory }}/hosts/{{ ns.cert_host }}/privkey.pem;
+	ssl_trusted_certificate {{ nginx_directory }}/hosts/{{ ns.cert_host }}/chain.pem;
+
+	ssl_session_timeout 1d;
+	ssl_session_cache shared:MozSSL:10m; # about 40000 sessions
+	ssl_session_tickets off;
+
+	ssl_protocols {{ tls_protocols or 'TLSv1.2 TLSv1.3' }};
+	ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+	ssl_prefer_server_ciphers off;
+
+	ssl_stapling on;
+	ssl_stapling_verify on;
+
+	resolver 8.8.8.8 8.8.4.4 1.1.1.1 1.0.0.1 208.67.222.222 208.67.220.220 valid=600s;
+	resolver_timeout 30s;
+
+	client_max_body_size 250M;
+	client_body_buffer_size 16K;
+	client_header_buffer_size 1k;
+
+	more_set_headers "X-Frame-Options: SAMEORIGIN";
+	more_set_headers "X-XSS-Protection: 1; mode=block";
+	more_set_headers "X-Content-Type-Options: nosniff";
+	more_set_headers "Referrer-Policy: no-referrer-when-downgrade";
+	more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+
+	{% if host_options.redirect %}
+
+	location / {
+		return 301 https://{{ host_options.redirect }}$request_uri;
+	}
+
+	{% else %}
+	location /assets/ {
+		proxy_http_version 1.1;
+
+		proxy_cache proxy_cache_zone;
+		proxy_cache_key $scheme$host$request_uri;
+		proxy_cache_valid 200 302 2m;
+		proxy_cache_valid 404 1m;
+		proxy_cache_bypass $http_secret_cache_purge;
+
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "";
+
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+		more_set_headers "X-Proxy-Cache: $upstream_cache_status";
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location /socket.io {
+		proxy_http_version 1.1;
+
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_set_header Connection "upgrade";
+
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	location / {
+		proxy_http_version 1.1;
+
+		proxy_read_timeout 600;
+		proxy_buffering off;
+		proxy_buffer_size 128k;
+		proxy_buffers 100 128k;
+		proxy_busy_buffers_size 128k;
+
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		{% if host_options.codeserver %}
+		proxy_set_header Connection "upgrade";
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection upgrade;
+		proxy_set_header Accept-Encoding gzip;
+		{% else %}
+		proxy_set_header Connection "";
+		{% endif %}
+
+		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
+
+		more_set_headers "Access-Control-Allow-Origin: $access_control_allow_origin";
+		more_set_headers "Access-Control-Allow-Headers: $access_control_allow_headers";
+		more_set_headers "Access-Control-Allow-Credentials: $access_control_allow_credentials";
+		more_set_headers "Access-Control-Allow-Methods: $access_control_allow_methods";
+
+		proxy_pass $upstream_server_hash;
+	}
+
+	proxy_intercept_errors on;
+	error_page 429 /exceeded.html;
+	location /exceeded.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+	{% endif %}
+}
+
+{% endfor %}
+
+server {
+	listen 80;
+	server_name _;
+
+	location ^~ /.well-known/acme-challenge/ {
+		return 301 http://ssl.{{ domain }}$request_uri;
+	}
+	location / {
+		return 301 https://$host$request_uri;
+	}
+}
+
+
+server {
+	listen 127.0.0.1:10090;
+	location / {
+		return 307 https://{{ domain }}/dashboard/#/sites/new?domain=$host;
+	}
+}
+
+server {
+	listen 127.0.0.1:10091;
+
+	root {{ error_pages_directory }};
+	error_page 503 /deactivated.html;
+
+	location / {
+		return 503;
+	}
+
+	location = /deactivated.html {
+		internal;
+	}
+}
+
+
+server {
+	listen 127.0.0.1:10092;
+
+	root {{ error_pages_directory }};
+	error_page 402 /suspended.html;
+
+	location / {
+		return 402;
+	}
+
+	location = /suspended.html {
+		internal;
+	}
+}
+
+
+server {
+	listen 127.0.0.1:10093;
+
+	root {{ error_pages_directory }};
+	error_page 402 /suspended_saas.html;
+
+	location / {
+		return 402;
+	}
+
+	location = /suspended_saas.html {
+		internal;
+	}
+
+}
