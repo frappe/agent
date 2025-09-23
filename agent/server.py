@@ -928,6 +928,7 @@ class Server(Base):
             "directory": self.directory,
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
+            "is_standalone": self.config.get("standalone", False),
         }
         if self.config.get("name").startswith("n"):
             data["is_proxy_server"] = True
