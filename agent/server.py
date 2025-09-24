@@ -545,6 +545,17 @@ class Server(Base):
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
 
+    def update_nfs_exports(self, server_name: str, private_ip: str):
+        shared_directory = f"/home/frappe/nfs/{server_name}"
+
+        os.makedirs(shared_directory)
+        self.execute(f"chown -R frappe:frappe {shared_directory}")
+
+        with open("/home/frappe/exports", "a+") as f:
+            f.write(f"{shared_directory} {private_ip}(rw,sync,no_subtree_check)\n")
+
+        self.execute("sudo exportfs -ra")
+
     def update_config(self, value):
         config = self.get_config(for_update=True)
         config.update(value)
