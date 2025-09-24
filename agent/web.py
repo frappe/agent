@@ -270,6 +270,16 @@ def pull_docker_images():
     return {"job": job}
 
 
+@application.route("/nfs/exports", methods=["POST"])
+def update_nfs_exports():
+    data = request.json
+    Server().update_nfs_exports(
+        server_name=data.get("server"),
+        private_ip=data.get("private_ip"),
+    )
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
 @application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}
