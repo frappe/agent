@@ -274,10 +274,19 @@ def pull_docker_images():
 def update_nfs_exports():
     data = request.json
     Server().update_nfs_exports(
-        server_name=data.get("server"),
-        private_ip=data.get("private_ip"),
+        server_to_enable_mount_on=data.get("server"),
+        private_ip_to_enable_mount_on=data.get("private_ip"),
+        share_file_system=data.get("share_file_system"),
+        use_file_system_of_server=data.get("use_file_system_of_server"),
     )
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/share-sites", methods=["POST"])
+def share_sites():
+    data = request.json
+    job = Server().share_sites(server_name=data.get("server_name"))
+    return {"job": job}
 
 
 @application.route("/benches")

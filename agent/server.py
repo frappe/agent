@@ -25,6 +25,7 @@ from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
+from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
@@ -522,16 +523,20 @@ class Server(Base):
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
 
-    def update_nfs_exports(self, server_name: str, private_ip: str):
-        shared_directory = f"/home/frappe/nfs/{server_name}"
-
-        os.makedirs(shared_directory)
-        self.execute(f"chown -R frappe:frappe {shared_directory}")
-
-        with open("/home/frappe/exports", "a+") as f:
-            f.write(f"{shared_directory} {private_ip}(rw,sync,no_subtree_check)\n")
-
-        self.execute("sudo exportfs -ra")
+    def update_nfs_exports(
+        self,
+        server_to_enable_mount_on: str,
+        private_ip_to_enable_mount_on: str,
+        use_file_system_of_server: str,
+        share_file_system: bool,
+    ) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.update_nfs_exports_on_host(
+            server_to_enable_mount_on=server_to_enable_mount_on,
+            private_ip_to_enable_mount_on=private_ip_to_enable_mount_on,
+            share_file_system=share_file_system,
+            use_file_system_of_server=use_file_system_of_server,
+        )
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
