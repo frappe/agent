@@ -941,7 +941,13 @@ class Server(Base):
         )
 
     def _reload_nginx(self):
-        return self.execute("sudo systemctl reload nginx")
+        try:
+            return self.execute("sudo systemctl reload nginx")
+        except AgentException as e:
+            try:
+                return self.execute("sudo nginx -t")
+            except AgentException as e2:
+                raise e2 from e
 
     def _render_template(self, template, context, outfile, options=None):
         if options is None:
