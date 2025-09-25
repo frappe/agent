@@ -10,6 +10,10 @@ import time
 from contextlib import suppress
 from datetime import datetime
 
+from jinja2 import Environment, PackageLoader
+from passlib.hash import pbkdf2_sha256 as pbkdf2
+from peewee import MySQLDatabase
+
 from agent.application_storage_analyzer import (
     analyze_benches_structure,
     format_size,
@@ -24,9 +28,6 @@ from agent.job import Job, Step, job, step
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
-from jinja2 import Environment, PackageLoader
-from passlib.hash import pbkdf2_sha256 as pbkdf2
-from peewee import MySQLDatabase
 
 
 class Server(Base):
@@ -940,7 +941,13 @@ class Server(Base):
         )
 
     def _reload_nginx(self):
-        return self.execute("sudo systemctl reload nginx")
+        try:
+            return self.execute("sudo systemctl reload nginx")
+        except AgentException as e:
+            try:
+                return self.execute("sudo nginx -t")
+            except AgentException as e2:
+                raise e2 from e
 
     def _render_template(self, template, context, outfile, options=None):
         if options is None:
