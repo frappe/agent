@@ -271,14 +271,21 @@ def pull_docker_images():
 
 
 @application.route("/nfs/exports", methods=["POST"])
-def update_nfs_exports():
+def add_to_acl():
     data = request.json
-    Server().update_nfs_exports(
+    Server().add_to_acl(
         server_to_enable_mount_on=data.get("server"),
         private_ip_to_enable_mount_on=data.get("private_ip"),
         share_file_system=data.get("share_file_system"),
         use_file_system_of_server=data.get("use_file_system_of_server"),
     )
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/exports", methods=["DELETE"])
+def remove_from_acl():
+    data = request.json
+    Server().rmeove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
 
 

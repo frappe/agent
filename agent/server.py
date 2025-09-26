@@ -546,7 +546,7 @@ class Server(Base):
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
 
-    def update_nfs_exports(
+    def add_to_acl(
         self,
         server_to_enable_mount_on: str,
         private_ip_to_enable_mount_on: str,
@@ -554,12 +554,16 @@ class Server(Base):
         share_file_system: bool,
     ) -> None:
         nfs_handler = NFSHandler(self)
-        nfs_handler.update_nfs_exports_on_host(
+        nfs_handler.add_to_acl(
             server_to_enable_mount_on=server_to_enable_mount_on,
             private_ip_to_enable_mount_on=private_ip_to_enable_mount_on,
             share_file_system=share_file_system,
             use_file_system_of_server=use_file_system_of_server,
         )
+
+    def rmeove_from_acl(self, file_system: str, private_ip: str) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.remove_from_acl(file_system, private_ip)
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
