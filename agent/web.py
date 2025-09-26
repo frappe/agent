@@ -270,6 +270,32 @@ def pull_docker_images():
     return {"job": job}
 
 
+@application.route("/nfs/exports", methods=["POST"])
+def add_to_acl():
+    data = request.json
+    Server().add_to_acl(
+        server_to_enable_mount_on=data.get("server"),
+        private_ip_to_enable_mount_on=data.get("private_ip"),
+        share_file_system=data.get("share_file_system"),
+        use_file_system_of_server=data.get("use_file_system_of_server"),
+    )
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/exports", methods=["DELETE"])
+def remove_from_acl():
+    data = request.json
+    Server().remove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/share-sites", methods=["POST"])
+def share_sites():
+    data = request.json
+    job = Server().share_sites(server_name=data.get("server_name"))
+    return {"job": job}
+
+
 @application.route("/benches")
 def get_benches():
     return {name: bench.dump() for name, bench in Server().benches.items()}

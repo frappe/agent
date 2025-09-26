@@ -25,6 +25,7 @@ from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
+from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
@@ -521,6 +522,25 @@ class Server(Base):
 
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
+
+    def add_to_acl(
+        self,
+        server_to_enable_mount_on: str,
+        private_ip_to_enable_mount_on: str,
+        use_file_system_of_server: str,
+        share_file_system: bool,
+    ) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.add_to_acl(
+            server_to_enable_mount_on=server_to_enable_mount_on,
+            private_ip_to_enable_mount_on=private_ip_to_enable_mount_on,
+            share_file_system=share_file_system,
+            use_file_system_of_server=use_file_system_of_server,
+        )
+
+    def remove_from_acl(self, file_system: str, private_ip: str) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.remove_from_acl(file_system, private_ip)
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
