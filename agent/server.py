@@ -561,7 +561,7 @@ class Server(Base):
             use_file_system_of_server=use_file_system_of_server,
         )
 
-    def rmeove_from_acl(self, file_system: str, private_ip: str) -> None:
+    def remove_from_acl(self, file_system: str, private_ip: str) -> None:
         nfs_handler = NFSHandler(self)
         nfs_handler.remove_from_acl(file_system, private_ip)
 

@@ -285,7 +285,7 @@ def add_to_acl():
 @application.route("/nfs/exports", methods=["DELETE"])
 def remove_from_acl():
     data = request.json
-    Server().rmeove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
+    Server().remove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
 
 
