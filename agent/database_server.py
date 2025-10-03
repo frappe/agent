@@ -444,13 +444,107 @@ class DatabaseServer(Server):
                 )
         return sorted(stalks, key=lambda x: x["name"])
 
-    def purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
+    def _purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
         try:
             mariadb = Database(private_ip, 3306, "root", mariadb_root_password, "mysql")
             mariadb.execute_query(f"PURGE BINARY LOGS TO '{to_binlog}';", commit=True)
             return True
         except Exception:
             return False
+
+    @job("Purge Binlogs By Size Limit", priority="low")
+    def purge_binlogs_by_size_limit(self, private_ip: str, mariadb_root_password: str, max_binlog_gb: int):
+        output = self.find_binlogs_by_size_limit(max_binlog_gb)
+
+        if not output or "purge_binlog_before" not in output:
+            return
+
+        self.purge_binlog_step(private_ip, mariadb_root_password, output["purge_binlog_before"])
+
+    @step("Purge Binlog")
+    def purge_binlog_step(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
+        output = f"Purging binlogs before: {to_binlog}\n"
+        if self._purge_binlog(private_ip, mariadb_root_password, to_binlog):
+            output += f"Successfully purged binlogs before: {to_binlog}\n"
+        else:
+            output += f"Failed to purge binlogs before: {to_binlog}\n"
+
+        return {
+            "output": output,
+        }
+
+    @step("Find Binlogs To Purge By Size Limit")
+    def find_binlogs_by_size_limit(self, max_binlog_gb: int):  # noqa: C901
+        binlogs_in_disk = []
+        total_bytes = 0
+
+        output = ""
+        for file in Path(self.mariadb_directory).iterdir():
+            if re.match(r"mysql-bin.\d+", file.name):
+                stat = file.stat()
+                total_bytes += stat.st_size
+                binlogs_in_disk.append(
+                    {
+                        "name": file.name,
+                        "size": stat.st_size,
+                        "modified_at": stat.st_mtime,
+                    }
+                )
+
+        max_bytes = max_binlog_gb * (1024**3)
+        if total_bytes <= max_bytes:
+            output += f"Total binlog size ({total_bytes / (1024**3):.2f} GB) is under the limit ({max_binlog_gb} GB).\nNo action taken.\n"  # noqa: E501
+            return {"output": output}
+
+        if len(binlogs_in_disk) <= 2:
+            # Do not delete if there are 2 or less binlogs
+            output += "Not enough binlogs to proceed with purging.\n"
+            return {"output": output}
+
+        # Sort based on modified_at
+        binlogs_in_disk.sort(key=lambda x: x["modified_at"])
+
+        # Remove last 2 binlogs from list to avoid deleting current and previous binlog
+        total_bytes -= binlogs_in_disk[-1]["size"]
+        total_bytes -= binlogs_in_disk[-2]["size"]
+
+        binlogs_in_disk = binlogs_in_disk[:-2]
+
+        # Purge oldest binlogs until we are under the limit
+        binlog_usage_bytes = total_bytes
+        newest_binlog_to_delete = None
+        binlogs_to_delete = []
+
+        while binlog_usage_bytes > max_bytes and binlogs_in_disk:
+            binlog = binlogs_in_disk.pop(0)
+            binlog_usage_bytes -= binlog["size"]
+            newest_binlog_to_delete = binlog["name"]
+            binlogs_to_delete.append(binlog)
+
+        if not newest_binlog_to_delete:
+            output += "No binlogs to delete.\n"
+            return {"output": output}
+
+        # Try to increase the index number by 1 to delete up to that binlog
+        match = re.match(r"mysql-bin\.(\d+)", newest_binlog_to_delete)
+        if match:
+            original_number = match.group(1)
+            index = int(original_number) + 1
+            # MySQL typically uses 6 digits, but adapt to longer numbers if needed
+            padding = max(6, len(original_number))
+            purge_binlog_before = f"mysql-bin.{index:0{padding}d}"
+        else:
+            return {"output": output + "\nFailed to determine the binlog index number for purging.\n"}
+
+        # Prepare output
+        output += "Binlogs to be purged:\n"
+        for binlog in binlogs_to_delete:
+            output += f"- {binlog['name']} (size: {binlog['size'] / (1024**3):.2f} GB, modified at: {datetime.fromtimestamp(binlog['modified_at']).isoformat()})\n"  # noqa: E501
+
+        return {
+            "purge_binlog_before": purge_binlog_before,
+            "output": output,
+        }
 
     def get_binlogs(self) -> dict:
         binlogs_in_disk = []
