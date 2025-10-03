@@ -187,6 +187,36 @@ class Server(Base):
         self._check_site_on_bench(name)
         self.execute(f"docker rm {name} --force")
 
+    @job("Run Benches on Shared FS")
+    def run_benches_on_shared_fs(self):
+        self.change_bench_directory()
+        self.update_agent_nginx_config()
+        self.update_bench_nginx_config()
+        self._reload_nginx()
+        self.restart_benches()
+
+    @step("Change Bench Directory")
+    def change_bench_directory(self):
+        self.update_config({"benches_directory": "/shared"})
+
+    @step("Update Agent Nginx Conf File")
+    def update_agent_nginx_config(self):
+        self._generate_nginx_config()
+
+    @step("Update Bench Nginx Conf File")
+    def update_bench_nginx_config(self):
+        from filelock import FileLock
+
+        for _, bench in self.benches.items():
+            with FileLock(os.path.join(bench.directory, "nginx.config.lock")):
+                # Don't want to use setup_nginx as it reloads everytime
+                bench.generate_nginx_config()
+
+    @step("Restart Benches")
+    def restart_benches(self):
+        for _, bench in self.benches.items():
+            bench.start()
+
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
         bench_directory = os.path.join(self.benches_directory, name)
@@ -905,6 +935,7 @@ class Server(Base):
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
+                "use_shared": self.config.get("benches_directory") == "/shared",
             },
             nginx_config,
         )

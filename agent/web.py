@@ -220,6 +220,12 @@ def get_server():
     return Server().dump()
 
 
+@application.route("/server/run-benches-on-shared-fs", methods=["POST"])
+def use_shared_benches():
+    job = Server().run_benches_on_shared_fs()
+    return {"job": job}
+
+
 @application.route("/server/reload", methods=["POST"])
 def restart_nginx():
     job = Server().restart_nginx()
