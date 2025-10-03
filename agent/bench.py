@@ -728,7 +728,14 @@ class Bench(Base):
             ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
 
             rq_port = self.bench_config.get("rq_port")
-            rq_port_mapping = f"-p 127.0.0.1:{rq_port}:11000 "
+            rq_cache_port = self.bench_config.get("rq_cache_port")
+
+            if not rq_cache_port:
+                # [Auto Scaling] We need to expose this when we restart the container regardless
+                offset = 18000 - self.bench_config["web_port"]
+                rq_cache_port = 13000 + offset
+
+            rq_port_mapping = f"-p 0.0.0.0:{rq_port}:11000 "  # need to expose to secondary server
 
             bench_directory = "/home/frappe/frappe-bench"
             mounts = self.prepare_mounts_on_host(bench_directory)
@@ -740,6 +747,7 @@ class Bench(Base):
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
                 f"-p 127.0.0.1:{self.bench_config['codeserver_port']}:8088 "
+                f"-p 0.0.0.0:{rq_cache_port}:13000 "
                 f"{rq_port_mapping if rq_port else ''}"
                 f"-p {ssh_ip}:{ssh_port}:2200 "
                 f"-v {self.sites_directory}:{bench_directory}/sites "
