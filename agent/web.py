@@ -222,7 +222,8 @@ def get_server():
 
 @application.route("/server/run-benches-on-shared-fs", methods=["POST"])
 def use_shared_benches():
-    job = Server().run_benches_on_shared_fs()
+    data = request.json
+    job = Server().run_benches_on_shared_fs(restart_benches=data.get("restart_benches"))
     return {"job": job}
 
 
