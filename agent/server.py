@@ -202,12 +202,14 @@ class Server(Base):
         self.execute(f"docker rm {name} --force")
 
     @job("Run Benches on Shared FS")
-    def run_benches_on_shared_fs(self):
+    def run_benches_on_shared_fs(self, restart_benches: bool = True):
         self.change_bench_directory()
         self.update_agent_nginx_config()
         self.update_bench_nginx_config()
         self._reload_nginx()
-        self.restart_benches()
+
+        if restart_benches:
+            self.restart_benches()
 
     @step("Change Bench Directory")
     def change_bench_directory(self):
