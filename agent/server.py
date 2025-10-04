@@ -25,6 +25,7 @@ from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
+from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
@@ -185,6 +186,38 @@ class Server(Base):
         """In case of corrupted bench / site config don't stall archive"""
         self._check_site_on_bench(name)
         self.execute(f"docker rm {name} --force")
+
+    @job("Run Benches on Shared FS")
+    def run_benches_on_shared_fs(self, restart_benches: bool = True):
+        self.change_bench_directory()
+        self.update_agent_nginx_config()
+        self.update_bench_nginx_config()
+        self._reload_nginx()
+
+        if restart_benches:
+            self.restart_benches()
+
+    @step("Change Bench Directory")
+    def change_bench_directory(self):
+        self.update_config({"benches_directory": "/shared"})
+
+    @step("Update Agent Nginx Conf File")
+    def update_agent_nginx_config(self):
+        self._generate_nginx_config()
+
+    @step("Update Bench Nginx Conf File")
+    def update_bench_nginx_config(self):
+        from filelock import FileLock
+
+        for _, bench in self.benches.items():
+            with FileLock(os.path.join(bench.directory, "nginx.config.lock")):
+                # Don't want to use setup_nginx as it reloads everytime
+                bench.generate_nginx_config()
+
+    @step("Restart Benches")
+    def restart_benches(self):
+        for _, bench in self.benches.items():
+            bench.start()
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
@@ -521,6 +554,25 @@ class Server(Base):
 
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
+
+    def add_to_acl(
+        self,
+        server_to_enable_mount_on: str,
+        private_ip_to_enable_mount_on: str,
+        use_file_system_of_server: str,
+        share_file_system: bool,
+    ) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.add_to_acl(
+            server_to_enable_mount_on=server_to_enable_mount_on,
+            private_ip_to_enable_mount_on=private_ip_to_enable_mount_on,
+            share_file_system=share_file_system,
+            use_file_system_of_server=use_file_system_of_server,
+        )
+
+    def remove_from_acl(self, file_system: str, private_ip: str) -> None:
+        nfs_handler = NFSHandler(self)
+        nfs_handler.remove_from_acl(file_system, private_ip)
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
@@ -885,6 +937,7 @@ class Server(Base):
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
+                "use_shared": self.config.get("benches_directory") == "/shared",
             },
             nginx_config,
         )

@@ -220,6 +220,13 @@ def get_server():
     return Server().dump()
 
 
+@application.route("/server/run-benches-on-shared-fs", methods=["POST"])
+def use_shared_benches():
+    data = request.json
+    job = Server().run_benches_on_shared_fs(restart_benches=data.get("restart_benches"))
+    return {"job": job}
+
+
 @application.route("/server/reload", methods=["POST"])
 def restart_nginx():
     job = Server().restart_nginx()
@@ -267,6 +274,32 @@ def get_reclaimable_size():
 def pull_docker_images():
     data = request.json
     job = Server().pull_docker_images(data.get("image_tags"), data.get("registry"))
+    return {"job": job}
+
+
+@application.route("/nfs/exports", methods=["POST"])
+def add_to_acl():
+    data = request.json
+    Server().add_to_acl(
+        server_to_enable_mount_on=data.get("server"),
+        private_ip_to_enable_mount_on=data.get("private_ip"),
+        share_file_system=data.get("share_file_system"),
+        use_file_system_of_server=data.get("use_file_system_of_server"),
+    )
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/exports", methods=["DELETE"])
+def remove_from_acl():
+    data = request.json
+    Server().remove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
+    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+
+
+@application.route("/nfs/share-sites", methods=["POST"])
+def share_sites():
+    data = request.json
+    job = Server().share_sites(server_name=data.get("server_name"))
     return {"job": job}
 
 
