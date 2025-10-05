@@ -202,14 +202,37 @@ class Server(Base):
         self.execute(f"docker rm {name} --force")
 
     @job("Run Benches on Shared FS")
-    def run_benches_on_shared_fs(self, restart_benches: bool = True):
+    def run_benches_on_shared_fs(self, private_ip: str, restart_benches: bool = True):
         self.change_bench_directory()
         self.update_agent_nginx_config()
         self.update_bench_nginx_config()
         self._reload_nginx()
+        self._configure_site_with_redis_private_ip(private_ip)
 
         if restart_benches:
             self.restart_benches()
+
+    @step("Configure Site with Redis Private IP")
+    def _configure_site_with_redis_private_ip(self, private_ip: str):
+        for _, bench in self.benches.items():
+            common_site_config = bench.get_config(for_update=True)
+
+            for key in ("redis_cache", "redis_queue", "redis_socketio"):
+                original_value = common_site_config[key]
+                common_site_config.update(
+                    {key: original_value.replace("localhost", private_ip)},
+                )
+
+            bench.set_config(common_site_config)
+
+    @job("Stop Workers on Primary Server")
+    def stop_bench_workers_on_primary_server(self):
+        self._stop_bench_workers_on_primary_server()
+
+    @step("Stop Workers on Primary Server")
+    def _stop_bench_workers_on_primary_server(self):
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
 
     @step("Change Bench Directory")
     def change_bench_directory(self):
