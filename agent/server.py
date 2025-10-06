@@ -204,6 +204,7 @@ class Server(Base):
     @job("Run Benches on Shared FS")
     def run_benches_on_shared_fs(
         self,
+        primary_server_private_ip: str,
         secondary_server_private_ip: str,
         is_primary: bool,
         restart_benches: bool = True,
@@ -215,7 +216,7 @@ class Server(Base):
         self._reload_nginx()
 
         if not is_primary:
-            self._configure_site_with_redis_private_ip(secondary_server_private_ip)
+            self._configure_site_with_redis_private_ip(primary_server_private_ip)
 
         if restart_benches:
             # We will only start with secondary server private IP if this is a secondary server
