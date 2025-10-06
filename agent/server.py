@@ -188,15 +188,27 @@ class Server(Base):
         self.execute(f"docker rm {name} --force")
 
     @job("Run Benches on Shared FS")
-    def run_benches_on_shared_fs(self, private_ip: str, restart_benches: bool = True):
+    def run_benches_on_shared_fs(
+        self,
+        secondary_server_private_ip: str,
+        is_primary: bool,
+        restart_benches: bool = True,
+        registry_settings: dict | None = None,
+    ):
         self.change_bench_directory()
         self.update_agent_nginx_config()
         self.update_bench_nginx_config()
         self._reload_nginx()
-        self._configure_site_with_redis_private_ip(private_ip)
+
+        if not is_primary:
+            self._configure_site_with_redis_private_ip(secondary_server_private_ip)
 
         if restart_benches:
-            self.restart_benches()
+            # We will only start with secondary server private IP if this is a secondary server
+            self.restart_benches(
+                registry_settings=registry_settings,
+                secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
+            )
 
     @step("Configure Site with Redis Private IP")
     def _configure_site_with_redis_private_ip(self, private_ip: str):
@@ -211,12 +223,13 @@ class Server(Base):
 
             bench.set_config(common_site_config)
 
-    @job("Stop Workers on Primary Server")
-    def stop_bench_workers_on_primary_server(self):
-        self._stop_bench_workers_on_primary_server()
+    @job("Stop Bench Workers")
+    def stop_bench_workers(self):
+        self._stop_bench_workers()
 
-    @step("Stop Workers on Primary Server")
-    def _stop_bench_workers_on_primary_server(self):
+    @step("Stop Bench Workers")
+    def _stop_bench_workers(self):
+        """Stop all workers except redis"""
         for _, bench in self.benches.items():
             bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
 
@@ -238,9 +251,10 @@ class Server(Base):
                 bench.generate_nginx_config()
 
     @step("Restart Benches")
-    def restart_benches(self):
+    def restart_benches(self, secondary_server_private_ip: str, registry_settings: dict[str, str]):
+        self.docker_login(registry_settings)
         for _, bench in self.benches.items():
-            bench.start()
+            bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
