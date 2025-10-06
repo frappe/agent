@@ -205,9 +205,9 @@ class Server(Base):
     @job("Run Benches on Shared FS")
     def run_benches_on_shared_fs(
         self,
-        primary_server_private_ip: str,
-        secondary_server_private_ip: str,
         is_primary: bool,
+        secondary_server_private_ip: str,
+        redis_connection_string_ip: str | None = None,
         restart_benches: bool = True,
         registry_settings: dict | None = None,
     ):
@@ -216,8 +216,8 @@ class Server(Base):
         self.update_bench_nginx_config()
         self._reload_nginx()
 
-        if not is_primary:
-            self._configure_site_with_redis_private_ip(primary_server_private_ip)
+        if redis_connection_string_ip:
+            self._configure_site_with_redis_private_ip(redis_connection_string_ip)
 
         if restart_benches:
             # We will only start with secondary server private IP if this is a secondary server
@@ -252,6 +252,16 @@ class Server(Base):
         """Stop all workers except redis"""
         for _, bench in self.benches.items():
             bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
+
+    @job("Start Bench Workers")
+    def start_bench_workers(self):
+        self._start_bench_workers()
+
+    @step("Start Bench Workers")
+    def _start_bench_workers(self):
+        """Start all workers"""
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
 
     @step("Change Bench Directory")
     def change_bench_directory(self):

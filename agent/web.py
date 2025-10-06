@@ -226,7 +226,7 @@ def use_shared_benches():
     job = Server().run_benches_on_shared_fs(
         is_primary=data.get("is_primary"),
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
-        primary_server_private_ip=data.get("primary_server_private_ip"),
+        redis_connection_string_ip=data.get("redis_connection_string_ip"),
         restart_benches=data.get("restart_benches"),
         registry_settings=data.get("registry_settings"),
     )
@@ -236,6 +236,11 @@ def use_shared_benches():
 @application.route("/server/stop-bench-workers", methods=["POST"])
 def stop_bench_workers():
     job = Server().stop_bench_workers()
+    return {"job": job}
+
+@application.route("/server/start-bench-workers", methods=["POST"])
+def start_bench_workers():
+    job = Server().start_bench_workers()
     return {"job": job}
 
 
