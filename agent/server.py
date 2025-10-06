@@ -229,26 +229,6 @@ class Server(Base):
 
             bench.set_config(common_site_config)
 
-    @job("Stop Bench Workers")
-    def stop_bench_workers(self):
-        self._stop_bench_workers()
-
-    @step("Stop Bench Workers")
-    def _stop_bench_workers(self):
-        """Stop all workers except redis"""
-        for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
-
-    @job("Start Bench Workers")
-    def start_bench_workers(self):
-        self._start_bench_workers()
-
-    @step("Start Bench Workers")
-    def _start_bench_workers(self):
-        """Start all workers"""
-        for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
-
     @step("Change Bench Directory")
     def change_bench_directory(self):
         self.update_config({"benches_directory": "/shared"})
@@ -271,6 +251,35 @@ class Server(Base):
         self.docker_login(registry_settings)
         for _, bench in self.benches.items():
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
+
+    @job("Stop Bench Workers")
+    def stop_bench_workers(self):
+        self._stop_bench_workers()
+
+    @step("Stop Bench Workers")
+    def _stop_bench_workers(self):
+        """Stop all workers except redis"""
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
+
+    @job("Start Bench Workers")
+    def start_bench_workers(self):
+        self._start_bench_workers()
+
+    @step("Start Bench Workers")
+    def _start_bench_workers(self):
+        """Start all workers"""
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
+
+    @job("Force Remove All Benches")
+    def force_remove_all_benches(self):
+        self._force_remove_all_benches()
+
+    @step("Force Remove All Benches")
+    def _force_remove_all_benches(self):
+        for _, bench in self.benches.items():
+            bench.execute(f"docker rm {bench.name} --force")
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):

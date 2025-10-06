@@ -244,6 +244,12 @@ def start_bench_workers():
     return {"job": job}
 
 
+@application.route("/server/force-remove-all-benches", methods=["POST"])
+def force_remove_all_benches():
+    job = Server().force_remove_all_benches()
+    return {"job": job}
+
+
 @application.route("/server/reload", methods=["POST"])
 def restart_nginx():
     job = Server().restart_nginx()
