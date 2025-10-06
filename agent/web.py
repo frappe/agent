@@ -225,7 +225,8 @@ def use_shared_benches():
     data = request.json
     job = Server().run_benches_on_shared_fs(
         is_primary=data.get("is_primary"),
-        secondary_server_private_ip=data.get("private_ip"),
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+        primary_server_private_ip=data.get("primary_server_private_ip"),
         restart_benches=data.get("restart_benches"),
         registry_settings=data.get("registry_settings"),
     )
