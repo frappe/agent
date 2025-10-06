@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -232,9 +233,13 @@ class Server(Base):
 
             for key in ("redis_cache", "redis_queue", "redis_socketio"):
                 original_value = common_site_config[key]
-                common_site_config.update(
-                    {key: original_value.replace("localhost", private_ip)},
+                updated_connection_string = re.sub(
+                    # Replace the IP with whatever is passed as Private IP
+                    r"(redis://)([^:]+)(:\d+)",
+                    lambda m: f"{m.group(1)}{private_ip}{m.group(3)}",
+                    original_value,
                 )
+                common_site_config.update({key: updated_connection_string})
 
             bench.set_config(common_site_config)
 
