@@ -716,7 +716,7 @@ class Bench(Base):
 
         return mounts_cmd
 
-    def start(self):
+    def start(self, secondary_server_private_ip: str | None = None):
         if self.bench_config.get("single_container"):
             try:
                 self.execute(f"docker stop {self.name}")
@@ -725,7 +725,7 @@ class Bench(Base):
                 pass
 
             ssh_port = self.bench_config.get("ssh_port", self.bench_config["web_port"] + 4000)
-            ssh_ip = self.bench_config.get("private_ip", "127.0.0.1")
+            ssh_ip = secondary_server_private_ip or self.bench_config.get("private_ip", "127.0.0.1")
 
             rq_port = self.bench_config.get("rq_port")
             rq_cache_port = self.bench_config.get("rq_cache_port")

@@ -224,8 +224,17 @@ def get_server():
 def use_shared_benches():
     data = request.json
     job = Server().run_benches_on_shared_fs(
-        private_ip=data.get("private_ip"), restart_benches=data.get("restart_benches")
+        is_primary=data.get("is_primary"),
+        secondary_server_private_ip=data.get("private_ip"),
+        restart_benches=data.get("restart_benches"),
+        registry_settings=data.get("registry_settings"),
     )
+    return {"job": job}
+
+
+@application.route("/server/stop-bench-workers", methods=["POST"])
+def stop_bench_workers():
+    job = Server().stop_bench_workers()
     return {"job": job}
 
 
