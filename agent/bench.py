@@ -736,6 +736,7 @@ class Bench(Base):
             command = (
                 "docker run -d --init -u frappe "
                 f"--restart always --hostname {self.name} "
+                "--security-opt seccomp=unconfined "
                 f"-p 127.0.0.1:{self.bench_config['web_port']}:8000 "
                 f"-p 127.0.0.1:{self.bench_config['socketio_port']}:9000 "
                 f"-p 127.0.0.1:{self.bench_config['codeserver_port']}:8088 "
