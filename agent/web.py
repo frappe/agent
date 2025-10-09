@@ -313,7 +313,7 @@ def add_to_acl():
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
 
 
-@application.route("/nfs/rmeove-from-acl", methods=["POST"])
+@application.route("/nfs/remove-from-acl", methods=["POST"])
 def remove_from_acl():
     data = request.json
     Server().remove_from_acl(
