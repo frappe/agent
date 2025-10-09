@@ -726,8 +726,24 @@ class DatabaseServer(Server):
 
     def get_queries(self, row_ids: dict[str, list[int]], database: str):
         return self.binlog_indexer.get_queries(row_ids, database)
+    
+    @job("Fix global search")
+    def fix_global_search(self):
+        self.truncate_global_search()
+        self.rebuild_global_search()
 
+    @step("Truncate Global Search Table"):
+    def truncate_global_search():
+        truncate = run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        return truncate
 
+    @step("Rebuild global search")
+    def rebuild_global_search_step(self):
+        """Execute bench rebuild-global-search command."""
+        command = f"bench --site {self.name} rebuild-global-search"
+        result = self.execute(command)
+        return {"output": json.dumps(result)}
+    
 def get_tmp_folder_path():
     path = "/opt/volumes/mariadb/tmp/"
     if not os.path.exists(path):
