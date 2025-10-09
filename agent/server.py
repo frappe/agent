@@ -626,16 +626,14 @@ class Server(Base):
     @job("Add Servers to ACL")
     def add_to_acl(
         self,
-        server_to_enable_mount_on: str,
-        private_ip_to_enable_mount_on: str,
-        use_file_system_of_server: str,
-        share_file_system: bool,
+        primary_server_private_ip: str,
+        secondary_server_private_ip: str,
+        shared_directory: bool,
     ) -> None:
         return self._add_to_acl(
-            server_to_enable_mount_on,
-            private_ip_to_enable_mount_on,
-            use_file_system_of_server,
-            share_file_system,
+            primary_server_private_ip,
+            secondary_server_private_ip,
+            shared_directory,
         )
 
     @step("Add Servers to ACL")
