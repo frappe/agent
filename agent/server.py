@@ -167,9 +167,11 @@ class Server(Base):
         archived_folder_size = float(archived_folder_size)
 
         try:
-            site_archived_folder_size = self.execute(
-                f"du -sB1 {archived_sites_directory} --exclude assets | awk '{{print $1}}'"
-            ).get("output").split("\n")
+            site_archived_folder_size = (
+                self.execute(f"du -sB1 {archived_sites_directory} --exclude assets | awk '{{print $1}}'")
+                .get("output")
+                .split("\n")
+            )
             site_archived_folder_size = sum(map(float, site_archived_folder_size))
         except Exception:
             site_archived_folder_size = 0
