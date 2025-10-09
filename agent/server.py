@@ -189,15 +189,16 @@ class Server(Base):
         self.execute(f"docker rm {name} --force")
 
     @job("Run Benches on Shared FS")
-    def run_benches_on_shared_fs(
+    def change_bench_directory(
         self,
+        directory: str,
         is_primary: bool,
         secondary_server_private_ip: str,
         redis_connection_string_ip: str | None = None,
         restart_benches: bool = True,
         registry_settings: dict | None = None,
     ):
-        self.change_bench_directory()
+        self._change_bench_directory(directory)
         self.update_agent_nginx_config()
         self.update_bench_nginx_config()
         self._reload_nginx()
@@ -208,6 +209,7 @@ class Server(Base):
         if restart_benches:
             # We will only start with secondary server private IP if this is a secondary server
             self.restart_benches(
+                is_primary=is_primary,
                 registry_settings=registry_settings,
                 secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
             )
@@ -230,8 +232,8 @@ class Server(Base):
             bench.set_config(common_site_config)
 
     @step("Change Bench Directory")
-    def change_bench_directory(self):
-        self.update_config({"benches_directory": "/shared"})
+    def _change_bench_directory(self, directory: str):
+        self.update_config({"benches_directory": directory})
 
     @step("Update Agent Nginx Conf File")
     def update_agent_nginx_config(self):
@@ -247,8 +249,12 @@ class Server(Base):
                 bench.generate_nginx_config()
 
     @step("Restart Benches")
-    def restart_benches(self, secondary_server_private_ip: str, registry_settings: dict[str, str]):
-        self.docker_login(registry_settings)
+    def restart_benches(
+        self, is_primary: bool, secondary_server_private_ip: str, registry_settings: dict[str, str]
+    ):
+        if not is_primary:
+            # Don't need to pull images on primary server
+            self.docker_login(registry_settings)
         for _, bench in self.benches.items():
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
