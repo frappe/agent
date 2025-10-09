@@ -302,22 +302,25 @@ def pull_docker_images():
     return {"job": job}
 
 
-@application.route("/nfs/exports", methods=["POST"])
+@application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json
     Server().add_to_acl(
-        server_to_enable_mount_on=data.get("server"),
-        private_ip_to_enable_mount_on=data.get("private_ip"),
-        share_file_system=data.get("share_file_system"),
-        use_file_system_of_server=data.get("use_file_system_of_server"),
+        primary_server_private_ip=data.get("primary_server_private_ip"),
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+        shared_directory=data.get("shared_directory"),
     )
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
 
 
-@application.route("/nfs/exports", methods=["DELETE"])
+@application.route("/nfs/rmeove-from-acl", methods=["POST"])
 def remove_from_acl():
     data = request.json
-    Server().remove_from_acl(file_system=data.get("file_system"), private_ip=data.get("private_ip"))
+    Server().remove_from_acl(
+        primary_server_private_ip=data.get("primary_server_private_ip"),
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+        shared_directory=data.get("shared_directory"),
+    )
     return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
 
 
