@@ -623,6 +623,7 @@ class Server(Base):
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
 
+    @job("Add Servers to ACL")
     def add_to_acl(
         self,
         server_to_enable_mount_on: str,
@@ -630,17 +631,43 @@ class Server(Base):
         use_file_system_of_server: str,
         share_file_system: bool,
     ) -> None:
-        nfs_handler = NFSHandler(self)
-        nfs_handler.add_to_acl(
-            server_to_enable_mount_on=server_to_enable_mount_on,
-            private_ip_to_enable_mount_on=private_ip_to_enable_mount_on,
-            share_file_system=share_file_system,
-            use_file_system_of_server=use_file_system_of_server,
+        return self._add_to_acl(
+            server_to_enable_mount_on,
+            private_ip_to_enable_mount_on,
+            use_file_system_of_server,
+            share_file_system,
         )
 
-    def remove_from_acl(self, file_system: str, private_ip: str) -> None:
+    @step("Add Servers to ACL")
+    def _add_to_acl(
+        self,
+        primary_server_private_ip: str,
+        secondary_server_private_ip: str,
+        shared_directory: str,
+    ):
         nfs_handler = NFSHandler(self)
-        nfs_handler.remove_from_acl(file_system, private_ip)
+        return nfs_handler.add_to_acl(
+            primary_server_private_ip=primary_server_private_ip,
+            secondary_server_private_ip=secondary_server_private_ip,
+            shared_directory=shared_directory,
+        )
+
+    @job("Remove Server from ACL")
+    def remove_from_acl(
+        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
+    ) -> None:
+        return self._remove_from_acl(shared_directory, primary_server_private_ip, secondary_server_private_ip)
+
+    @step("Remove Server from ACL")
+    def _remove_from_acl(
+        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
+    ):
+        nfs_handler = NFSHandler(self)
+        return nfs_handler.remove_from_acl(
+            shared_directory=shared_directory,
+            primary_server_private_ip=primary_server_private_ip,
+            secondary_server_private_ip=secondary_server_private_ip,
+        )
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
