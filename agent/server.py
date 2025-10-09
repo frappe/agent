@@ -159,19 +159,33 @@ class Server(Base):
         return [to_bytes(size) for image_name, size in images_present if image_name not in images_in_use]
 
     def get_reclaimable_size(self) -> dict[str, dict[str, float] | float]:
-        """Checks archived and unused docker artefacts size"""
+        """Checks archived (bench and site) and unused docker artefacts size"""
+        archived_sites_directory = os.path.join(self.benches_directory, "*", "sites", "archived")
         archived_folder_size = self.execute(
             "du -sB1 /home/frappe/archived/ --exclude assets | awk '{print $1}'"
         ).get("output")
-        unused_images_size = sum(self.unused_image_size())
+        archived_folder_size = float(archived_folder_size)
 
-        formatted_archived_folder_size = f"{round(float(archived_folder_size) / 1024**3, 2)}GB"
+        try:
+            site_archived_folder_size = (
+                self.execute(f"du -sB1 {archived_sites_directory} --exclude assets | awk '{{print $1}}'")
+                .get("output")
+                .split("\n")
+            )
+            site_archived_folder_size = sum(map(float, site_archived_folder_size))
+        except Exception:
+            site_archived_folder_size = 0
+
+        unused_images_size = sum(self.unused_image_size())
+        total_archived_folder_size = archived_folder_size + site_archived_folder_size
+
+        formatted_archived_folder_size = f"{round(total_archived_folder_size / 1024**3, 2)}GB"
         formatted_unused_image_size = format_size(unused_images_size)
 
         return {
             "archived": formatted_archived_folder_size,
             "images": formatted_unused_image_size,
-            "total": round((unused_images_size + float(archived_folder_size)) / 1024**3, 2),
+            "total": round((unused_images_size + total_archived_folder_size) / 1024**3, 2),
         }
 
     def _check_site_on_bench(self, bench_name: str):
@@ -211,6 +225,8 @@ class Server(Base):
         self.remove_archived_benches(force)
         self.remove_temporary_files(force)
         self.remove_unused_docker_artefacts()
+        if force:
+            self.remove_archived_sites()
 
     def remove_benches_without_container(self, benches: list[str]):
         for bench in benches:
@@ -219,6 +235,13 @@ class Server(Base):
             except AgentException as e:
                 if e.data.returncode:
                     self.move_to_archived_directory(Bench(bench, self))
+
+    @step("Remove Archived Sites")
+    def remove_archived_sites(self):
+        for bench in self.benches:
+            archived_sites_path = os.path.join(self.benches_directory, bench, "sites", "archived")
+            if os.path.exists(archived_sites_path) and os.path.isdir(archived_sites_path):
+                shutil.rmtree(archived_sites_path)
 
     @step("Remove Archived Benches")
     def remove_archived_benches(self, force: bool = False):
