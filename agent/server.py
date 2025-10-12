@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -25,6 +26,7 @@ from agent.base import AgentException, Base
 from agent.bench import Bench
 from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
+from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
@@ -199,6 +201,105 @@ class Server(Base):
         """In case of corrupted bench / site config don't stall archive"""
         self._check_site_on_bench(name)
         self.execute(f"docker rm {name} --force")
+
+    @job("Run Benches on Shared FS")
+    def change_bench_directory(
+        self,
+        directory: str,
+        is_primary: bool,
+        secondary_server_private_ip: str,
+        redis_connection_string_ip: str | None = None,
+        restart_benches: bool = True,
+        registry_settings: dict | None = None,
+    ):
+        self._change_bench_directory(directory)
+        self.update_agent_nginx_config()
+        self.update_bench_nginx_config()
+        self._reload_nginx()
+
+        if redis_connection_string_ip:
+            self._configure_site_with_redis_private_ip(redis_connection_string_ip)
+
+        if restart_benches:
+            # We will only start with secondary server private IP if this is a secondary server
+            self.restart_benches(
+                is_primary=is_primary,
+                registry_settings=registry_settings,
+                secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
+            )
+
+    @step("Configure Site with Redis Private IP")
+    def _configure_site_with_redis_private_ip(self, private_ip: str):
+        for _, bench in self.benches.items():
+            common_site_config = bench.get_config(for_update=True)
+
+            for key in ("redis_cache", "redis_queue", "redis_socketio"):
+                original_value = common_site_config[key]
+                updated_connection_string = re.sub(
+                    # Replace the IP with whatever is passed as Private IP
+                    r"(redis://)([^:]+)(:\d+)",
+                    lambda m: f"{m.group(1)}{private_ip}{m.group(3)}",
+                    original_value,
+                )
+                common_site_config.update({key: updated_connection_string})
+
+            bench.set_config(common_site_config)
+
+    @step("Change Bench Directory")
+    def _change_bench_directory(self, directory: str):
+        self.update_config({"benches_directory": directory})
+
+    @step("Update Agent Nginx Conf File")
+    def update_agent_nginx_config(self):
+        self._generate_nginx_config()
+
+    @step("Update Bench Nginx Conf File")
+    def update_bench_nginx_config(self):
+        from filelock import FileLock
+
+        for _, bench in self.benches.items():
+            with FileLock(os.path.join(bench.directory, "nginx.config.lock")):
+                # Don't want to use setup_nginx as it reloads everytime
+                bench.generate_nginx_config()
+
+    @step("Restart Benches")
+    def restart_benches(
+        self, is_primary: bool, secondary_server_private_ip: str, registry_settings: dict[str, str]
+    ):
+        if not is_primary:
+            # Don't need to pull images on primary server
+            self.docker_login(registry_settings)
+        for _, bench in self.benches.items():
+            bench.start(secondary_server_private_ip=secondary_server_private_ip)
+
+    @job("Stop Bench Workers")
+    def stop_bench_workers(self):
+        self._stop_bench_workers()
+
+    @step("Stop Bench Workers")
+    def _stop_bench_workers(self):
+        """Stop all workers except redis"""
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
+
+    @job("Start Bench Workers")
+    def start_bench_workers(self):
+        self._start_bench_workers()
+
+    @step("Start Bench Workers")
+    def _start_bench_workers(self):
+        """Start all workers"""
+        for _, bench in self.benches.items():
+            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
+
+    @job("Force Remove All Benches")
+    def force_remove_all_benches(self):
+        self._force_remove_all_benches()
+
+    @step("Force Remove All Benches")
+    def _force_remove_all_benches(self):
+        for _, bench in self.benches.items():
+            bench.execute(f"docker rm {bench.name} --force")
 
     @job("Archive Bench", priority="low")
     def archive_bench(self, name):
@@ -544,6 +645,50 @@ class Server(Base):
 
     def setup_proxysql(self, password):
         self.update_config({"proxysql_admin_password": password})
+
+    @job("Add Servers to ACL")
+    def add_to_acl(
+        self,
+        primary_server_private_ip: str,
+        secondary_server_private_ip: str,
+        shared_directory: bool,
+    ) -> None:
+        return self._add_to_acl(
+            primary_server_private_ip,
+            secondary_server_private_ip,
+            shared_directory,
+        )
+
+    @step("Add Servers to ACL")
+    def _add_to_acl(
+        self,
+        primary_server_private_ip: str,
+        secondary_server_private_ip: str,
+        shared_directory: str,
+    ):
+        nfs_handler = NFSHandler(self)
+        return nfs_handler.add_to_acl(
+            primary_server_private_ip=primary_server_private_ip,
+            secondary_server_private_ip=secondary_server_private_ip,
+            shared_directory=shared_directory,
+        )
+
+    @job("Remove Server from ACL")
+    def remove_from_acl(
+        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
+    ) -> None:
+        return self._remove_from_acl(shared_directory, primary_server_private_ip, secondary_server_private_ip)
+
+    @step("Remove Server from ACL")
+    def _remove_from_acl(
+        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
+    ):
+        nfs_handler = NFSHandler(self)
+        return nfs_handler.remove_from_acl(
+            shared_directory=shared_directory,
+            primary_server_private_ip=primary_server_private_ip,
+            secondary_server_private_ip=secondary_server_private_ip,
+        )
 
     def update_config(self, value):
         config = self.get_config(for_update=True)
@@ -908,6 +1053,7 @@ class Server(Base):
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
+                "use_shared": self.config.get("benches_directory") == "/shared",
             },
             nginx_config,
         )
