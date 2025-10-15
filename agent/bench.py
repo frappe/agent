@@ -920,7 +920,7 @@ class Bench(Base):
         patch_dir = Path(os.path.join(self.directory, *relative))
         patch_dir.mkdir(parents=True, exist_ok=True)
 
-        bench_container_dir = self.server.benches_directory
+        bench_container_dir = "/home/frappe/frappe-bench"
         patch_container_dir = os.path.join(bench_container_dir, *relative, filename)
 
         patch_path = patch_dir / filename
