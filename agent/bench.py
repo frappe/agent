@@ -173,7 +173,7 @@ class Bench(Base):
     def docker_execute(self, command, input=None, subdir=None, non_zero_throw=True, as_root: bool = False):
         interactive = "-i" if input else ""
         as_root = "-u root" if as_root else ""
-        workdir = "/home/frappe/frappe-bench"
+        workdir = self.server.benches_directory
         if subdir:
             workdir = os.path.join(workdir, subdir)
 
@@ -737,7 +737,7 @@ class Bench(Base):
 
             rq_port_mapping = f"-p 0.0.0.0:{rq_port}:11000 "  # need to expose to secondary server
 
-            bench_directory = "/home/frappe/frappe-bench"
+            bench_directory = self.server.benches_directory
             mounts = self.prepare_mounts_on_host(bench_directory)
 
             command = (
@@ -920,7 +920,7 @@ class Bench(Base):
         patch_dir = Path(os.path.join(self.directory, *relative))
         patch_dir.mkdir(parents=True, exist_ok=True)
 
-        bench_container_dir = "/home/frappe/frappe-bench"
+        bench_container_dir = self.server.benches_directory
         patch_container_dir = os.path.join(bench_container_dir, *relative, filename)
 
         patch_path = patch_dir / filename
