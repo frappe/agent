@@ -161,9 +161,9 @@ server {
 
 		proxy_read_timeout 600;
 		proxy_buffering off;
-		proxy_buffer_size 128k;
-		proxy_buffers 100 128k;
-		proxy_busy_buffers_size 128k;
+		proxy_buffer_size 8k;
+		proxy_buffers 8 8k;
+		proxy_busy_buffers_size 8k;
 
 		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
