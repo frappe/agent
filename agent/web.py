@@ -1303,7 +1303,14 @@ def explain():
 @application.route("/database/binlogs/purge", methods=["POST"])
 def purge_binlog():
     data = request.json
-    return jsonify(DatabaseServer().purge_binlog(**data))
+    return jsonify(DatabaseServer()._purge_binlog(**data))
+
+
+@application.route("/database/binlogs/purge_by_size_limit", methods=["POST"])
+def purge_binlogs_by_size_limit():
+    data = request.json
+    job = DatabaseServer().purge_binlogs_by_size_limit(**data)
+    return {"job": job}
 
 
 @application.route("/database/binlogs/list", methods=["GET"])
