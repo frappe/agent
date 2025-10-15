@@ -109,9 +109,9 @@ class Site(Base):
         private_file,
     ):
         sites_directory = self.bench.sites_directory
-        database_file = database_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
-        public_file = public_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
-        private_file = private_file.replace(sites_directory, "/home/frappe/frappe-bench/sites")
+        database_file = database_file.replace(sites_directory, f"{self.bench.server.benches_directory}/sites")
+        public_file = public_file.replace(sites_directory, f"{self.bench.server.benches_directory}/sites")
+        private_file = private_file.replace(sites_directory, f"{self.bench.server.benches_directory}/sites")
 
         public_file_option = f"--with-public-files {public_file}" if public_file else ""
         private_file_option = f"--with-private-files {private_file} " if private_file else ""
