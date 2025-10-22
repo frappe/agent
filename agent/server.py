@@ -89,6 +89,7 @@ class Server(Base):
         self._render_template("bench/docker-compose.yml.jinja2", config, docker_compose)
 
         config_directory = os.path.join(bench_directory, "config")
+
         command = (
             "docker run --rm --net none "
             f"-v {config_directory}:/home/frappe/frappe-bench/configmount "
