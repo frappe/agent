@@ -37,16 +37,20 @@ class Server(Base):
         super().__init__()
 
         self.directory = directory or os.getcwd()
+        self.set_config_attributes()
+
+        self.job = None
+        self.step = None
+
+    def set_config_attributes(self):
+        """Setting config attributes here to enable easy config reloads"""
         self.config_file = os.path.join(self.directory, "config.json")
         self.name = self.config["name"]
         self.benches_directory = self.config["benches_directory"]
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
-
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
-        self.job = None
-        self.step = None
 
     @property
     def press_url(self):
@@ -213,6 +217,7 @@ class Server(Base):
         registry_settings: dict | None = None,
     ):
         self._change_bench_directory(directory)
+        self.set_config_attributes()
         self.update_agent_nginx_config()
         self.update_bench_nginx_config()
         self._reload_nginx()
