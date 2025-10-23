@@ -115,12 +115,13 @@ class Server(Base):
             "config": self.config,
         }
 
-    def update_redis_password(self, bench: Bench, redis_password: str) -> None:
+    def update_redis_password(self, bench: Bench) -> None:
         """Updates redis-cache and redis-queue with agent stored hash"""
+        agent_access_token = self.config["access_token"]
         redis_cache_conf = os.path.join(bench.config_directory, "redis-cache.conf")
         redis_queue_conf = os.path.join(bench.config_directory, "redis-queue.conf")
 
-        requirepass_line = f"requirepass {redis_password}\n"
+        requirepass_line = f"requirepass {agent_access_token}\n"
 
         for conf_file in [redis_cache_conf, redis_queue_conf]:
             with open(conf_file, "r") as f:
@@ -148,8 +149,7 @@ class Server(Base):
         self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
-        if redis_password:
-            self.update_redis_password(bench, redis_password)
+        self.update_redis_password(bench)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
