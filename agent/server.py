@@ -115,13 +115,12 @@ class Server(Base):
             "config": self.config,
         }
 
-    def update_redis_password(self, bench: Bench) -> None:
+    def update_redis_password(self, bench: Bench, agent_password: str) -> None:
         """Updates redis-cache and redis-queue with agent stored hash"""
-        agent_access_token = self.config["access_token"]
         redis_cache_conf = os.path.join(bench.config_directory, "redis-cache.conf")
         redis_queue_conf = os.path.join(bench.config_directory, "redis-queue.conf")
 
-        requirepass_line = f"requirepass {agent_access_token}\n"
+        requirepass_line = f"requirepass {agent_password}\n"
 
         for conf_file in [redis_cache_conf, redis_queue_conf]:
             with open(conf_file, "r") as f:
@@ -136,12 +135,12 @@ class Server(Base):
                     f.writelines(lines)
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry, mounts=None):
+    def new_bench(self, name, bench_config, common_site_config, registry, agent_password: str, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
-        self.update_redis_password(bench)
+        self.update_redis_password(bench, agent_password)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
