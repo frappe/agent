@@ -115,12 +115,12 @@ class Server(Base):
             "config": self.config,
         }
 
-    def update_redis_password(self, bench: Bench, agent_password: str) -> None:
+    def update_redis_password(self, bench: Bench, redis_password: str) -> None:
         """Updates redis-cache and redis-queue with agent stored hash"""
         redis_cache_conf = os.path.join(bench.config_directory, "redis-cache.conf")
         redis_queue_conf = os.path.join(bench.config_directory, "redis-queue.conf")
 
-        requirepass_line = f"requirepass {agent_password}\n"
+        requirepass_line = f"requirepass {redis_password}\n"
 
         for conf_file in [redis_cache_conf, redis_queue_conf]:
             with open(conf_file, "r") as f:
@@ -135,12 +135,12 @@ class Server(Base):
                     f.writelines(lines)
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry, agent_password: str, mounts=None):
+    def new_bench(self, name, bench_config, common_site_config, registry, redis_password: str, mounts=None):
         self.docker_login(registry)
         self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
-        self.update_redis_password(bench, agent_password)
+        self.update_redis_password(bench, redis_password)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
@@ -231,7 +231,7 @@ class Server(Base):
         directory: str,
         is_primary: bool,
         secondary_server_private_ip: str,
-        agent_password: str,
+        redis_password: str,
         redis_connection_string_ip: str,
         restart_benches: bool = True,
         registry_settings: dict | None = None,
@@ -243,7 +243,7 @@ class Server(Base):
         self._reload_nginx()
 
         self._update_site_config_with_new_rq_conf(
-            redis_connection_string_ip, agent_password
+            redis_connection_string_ip, redis_password
         )  # Update common site config
 
         if restart_benches:
@@ -251,12 +251,12 @@ class Server(Base):
             self.restart_benches(
                 is_primary=is_primary,
                 registry_settings=registry_settings,
-                agent_password=agent_password,
+                redis_password=redis_password,
                 secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
             )
 
     @step("Configure Site with Redis Private IP")
-    def _update_site_config_with_new_rq_conf(self, private_ip: str, agent_password: str):
+    def _update_site_config_with_new_rq_conf(self, private_ip: str, redis_password: str):
         for _, bench in self.benches.items():
             common_site_config = bench.get_config(for_update=True)
 
@@ -270,7 +270,7 @@ class Server(Base):
                 else:
                     port = 11000 if key == "redis_queue" else 13000
 
-                updated_connection_string = f"redis://:{agent_password}@{private_ip}:{port}"
+                updated_connection_string = f"redis://:{redis_password}@{private_ip}:{port}"
                 common_site_config.update({key: updated_connection_string})
 
             bench.set_config(common_site_config)
@@ -297,14 +297,14 @@ class Server(Base):
         self,
         is_primary: bool,
         secondary_server_private_ip: str,
-        agent_password: str,
+        redis_password: str,
         registry_settings: dict[str, str],
     ):
         if not is_primary:
             # Don't need to pull images on primary server
             self.docker_login(registry_settings)
         for _, bench in self.benches.items():
-            self.update_redis_password(bench, agent_password)  # Update redis conf files
+            self.update_redis_password(bench, redis_password)  # Update redis conf files
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
     @job("Stop Bench Workers")
