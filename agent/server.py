@@ -135,12 +135,21 @@ class Server(Base):
                     f.writelines(lines)
 
     @job("New Bench", priority="low")
-    def new_bench(self, name, bench_config, common_site_config, registry, redis_password: str, mounts=None):
+    def new_bench(
+        self,
+        name,
+        bench_config,
+        common_site_config,
+        registry,
+        redis_password: str | None = None,
+        mounts=None,
+    ):
         self.docker_login(registry)
         self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
-        self.update_redis_password(bench, redis_password)
+        if redis_password:
+            self.update_redis_password(bench, redis_password)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
