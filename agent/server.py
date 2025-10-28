@@ -134,6 +134,21 @@ class Server(Base):
                 with open(conf_file, "w") as f:
                     f.writelines(lines)
 
+    @job("Set Redis Password", priority="high")
+    def set_redis_password(self, redis_password: str):
+        """Set redis password for existing benches"""
+        return self._set_redis_password(redis_password)
+
+    @step("Set Redis Password")
+    def _set_redis_password(self, redis_password: str):
+        for _, bench in self.benches.items():
+            for port in ("11000", "13000"):  # for cache and queue
+                bench.docker_execute(
+                    f"redis-cli --raw -p {port} CONFIG SET requirepass '{redis_password}' "
+                    f"&& redis-cli --raw -p {port} -a '{redis_password}' CONFIG SET protected-mode no "
+                    f"&& redis-cli --raw -p {port} -a '{redis_password}' CONFIG REWRITE"
+                )
+
     @job("New Bench", priority="low")
     def new_bench(
         self,

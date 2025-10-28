@@ -606,19 +606,6 @@ class Bench(Base):
         self.docker_execute("supervisorctl reread")
         self.docker_execute("supervisorctl update")
 
-    @job("Set Redis Password", priority="high")
-    def set_redis_password(self, redis_password: str):
-        return self._set_redis_password(redis_password)
-
-    @step("Set Redis Password")
-    def _set_redis_password(self, redis_password: str):
-        for port in ("11000", "13000"):  # for cache and queue
-            self.docker_execute(f"redis-cli --raw -p {port} CONFIG SET requirepass '{redis_password}'")
-            self.docker_execute(
-                f"redis-cli --raw -p {port} -a '{redis_password}' CONFIG SET protected-mode no"
-            )
-            self.docker_execute(f"redis-cli --raw -p {port} -a '{redis_password}' CONFIG REWRITE")
-
     def generate_supervisor_config(self):
         supervisor_config = os.path.join(self.directory, "config", "supervisor.conf")
         self.server._render_template(
