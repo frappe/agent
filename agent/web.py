@@ -481,11 +481,10 @@ def restart_bench(bench):
     return {"job": job}
 
 
-@application.route("/benches/<string:bench>/set-redis-password", methods=["POST"])
-@validate_bench
-def set_redis_password(bench):
+@application.route("/server/set-redis-password", methods=["POST"])
+def set_redis_password():
     data = request.json
-    job = Server().benches[bench].set_redis_password(data.get("redis_password"))
+    job = Server().set_redis_password(data.get("redis_password"))
     return {"job": job}
 
 
