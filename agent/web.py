@@ -481,6 +481,13 @@ def restart_bench(bench):
     return {"job": job}
 
 
+@application.route("/server/set-redis-password", methods=["POST"])
+def set_redis_password():
+    data = request.json
+    job = Server().set_redis_password(data.get("redis_password"))
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/limits", methods=["POST"])
 def update_bench_limits(bench):
     data = request.json
