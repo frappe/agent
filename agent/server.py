@@ -115,40 +115,6 @@ class Server(Base):
             "config": self.config,
         }
 
-    def update_redis_password(self, bench: Bench, redis_password: str) -> None:
-        """Updates redis-cache and redis-queue with agent stored hash"""
-        redis_cache_conf = os.path.join(bench.config_directory, "redis-cache.conf")
-        redis_queue_conf = os.path.join(bench.config_directory, "redis-queue.conf")
-
-        requirepass_line = f"requirepass {redis_password}\n"
-
-        for conf_file in [redis_cache_conf, redis_queue_conf]:
-            with open(conf_file, "r") as f:
-                lines = f.readlines()
-
-            has_requirepass = any(line.strip().startswith("requirepass") for line in lines)
-
-            if not has_requirepass:
-                lines.append(requirepass_line)
-
-                with open(conf_file, "w") as f:
-                    f.writelines(lines)
-
-    @job("Set Redis Password", priority="high")
-    def set_redis_password(self, redis_password: str):
-        """Set redis password for existing benches"""
-        return self._set_redis_password(redis_password)
-
-    @step("Set Redis Password")
-    def _set_redis_password(self, redis_password: str):
-        for _, bench in self.benches.items():
-            for port in ("11000", "13000"):  # for cache and queue
-                bench.docker_execute(
-                    f"redis-cli --raw -p {port} CONFIG SET requirepass '{redis_password}' "
-                    f"&& redis-cli --raw -p {port} -a '{redis_password}' CONFIG SET protected-mode no "
-                    f"&& redis-cli --raw -p {port} -a '{redis_password}' CONFIG REWRITE"
-                )
-
     @job("New Bench", priority="low")
     def new_bench(
         self,
@@ -156,15 +122,12 @@ class Server(Base):
         bench_config,
         common_site_config,
         registry,
-        redis_password: str | None = None,
         mounts=None,
     ):
         self.docker_login(registry)
         self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
-        if redis_password:
-            self.update_redis_password(bench, redis_password)
         if bench.bench_config.get("single_container"):
             bench.generate_supervisor_config()
         bench.deploy()
@@ -328,7 +291,7 @@ class Server(Base):
             # Don't need to pull images on primary server
             self.docker_login(registry_settings)
         for _, bench in self.benches.items():
-            self.update_redis_password(bench, redis_password)  # Update redis conf files
+            bench._update_redis_password(redis_password)
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
     @job("Stop Bench Workers")
