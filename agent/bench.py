@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import string
 import tempfile
@@ -15,6 +16,7 @@ from pathlib import Path, PurePath
 from random import choices
 from textwrap import indent
 from typing import TYPE_CHECKING, TypedDict
+from urllib.parse import urlparse
 
 import requests
 
@@ -566,17 +568,65 @@ class Bench(Base):
         return apps
 
     @step("Update Bench Configuration")
-    def update_config(self, common_site_config, bench_config):
-        self._update_config(common_site_config, bench_config)
+    def update_config(self, common_site_config, bench_config) -> bool:
+        return self._update_config(common_site_config, bench_config)
+
+    def _update_redis_password(self, redis_password: str) -> bool:
+        """
+        Update redis password if not present once added password will not be changed!
+        Release group does not allow changing password anyways
+        """
+        updated = False
+
+        requirepass_line = f"requirepass {redis_password}\n"
+        protected_mode_line = "protected-mode no\n"
+
+        redis_password_pattern = r"^\s*requirepass\s+.*$"
+        protected_mode_pattern = r"^\s*protected-mode\s+.*$"
+
+        for conf_file in [
+            os.path.join(self.config_directory, "redis-queue.conf"),
+            os.path.join(self.config_directory, "redis-cache.conf"),
+        ]:
+            with open(conf_file, "r") as f:
+                content = f.read()
+
+            if not content.endswith("\n"):
+                content += "\n"
+
+            if not re.search(protected_mode_pattern, content, flags=re.MULTILINE):
+                updated = True
+                content += protected_mode_line
+
+            if not re.search(redis_password_pattern, content, flags=re.MULTILINE):
+                updated = True
+                content += requirepass_line
+
+            with open(conf_file, "w") as f:
+                f.write(content)
+
+        return updated
+
+    def _get_redis_passwords(self, common_site_config: dict[str, str | int]) -> str | None:
+        """Get redis cache and queue passwords if they exist,
+        we assume the redis cache and queue password to be same"""
+        redis_cache_url = common_site_config.get("redis_cache")
+        return urlparse(redis_cache_url).password
 
     def _update_config(
         self,
         common_site_config: dict | None = None,
         bench_config: dict | None = None,
-    ):
+    ) -> bool:
+        requires_deploy = False
         if common_site_config:
             new_common_site_config = self.get_config(for_update=True)
             new_common_site_config.update(common_site_config)
+            redis_password = self._get_redis_passwords(common_site_config)
+
+            if redis_password:
+                requires_deploy = self._update_redis_password(redis_password)
+
             self.set_config(new_common_site_config)
 
         if bench_config:
@@ -584,16 +634,20 @@ class Bench(Base):
             new_bench_config.update(bench_config)
             self.set_bench_config(new_bench_config)
 
+        return requires_deploy
+
     @job("Update Bench Configuration", priority="high")
     def update_config_job(self, common_site_config, bench_config):
         old_config = self.bench_config
-        self.update_config(common_site_config, bench_config)
+        requires_update = self.update_config(common_site_config, bench_config)
         self.setup_nginx()
         if self.bench_config.get("single_container"):
             self.update_supervisor()
             self.update_runtime_limits()
-            if (old_config["web_port"] != bench_config["web_port"]) or (
-                old_config["socketio_port"] != bench_config["socketio_port"]
+            if (
+                requires_update
+                or (old_config["web_port"] != bench_config["web_port"])
+                or (old_config["socketio_port"] != bench_config["socketio_port"])
             ):
                 self.deploy()
         else:
