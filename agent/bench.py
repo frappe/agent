@@ -645,9 +645,9 @@ class Bench(Base):
             self.update_supervisor()
             self.update_runtime_limits()
             if (
-                (old_config["web_port"] != bench_config["web_port"])
+                requires_update
+                or (old_config["web_port"] != bench_config["web_port"])
                 or (old_config["socketio_port"] != bench_config["socketio_port"])
-                or requires_update
             ):
                 self.deploy()
         else:
