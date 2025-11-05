@@ -740,6 +740,7 @@ class DatabaseServer(Server):
 
     @step("Rebuild global search")
     def rebuild_global_search_step(self):
+        import json
         """Execute bench rebuild-global-search command."""
         command = f"bench --site {self.name} rebuild-global-search"
         result = self.execute(command)
