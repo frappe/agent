@@ -467,8 +467,7 @@ class DatabaseServer(Server):
 
     @step("Truncate Global Search Table")
     def truncate_global_search(self):
-        truncate = run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
-        return truncate
+        return run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
 
     @step("Rebuild global search")
     def rebuild_global_search_step(self):
