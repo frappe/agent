@@ -9,6 +9,7 @@ import tempfile
 import time
 from contextlib import suppress
 from datetime import datetime
+from urllib.parse import urlparse
 
 from jinja2 import Environment, PackageLoader
 from passlib.hash import pbkdf2_sha256 as pbkdf2
@@ -218,7 +219,6 @@ class Server(Base):
         directory: str,
         is_primary: bool,
         secondary_server_private_ip: str,
-        redis_password: str,
         redis_connection_string_ip: str,
         restart_benches: bool = True,
         registry_settings: dict | None = None,
@@ -229,21 +229,18 @@ class Server(Base):
         self.update_bench_nginx_config()
         self._reload_nginx()
 
-        self._update_site_config_with_new_rq_conf(
-            redis_connection_string_ip, redis_password
-        )  # Update common site config
+        self._update_site_config_with_new_rq_conf(redis_connection_string_ip)
 
         if restart_benches:
             # We will only start with secondary server private IP if this is a secondary server
             self.restart_benches(
                 is_primary=is_primary,
                 registry_settings=registry_settings,
-                redis_password=redis_password,
                 secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
             )
 
     @step("Configure Site with Redis Private IP")
-    def _update_site_config_with_new_rq_conf(self, private_ip: str, redis_password: str):
+    def _update_site_config_with_new_rq_conf(self, private_ip: str):
         for _, bench in self.benches.items():
             common_site_config = bench.get_config(for_update=True)
 
@@ -257,7 +254,13 @@ class Server(Base):
                 else:
                     port = 11000 if key == "redis_queue" else 13000
 
-                updated_connection_string = f"redis://:{redis_password}@{private_ip}:{port}"
+                old_connection_string = urlparse(common_site_config[key])
+                # We should have the password by now, if we don't then press will handle
+                updated_connection_string = (
+                    f"redis://:{old_connection_string.password}@{private_ip}:{port}"
+                    if old_connection_string.password
+                    else f"redis://{private_ip}:{port}"
+                )
                 common_site_config.update({key: updated_connection_string})
 
             bench.set_config(common_site_config)
@@ -284,14 +287,12 @@ class Server(Base):
         self,
         is_primary: bool,
         secondary_server_private_ip: str,
-        redis_password: str,
         registry_settings: dict[str, str],
     ):
         if not is_primary:
             # Don't need to pull images on primary server
             self.docker_login(registry_settings)
         for _, bench in self.benches.items():
-            bench._update_redis_password(redis_password)
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
     @job("Stop Bench Workers")
