@@ -686,14 +686,11 @@ class Bench(Base):
         )
 
     def _get_custom_workers_group(self):
-        group = []
         custom_workers = self.common_site_config.get("workers", {})
-
-        if custom_workers:
-            for worker_name in custom_workers:
-                group.append(f"frappe-bench-{ worker_name }-worker")
-
-        return ", ".join(group)
+        worker_keys = custom_workers.keys()
+        if worker_keys:
+            return ",".join(f"frappe-bench-{name}-worker" for name in worker_keys)
+        return ""
 
     @step("Generate Docker Compose File")
     def generate_docker_compose_file(self):
