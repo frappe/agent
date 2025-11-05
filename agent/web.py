@@ -226,7 +226,6 @@ def change_bench_directory():
     job = Server().change_bench_directory(
         is_primary=data.get("is_primary"),
         directory=data.get("directory"),
-        redis_password=data.get("redis_password"),
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
         redis_connection_string_ip=data.get("redis_connection_string_ip"),
         restart_benches=data.get("restart_benches"),
