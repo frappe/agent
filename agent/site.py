@@ -678,6 +678,23 @@ class Site(Base):
     def resume_scheduler(self):
         return self.bench_execute("scheduler resume")
 
+    @job("Fix global search")
+    def fix_global_search(self):
+        self.truncate_global_search()
+        self.rebuild_global_search()
+
+    @step("Truncate Global Search Table")
+    def truncate_global_search(self):
+        return self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+
+    @step("Rebuild global search")
+    def rebuild_global_search_step(self):
+        import json
+        """Execute bench rebuild-global-search command."""
+        command = f"bench --site {self.name} rebuild-global-search"
+        result = self.execute(command)
+        return {"output": json.dumps(result)}
+
     def fetch_site_status(self):
         data = {
             "scheduler": True,
