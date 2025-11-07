@@ -74,9 +74,12 @@ def ping_server(password: str):
 @click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 @click.option("--press-url", required=False, type=str)
-def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
+@click.option("--is-nfs-server", required=False, is_flag=True, type=bool, default=False)
+def config(
+    name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None, is_nfs_server: bool | None = None
+) -> None:
     config = {
-        "benches_directory": f"/home/{user}/benches",
+        "benches_directory": f"/home/{user}/{'benches' if not is_nfs_server else 'nfs'}",
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
@@ -87,6 +90,8 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
         "web_port": 25052,
         "press_url": "https://frappecloud.com",
     }
+    if is_nfs_server:
+        config["exports_file"] = f"/home/{user}/exports"
     if press_url:
         config["press_url"] = press_url
     if proxy_ip:
