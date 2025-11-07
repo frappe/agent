@@ -16,6 +16,7 @@ from agent.database import Database
 from agent.job import job, step
 from agent.server import Server
 
+
 class DatabaseServer(Server):
     def __init__(self, directory=None):
         super().__init__(directory=directory)
