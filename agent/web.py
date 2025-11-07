@@ -462,14 +462,7 @@ def get_site_sid(bench, site):
 @application.route("/benches", methods=["POST"])
 def new_bench():
     data = request.json
-    primary_server = data.pop("primary_server", None)
-
-    # Explicitly call this on the primary server
-    if primary_server:
-        job = Server(primary_server=primary_server).new_bench(**data)
-    else:
-        job = Server().new_bench(**data)
-
+    job = Server().new_bench(**data)
     return {"job": job}
 
 
