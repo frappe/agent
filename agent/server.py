@@ -33,10 +33,11 @@ from agent.utils import get_supervisor_processes_status, is_registry_healthy
 
 
 class Server(Base):
-    def __init__(self, directory=None):
+    def __init__(self, directory=None, primary_server: str | None = None):
         super().__init__()
 
         self.directory = directory or os.getcwd()
+        self.primary_server = primary_server
         self.set_config_attributes()
 
         self.job = None
@@ -45,8 +46,12 @@ class Server(Base):
     def set_config_attributes(self):
         """Setting config attributes here to enable easy config reloads"""
         self.config_file = os.path.join(self.directory, "config.json")
-        self.name = self.config["name"]
-        self.benches_directory = self.config["benches_directory"]
+        self.name = self.primary_server or self.config["name"]
+        self.benches_directory = (
+            os.path.join(self.config["benches_directory"], self.primary_server)
+            if self.primary_server
+            else self.config["benches_directory"]
+        )
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
