@@ -15,7 +15,10 @@ from peewee import MySQLDatabase
 from agent.database import Database
 from agent.job import job, step
 from agent.server import Server
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2eb3377 (fix: Misplaced job and steps)
 
 class DatabaseServer(Server):
     def __init__(self, directory=None):
@@ -727,7 +730,10 @@ class DatabaseServer(Server):
     def get_queries(self, row_ids: dict[str, list[int]], database: str):
         return self.binlog_indexer.get_queries(row_ids, database)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2eb3377 (fix: Misplaced job and steps)
 def get_tmp_folder_path():
     path = "/opt/volumes/mariadb/tmp/"
     if not os.path.exists(path):
