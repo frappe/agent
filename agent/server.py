@@ -9,6 +9,7 @@ import tempfile
 import time
 from contextlib import suppress
 from datetime import datetime
+from typing import Any
 from urllib.parse import urlparse
 
 from jinja2 import Environment, PackageLoader
@@ -33,10 +34,11 @@ from agent.utils import get_supervisor_processes_status, is_registry_healthy
 
 
 class Server(Base):
-    def __init__(self, directory=None):
+    def __init__(self, directory=None, primary_server: str | None = None):
         super().__init__()
 
         self.directory = directory or os.getcwd()
+        self.primary_server = primary_server
         self.set_config_attributes()
 
         self.job = None
@@ -45,8 +47,12 @@ class Server(Base):
     def set_config_attributes(self):
         """Setting config attributes here to enable easy config reloads"""
         self.config_file = os.path.join(self.directory, "config.json")
-        self.name = self.config["name"]
-        self.benches_directory = self.config["benches_directory"]
+        self.name = self.primary_server or self.config["name"]
+        self.benches_directory = (
+            os.path.join(self.config["benches_directory"], self.primary_server)
+            if self.primary_server
+            else self.config["benches_directory"]
+        )
         self.archived_directory = os.path.join(os.path.dirname(self.benches_directory), "archived")
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
@@ -75,7 +81,6 @@ class Server(Base):
 
                 time.sleep(60)
 
-    @step("Initialize Bench")
     def bench_init(self, name, config, registry: dict[str, str]):
         self.establish_connection_with_registry(max_retries=3, registry=registry)
         bench_directory = os.path.join(self.benches_directory, name)
@@ -116,6 +121,15 @@ class Server(Base):
             "config": self.config,
         }
 
+    @job("Setup Bench", priority="low")
+    def setup_bench(self, name: str, bench_config: dict[str, Any], registry: dict[str, Any]):
+        self._setup_bench(name, bench_config, registry)
+
+    @step("Setup Bench")
+    def _setup_bench(self, name: str, bench_config: dict[str, Any], registry: dict[str, Any]):
+        self.docker_login(registry)
+        self.bench_init(name, bench_config, registry)
+
     @job("New Bench", priority="low")
     def new_bench(
         self,
@@ -126,7 +140,6 @@ class Server(Base):
         mounts=None,
     ):
         self.docker_login(registry)
-        self.bench_init(name, bench_config, registry)
         bench = Bench(name, self, mounts=mounts)
         bench.update_config(common_site_config, bench_config)
         if bench.bench_config.get("single_container"):

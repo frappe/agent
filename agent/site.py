@@ -10,6 +10,7 @@ from datetime import datetime
 from shlex import quote
 from typing import TYPE_CHECKING
 
+import pytz
 import requests
 
 from agent.base import AgentException, Base
@@ -456,6 +457,57 @@ class Site(Base):
     @step("Update Saas Plan")
     def update_plan(self, plan):
         self.bench_execute(f"update-site-plan {plan}")
+
+    def _generate_private_and_public_tar(self, current_date: str, backup_dir: str) -> None:
+        """Generate private and public files tarfile at the backup location
+        ref: https://github.com/frappe/frappe/blob/7b8c9132f88b5b45a5ce5f9b404db93b36eb2d0b/frappe/utils/backups.py#L349
+        """
+        for folder in ("public", "private"):
+            files_path = os.path.join(self.directory, folder, "files")
+            backup_path = os.path.join(
+                backup_dir, f"{current_date}-{self.name}-{'private-' if folder == 'private' else ''}files.tar"
+            )
+
+            cmd_string = f"tar -cf {backup_path} {files_path}"
+            self.execute(cmd_string)
+
+    def _generate_site_config_backup(self, current_date: str, backup_dir: str) -> None:
+        """Dump the current site config"""
+        file_path = os.path.join(backup_dir, f"{current_date}-{self.name}-site_config_backup.json")
+
+        with open(file_path, "w") as f:
+            json.dump(self.config, f, indent=2)
+
+    def _take_database_dump(self, current_date: str, backup_dir: str) -> None:
+        """Take mariadb dump of the database
+        ref: https://github.com/frappe/frappe/blob/7b8c9132f88b5b45a5ce5f9b404db93b36eb2d0b/frappe/utils/backups.py#L382
+        """
+        gzip = self.execute("which gzip")["output"]
+        mysqldump = self.execute("which mysqldump")["output"]  # This is symlinked in the image
+
+        backup_path = os.path.join(backup_dir, f"{current_date}-{self.name}-database.sql.gz")
+        cmd_string = (
+            f"set -o pipefail; {mysqldump} --user={self.user} "
+            f"--host={self.host} --port {self.bench.common_site_config['db_port']} "
+            f"--password={self.password} --single-transaction --quick --lock-tables=false "
+            f"{self.user} | {gzip} >> {backup_path}"
+        )
+
+        self.execute(cmd_string, executable="/bin/bash")
+
+    def _backup(self, with_files: bool) -> None:
+        current_date = datetime.now(pytz.UTC)
+        current_date = current_date.strftime("%Y%m%d_%H%M%S")
+        backup_dir = os.path.join(self.directory, "private", "backups")
+
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir, exist_ok=True)
+
+        if with_files:
+            self._generate_private_and_public_tar(current_date, backup_dir)
+            self._generate_site_config_backup(current_date, backup_dir)
+
+        self._take_database_dump(current_date, backup_dir)
 
     @step("Backup Site")
     def backup(self, with_files=False):
