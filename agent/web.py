@@ -459,7 +459,14 @@ def get_site_sid(bench, site):
     return {"sid": Server().benches[bench].sites[site].sid(user=user)}
 
 
-@application.route("/benches", methods=["POST"])
+@application.route("/benches/setup", methods=["POST"])
+def setup_bench():
+    data = request.json
+    job = Server().setup_bench(**data)
+    return {"job": job}
+
+
+@application.route("/benches/new", methods=["POST"])
 def new_bench():
     data = request.json
     job = Server().new_bench(**data)
