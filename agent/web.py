@@ -462,7 +462,10 @@ def get_site_sid(bench, site):
 @application.route("/benches/setup", methods=["POST"])
 def setup_bench():
     data = request.json
-    job = Server().setup_bench(**data)
+    primary_server = data.pop("primary_server", None)
+    job = Server(primary_server=primary_server).setup_bench(
+        **data
+    )  # This could be running on the nfs server as well
     return {"job": job}
 
 
