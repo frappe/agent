@@ -681,19 +681,13 @@ class Server(Base):
         )
 
     @job("Remove Server from ACL")
-    def remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ) -> None:
-        return self._remove_from_acl(shared_directory, primary_server_private_ip, secondary_server_private_ip)
+    def remove_from_acl(self, secondary_server_private_ip: str) -> None:
+        return self._remove_from_acl(secondary_server_private_ip)
 
     @step("Remove Server from ACL")
-    def _remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ):
+    def _remove_from_acl(self, secondary_server_private_ip: str):
         nfs_handler = NFSHandler(self)
         return nfs_handler.remove_from_acl(
-            shared_directory=shared_directory,
-            primary_server_private_ip=primary_server_private_ip,
             secondary_server_private_ip=secondary_server_private_ip,
         )
 
