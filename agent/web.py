@@ -308,7 +308,7 @@ def add_to_acl():
     Server().add_to_acl(
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
     )
-    return {"shared_directory": "/shared"}
+    return {"shared_directory": "/home/frappe/shared"}
 
 
 @application.route("/nfs/remove-from-acl", methods=["POST"])
@@ -317,7 +317,7 @@ def remove_from_acl():
     Server().remove_from_acl(
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
     )
-    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+    return {"shared_directory": "/home/frappe/shared"}
 
 
 @application.route("/nfs/share-sites", methods=["POST"])
