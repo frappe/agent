@@ -306,11 +306,9 @@ def pull_docker_images():
 def add_to_acl():
     data = request.json
     Server().add_to_acl(
-        primary_server_private_ip=data.get("primary_server_private_ip"),
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
-        shared_directory=data.get("shared_directory"),
     )
-    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+    return {"shared_directory": "/shared"}
 
 
 @application.route("/nfs/remove-from-acl", methods=["POST"])
