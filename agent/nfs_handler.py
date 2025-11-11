@@ -11,7 +11,7 @@ class NFSHandler:
     def __init__(self, server: "Server"):
         self.server = server
         self.exports_file = "/home/frappe/exports"
-        self.shared_directory = "/shared"
+        self.shared_directory = "/home/frappe/shared"
         self.options = "rw,sync,no_subtree_check"
 
     def reload_exports(self):
