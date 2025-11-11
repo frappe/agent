@@ -670,30 +670,14 @@ class Server(Base):
         self.update_config({"proxysql_admin_password": password})
 
     @job("Add Servers to ACL")
-    def add_to_acl(
-        self,
-        primary_server_private_ip: str,
-        secondary_server_private_ip: str,
-        shared_directory: bool,
-    ) -> None:
-        return self._add_to_acl(
-            primary_server_private_ip,
-            secondary_server_private_ip,
-            shared_directory,
-        )
+    def add_to_acl(self, secondary_server_private_ip: str) -> None:
+        return self._add_to_acl(secondary_server_private_ip)
 
     @step("Add Servers to ACL")
-    def _add_to_acl(
-        self,
-        primary_server_private_ip: str,
-        secondary_server_private_ip: str,
-        shared_directory: str,
-    ):
+    def _add_to_acl(self, secondary_server_private_ip: str):
         nfs_handler = NFSHandler(self)
         return nfs_handler.add_to_acl(
-            primary_server_private_ip=primary_server_private_ip,
             secondary_server_private_ip=secondary_server_private_ip,
-            shared_directory=shared_directory,
         )
 
     @job("Remove Server from ACL")
