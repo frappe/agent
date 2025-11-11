@@ -30,20 +30,14 @@ class NFSHandler:
         lock = filelock.SoftFileLock(self.exports_file + ".lock")
 
         with lock.acquire(timeout=10), open(self.exports_file, "a+") as f:
-            # Since we are on primary anyways we don't need to add this to the ACL
-            # f.write(f"{self.shared_directory} {primary_server_private_ip}({self.options})\n")
             f.write(f"{self.shared_directory} {secondary_server_private_ip}({self.options})\n")
 
         self.reload_exports()
 
-    def remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ):
+    def remove_from_acl(self, secondary_server_private_ip: str):
         """Unsubscrible a given private IP from a give file system"""
-        server_shared_directory = os.path.join(self.shared_directory)
         remove_lines = [
-            f"{server_shared_directory} {primary_server_private_ip}({self.options})",
-            f"{server_shared_directory} {secondary_server_private_ip}({self.options})",
+            f"{self.shared_directory} {secondary_server_private_ip}({self.options})",
         ]
         for line in remove_lines:
             lock = filelock.SoftFileLock(self.exports_file + ".lock")
