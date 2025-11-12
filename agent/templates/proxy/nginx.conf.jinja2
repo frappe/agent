@@ -149,7 +149,7 @@ server {
 	{% if host_options.redirect %}
 
 	location / {
-		return 301 https://{{ host_options.redirect }}$request_uri;
+		return 308 https://{{ host_options.redirect }}$request_uri;
 	}
 
 	{% else %}
@@ -239,7 +239,7 @@ server {
 		return 301 http://ssl.{{ domain }}$request_uri;
 	}
 	location / {
-		return 301 https://$host$request_uri;
+		return 308 https://$host$request_uri;
 	}
 }
 
