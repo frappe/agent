@@ -1054,7 +1054,7 @@ class Server(Base):
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
-                "use_shared": self.config.get("benches_directory") == "/shared",
+                "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
             },
             nginx_config,
         )
