@@ -11,7 +11,7 @@ class NFSHandler:
     def __init__(self, server: "Server"):
         self.server = server
         self.exports_file = "/home/frappe/exports"
-        self.shared_directory = "/home/frappe/nfs"
+        self.shared_directory = "/home/frappe/shared"
         self.options = "rw,sync,no_subtree_check"
 
     def reload_exports(self):
@@ -19,34 +19,25 @@ class NFSHandler:
 
     def add_to_acl(
         self,
-        primary_server_private_ip: str,
         secondary_server_private_ip: str,
-        shared_directory: str,
     ):
         """
         Updates the exports file on the nfs host server
         """
-        server_shared_directory = os.path.join(self.shared_directory, shared_directory)
-
-        os.makedirs(server_shared_directory)
-        self.server.execute(f"chown -R frappe:frappe {server_shared_directory}")
+        os.makedirs(self.shared_directory, exist_ok=True)
+        self.server.execute(f"chown -R frappe:frappe {self.shared_directory}")
 
         lock = filelock.SoftFileLock(self.exports_file + ".lock")
 
         with lock.acquire(timeout=10), open(self.exports_file, "a+") as f:
-            f.write(f"{server_shared_directory} {primary_server_private_ip}({self.options})\n")
-            f.write(f"{server_shared_directory} {secondary_server_private_ip}({self.options})\n")
+            f.write(f"{self.shared_directory} {secondary_server_private_ip}({self.options})\n")
 
         self.reload_exports()
 
-    def remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ):
+    def remove_from_acl(self, secondary_server_private_ip: str):
         """Unsubscrible a given private IP from a give file system"""
-        server_shared_directory = os.path.join(self.shared_directory, shared_directory)
         remove_lines = [
-            f"{server_shared_directory} {primary_server_private_ip}({self.options})",
-            f"{server_shared_directory} {secondary_server_private_ip}({self.options})",
+            f"{self.shared_directory} {secondary_server_private_ip}({self.options})",
         ]
         for line in remove_lines:
             lock = filelock.SoftFileLock(self.exports_file + ".lock")
