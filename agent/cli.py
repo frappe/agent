@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING
 import click
 import requests
 
+from agent.bench import Bench
 from agent.proxy import Proxy
 from agent.server import Server
+from agent.site import Site
 from agent.utils import get_timestamp
 
 if TYPE_CHECKING:
@@ -145,12 +147,14 @@ def proxy(domain=None, press_url=None):
 @setup.command()
 @click.option("--domain")
 def standalone(domain=None):
+    if not domain:
+        return
     server = Server()
-    if domain:
-        config = server.get_config(for_update=True)
-        config["domain"] = domain
-        config["standalone"] = True
-        server.set_config(config, indent=4)
+    config = server.get_config(for_update=True)
+    config["domain"] = domain
+    config["standalone"] = True
+    server.set_config(config, indent=4)
+    server.setup_supervisor()
 
 
 @setup.command()
@@ -325,7 +329,17 @@ def console(config_path):
     if config_dir:
         try:
             locals()["server"] = Server(config_dir)
-            print(f"In namespace:\nserver = agent.server.Server('{config_dir}')")
+            locals()["Proxy"] = Proxy
+            locals()["Bench"] = Bench
+            locals()["Site"] = Site
+            print(f"""
+In namespace:
+server = agent.server.Server('{config_dir}')
+
+Proxy = agent.proxy.Proxy
+Bench = agent.bench.Bench
+Site = agent.site.Site
+""")
         except Exception:
             print(f"Could not initialize agent.server.Server('{config_dir}')")
 

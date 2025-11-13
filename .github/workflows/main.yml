@@ -33,7 +33,7 @@ jobs:
 
       - name: Format Check
         run: |
-          ruff format --check
+          ruff format --check --diff
 
   unit-tests:
     name: "Unit Tests"

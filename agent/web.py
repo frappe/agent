@@ -34,6 +34,7 @@ from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
 from agent.security import Security
 from agent.server import Server
+from agent.snapshot_recovery import SnapshotRecovery
 from agent.ssh import SSHProxy
 from agent.utils import check_installed_pyspy
 
@@ -219,6 +220,38 @@ def get_server():
     return Server().dump()
 
 
+@application.route("/server/change-bench-directory", methods=["POST"])
+def change_bench_directory():
+    data = request.json
+    job = Server().change_bench_directory(
+        is_primary=data.get("is_primary"),
+        directory=data.get("directory"),
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+        redis_connection_string_ip=data.get("redis_connection_string_ip"),
+        restart_benches=data.get("restart_benches"),
+        registry_settings=data.get("registry_settings"),
+    )
+    return {"job": job}
+
+
+@application.route("/server/stop-bench-workers", methods=["POST"])
+def stop_bench_workers():
+    job = Server().stop_bench_workers()
+    return {"job": job}
+
+
+@application.route("/server/start-bench-workers", methods=["POST"])
+def start_bench_workers():
+    job = Server().start_bench_workers()
+    return {"job": job}
+
+
+@application.route("/server/force-remove-all-benches", methods=["POST"])
+def force_remove_all_benches():
+    job = Server().force_remove_all_benches()
+    return {"job": job}
+
+
 @application.route("/server/reload", methods=["POST"])
 def restart_nginx():
     job = Server().restart_nginx()
@@ -239,7 +272,8 @@ def get_server_status():
 
 @application.route("/server/cleanup", methods=["POST"])
 def cleanup_unused_files():
-    job = Server().cleanup_unused_files()
+    data = request.json
+    job = Server().cleanup_unused_files(force=data.get("force", False))
     return {"job": job}
 
 
@@ -250,10 +284,46 @@ def get_storage_breakdown():
     return Response(json_output, mimetype="application/json")
 
 
+@application.route("/server/image-size/<string:image_tag>", methods=["GET"])
+def get_docker_image_size(image_tag: str):
+    size = Server().get_image_size(image_tag)
+    return {"size": size}
+
+
+@application.route("/server/reclaimable-size", methods=["GET"])
+def get_reclaimable_size():
+    return Server().get_reclaimable_size()
+
+
 @application.route("/server/pull-images", methods=["POST"])
 def pull_docker_images():
     data = request.json
     job = Server().pull_docker_images(data.get("image_tags"), data.get("registry"))
+    return {"job": job}
+
+
+@application.route("/nfs/add-to-acl", methods=["POST"])
+def add_to_acl():
+    data = request.json
+    Server().add_to_acl(
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+    )
+    return {"shared_directory": "/home/frappe/shared"}
+
+
+@application.route("/nfs/remove-from-acl", methods=["POST"])
+def remove_from_acl():
+    data = request.json
+    Server().remove_from_acl(
+        secondary_server_private_ip=data.get("secondary_server_private_ip"),
+    )
+    return {"shared_directory": "/home/frappe/shared"}
+
+
+@application.route("/nfs/share-sites", methods=["POST"])
+def share_sites():
+    data = request.json
+    job = Server().share_sites(server_name=data.get("server_name"))
     return {"job": job}
 
 
@@ -1229,7 +1299,14 @@ def explain():
 @application.route("/database/binlogs/purge", methods=["POST"])
 def purge_binlog():
     data = request.json
-    return jsonify(DatabaseServer().purge_binlog(**data))
+    return jsonify(DatabaseServer()._purge_binlog(**data))
+
+
+@application.route("/database/binlogs/purge_by_size_limit", methods=["POST"])
+def purge_binlogs_by_size_limit():
+    data = request.json
+    job = DatabaseServer().purge_binlogs_by_size_limit(**data)
+    return {"job": job}
 
 
 @application.route("/database/binlogs/list", methods=["GET"])
@@ -1274,6 +1351,42 @@ def get_row_ids():
 def get_queries():
     data = request.json
     return jsonify(DatabaseServer().get_queries(**data))
+
+
+@application.route("/database/ping", methods=["POST"])
+def ping_database():
+    data = request.json or {}
+    return jsonify({"reachable": DatabaseServer().ping(**data)})
+
+
+@application.route("/database/replication/status", methods=["POST"])
+def get_replication_status():
+    data = request.json
+    return DatabaseServer().get_slave_status(**data)
+
+
+@application.route("/database/replication/reset", methods=["POST"])
+def reset_replication():
+    data = request.json
+    return DatabaseServer().reset_replication(**data)
+
+
+@application.route("/database/replication/config", methods=["POST"])
+def set_replication_config():
+    data = request.json
+    return DatabaseServer().configure_replication(**data)
+
+
+@application.route("/database/replication/start", methods=["POST"])
+def start_replication():
+    data = request.json
+    return DatabaseServer().start_replication(**data)
+
+
+@application.route("/database/replication/stop", methods=["POST"])
+def stop_replication():
+    data = request.json
+    return DatabaseServer().stop_replication(**data)
 
 
 @application.route("/ssh/users", methods=["POST"])
@@ -1685,4 +1798,43 @@ def recover_update_inplace(bench: str):
         request.json.get("sites"),
         request.json.get("image"),
     )
+    return {"job": job}
+
+
+@application.route("/benches/database_host", methods=["POST"])
+def update_database_host():
+    data = request.json
+
+    job = Server().update_database_host_job(data["db_host"])
+
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/search_sites", methods=["POST"])
+def search_sites():
+    data = request.json
+    sites = data.get("sites", [])
+    job = SnapshotRecovery().search_sites_in_snapshot(sites)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_files", methods=["POST"])
+def backup_files():
+    data = request.json
+    site = data.get("site")
+    bench = data.get("bench")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_files(site, bench, offsite)
+    return {"job": job}
+
+
+@application.route("/snapshot_recovery/backup_database", methods=["POST"])
+def backup_db():
+    data = request.json
+    site = data.get("site")
+    database_ip = data.get("database_ip")
+    mariadb_root_password = data.get("mariadb_root_password")
+    database_name = data.get("database_name")
+    offsite = data.get("offsite")
+    job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}

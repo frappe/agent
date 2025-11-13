@@ -34,6 +34,26 @@ if TYPE_CHECKING:
         traceback: str | None
 
 
+def format_size(bytes_val):
+    thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
+
+    for factor, suffix in thresholds:
+        if bytes_val >= factor:
+            value = bytes_val / factor
+            return f"{value:.2f}{suffix}"
+
+    return f"{bytes_val}B"
+
+
+def to_bytes(size_str: str) -> float:
+    size_str = size_str.strip().upper()
+    units = [("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1)]
+    for suffix, factor in units:
+        if size_str.endswith(suffix):
+            return float(size_str.replace(suffix, "").strip()) * factor
+    return 0
+
+
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
     filename = urlparse(url).path.split("/")[-1]
@@ -70,6 +90,18 @@ def get_size(folder, ignore_dirs=None):
                 total_size += get_size(itempath)
 
     return total_size
+
+
+def is_registry_healthy(url: str, username: str, password: str) -> bool:
+    """Check if production registry (only) is healthy in the push cycle"""
+    headers = {"Accept": "application/vnd.docker.distribution.manifest.v2+json"}
+
+    if url != "registry.frappe.cloud":
+        return True
+
+    response = requests.get(f"https://{url}/v2", auth=(username, password), headers=headers)
+
+    return response.ok
 
 
 def cint(x):

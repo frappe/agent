@@ -2,16 +2,7 @@ from __future__ import annotations
 
 import json
 
-
-def format_size(bytes_val):
-    thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
-
-    for factor, suffix in thresholds:
-        if bytes_val >= factor:
-            value = bytes_val / factor
-            return f"{value:.2f}{suffix}"
-
-    return f"{bytes_val}B"
+from agent.utils import format_size, to_bytes
 
 
 def calculate_directory_size(entry: list) -> int:
@@ -63,7 +54,7 @@ def build_tree_structure(  # noqa: C901
     total_size = calculate_directory_size(entry)
 
     node = {
-        "name": metadata["name"],
+        "name": metadata["name"] if metadata["name"] != "/home/frappe/benches" else "Benches",
         "size": total_size,
         "size_formatted": format_size(total_size),
         "is_file": "asize" in metadata and "dsize" not in metadata,
@@ -106,10 +97,32 @@ def parse_docker_df_output(output: str):
 
     lines = output.strip().splitlines()
 
-    image_size = lines[0]
-    container_size = lines[1]
+    image_size_formatted = lines[0]
+    container_size_formatted = lines[1]
 
-    return {"image": image_size, "container": container_size}
+    image_size_str = lines[0]
+    container_size_str = lines[1]
+
+    image_size_bytes = to_bytes(image_size_str)
+    container_size_bytes = to_bytes(container_size_str)
+
+    return {
+        "size": image_size_bytes + container_size_bytes,
+        "image": image_size_formatted,
+        "container": container_size_formatted,
+    }
+
+
+def parse_total_disk_usage_output(output: str):
+    """
+    Example output:
+        Filesystem     1K-blocks      Used Available Use% Mounted on
+        /dev/nvme1n1p1 611588388 250803700 360768304  42% /opt/volumes/benches
+    """
+    lines = output.strip().splitlines()
+    size_line = lines[1]
+    size = size_line.split()[2]
+    return {"size": size, "size_formatted": format_size(int(size))}
 
 
 def analyze_benches_structure(json_data: str, display_depth: int = 5, max_children: int = 5) -> dict | None:
