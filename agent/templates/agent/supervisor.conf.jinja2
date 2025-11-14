@@ -46,7 +46,7 @@ directory={{ directory }}
 
 {$ if is_secondary %}
 [program:monitor_idle]
-command= {{ directory }}/env/bin/python /home/frappe/repo/monitor_idle.py --agent-directory {{ directory }}
+command= {{ directory }}/env/bin/python /home/frappe/agent/repo/monitor_idle.py --agent-directory {{ directory }}
 autostart=true
 autorestart=true
 startsecs=10
