@@ -44,7 +44,7 @@ user={{ user }}
 directory={{ directory }}
 {% endif %}
 
-{$ if is_secondary %}
+{% if is_secondary %}
 [program:monitor_idle]
 command= {{ directory }}/env/bin/python /home/frappe/agent/repo/monitor_idle.py --agent-directory {{ directory }}
 autostart=true
@@ -57,4 +57,15 @@ directory={{ directory }}
 {% endif %}
 
 [group:agent]
-{% if is_proxy_server or is_standalone %}programs=web, redis, worker, nginx_reload_manager{% else %}programs=web, redis, worker{% endif %}{% if is_secondary %}programs=web, redis, worker, monitor_idle{% endif %}
+
+{% set programs = "web, redis, worker" %}
+
+{% if is_proxy_server or is_standalone %}
+    {% set programs = programs + ", nginx_reload_manager" %}
+{% endif %}
+
+{% if is_secondary %}
+    {% set programs = programs + ", monitor_idle" %}
+{% endif %}
+
+programs={{ programs }}
