@@ -671,46 +671,24 @@ class Server(Base):
         self.update_config({"proxysql_admin_password": password})
 
     @job("Add Servers to ACL")
-    def add_to_acl(
-        self,
-        primary_server_private_ip: str,
-        secondary_server_private_ip: str,
-        shared_directory: bool,
-    ) -> None:
-        return self._add_to_acl(
-            primary_server_private_ip,
-            secondary_server_private_ip,
-            shared_directory,
-        )
+    def add_to_acl(self, secondary_server_private_ip: str) -> None:
+        return self._add_to_acl(secondary_server_private_ip)
 
     @step("Add Servers to ACL")
-    def _add_to_acl(
-        self,
-        primary_server_private_ip: str,
-        secondary_server_private_ip: str,
-        shared_directory: str,
-    ):
+    def _add_to_acl(self, secondary_server_private_ip: str):
         nfs_handler = NFSHandler(self)
         return nfs_handler.add_to_acl(
-            primary_server_private_ip=primary_server_private_ip,
             secondary_server_private_ip=secondary_server_private_ip,
-            shared_directory=shared_directory,
         )
 
     @job("Remove Server from ACL")
-    def remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ) -> None:
-        return self._remove_from_acl(shared_directory, primary_server_private_ip, secondary_server_private_ip)
+    def remove_from_acl(self, secondary_server_private_ip: str) -> None:
+        return self._remove_from_acl(secondary_server_private_ip)
 
     @step("Remove Server from ACL")
-    def _remove_from_acl(
-        self, shared_directory: str, primary_server_private_ip: str, secondary_server_private_ip: str
-    ):
+    def _remove_from_acl(self, secondary_server_private_ip: str):
         nfs_handler = NFSHandler(self)
         return nfs_handler.remove_from_acl(
-            shared_directory=shared_directory,
-            primary_server_private_ip=primary_server_private_ip,
             secondary_server_private_ip=secondary_server_private_ip,
         )
 
@@ -1077,7 +1055,7 @@ class Server(Base):
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
-                "use_shared": self.config.get("benches_directory") == "/shared",
+                "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
             },
             nginx_config,
         )
