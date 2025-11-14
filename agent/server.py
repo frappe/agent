@@ -1126,6 +1126,9 @@ class Server(Base):
         if self.config.get("name").startswith("n"):
             data["is_proxy_server"] = True
 
+        if self.config.get("name", "").startswith("fs"):
+            data["is_secondary"] = True
+
         self._render_template(
             "agent/supervisor.conf.jinja2",
             data,

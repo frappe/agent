@@ -44,5 +44,17 @@ user={{ user }}
 directory={{ directory }}
 {% endif %}
 
+{$ if is_secondary %}
+[program:monitor_idle]
+command= {{ directory }}/env/bin/python /home/frappe/repo/monitor_idle.py --agent-password {{ agent_password }}
+autostart=true
+autorestart=true
+startsecs=10
+stdout_logfile={{ directory }}/logs/idle-monitor.log
+stderr_logfile={{ directory }}/logs/idle-monitor.error.log
+user={{ user }}
+directory={{ directory }}
+{% endif %}
+
 [group:agent]
-{% if is_proxy_server or is_standalone %}programs=web, redis, worker, nginx_reload_manager{% else %}programs=web, redis, worker{% endif %}
+{% if is_proxy_server or is_standalone %}programs=web, redis, worker, nginx_reload_manager{% else %}programs=web, redis, worker{% endif %}{% if is_secondary %}programs=web, redis, worker, monitor_idle{% endif %}
