@@ -40,9 +40,8 @@ def inform_master(press_url: str, config: dict) -> None:
     """Let the master know of idle benches"""
     try:
         requests.post(
-            f"{press_url}/press.api.server.benches_are_idle",
-            data={"server": config["name"]},
-            headers={"Authorization": f"Bearer {config['access_token']}"},
+            f"{press_url}/api/method/press.api.server.benches_are_idle",
+            data={"server": config["name"], "access_token": config["access_token"]},
             timeout=10,
         )
         print(f"Informed master at {press_url} that benches are idle")
