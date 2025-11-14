@@ -14,6 +14,7 @@ else:
     print("Error: --agent-directory argument required")
     sys.exit(1)
 
+CHECK_INTERVAL = 1
 IDLE_THRESHOLD = 300  # After which the bench will be requested to die
 
 
@@ -76,4 +77,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    while True:
+        main()
+        time.sleep(CHECK_INTERVAL)
