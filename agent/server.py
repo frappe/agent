@@ -293,6 +293,7 @@ class Server(Base):
             # Don't need to pull images on primary server
             self.docker_login(registry_settings)
         for _, bench in self.benches.items():
+            bench.generate_supervisor_config()  # Should set gunicorn access log if it does not exist
             bench.start(secondary_server_private_ip=secondary_server_private_ip)
 
     @job("Stop Bench Workers")
