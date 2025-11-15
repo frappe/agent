@@ -57,6 +57,9 @@ def main() -> None:
     benches_directory = config["benches_directory"]
     benches = os.scandir(benches_directory)
 
+    if not benches:
+        benches_are_idle = True  # There are no benches on this secondary server we can shut it down safely
+
     for bench in benches:
         if not bench.name.startswith("bench-"):
             continue
@@ -87,7 +90,7 @@ def verify_if_monitor_should_run():
 
 
 if __name__ == "__main__":
-    # verify_if_monitor_should_run()
+    verify_if_monitor_should_run()
 
     while True:
         main()
