@@ -24,9 +24,9 @@ def get_agent_config() -> dict[str, str | int]:
         return json.loads(agent_config.read())
 
 
-def check_idle_slave(bench_path: str) -> bool:
+def check_idle_slave(bench_path: str, server_name: str) -> bool:
     """Check if the modified time of the gunicorn access log is older than IDLE_THRESHOLD"""
-    access_log = os.path.join(bench_path, "logs", "gunicorn.access.log")
+    access_log = os.path.join(bench_path, "logs", f"{server_name}-gunicorn.access.log")
     if not os.path.exists(access_log):
         return True
 
@@ -61,7 +61,7 @@ def main() -> None:
         if not bench.name.startswith("bench-"):
             continue
 
-        is_idle = check_idle_slave(bench.path)
+        is_idle = check_idle_slave(bench.path, config["name"])
         if not is_idle:
             print(f"Bench {bench.name} is still active")
             benches_are_idle = False
