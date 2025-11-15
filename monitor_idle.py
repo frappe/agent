@@ -37,12 +37,16 @@ def check_idle_slave(bench_path: str, server_name: str) -> bool:
     return idle_time > IDLE_THRESHOLD
 
 
-def inform_master(press_url: str, config: dict) -> None:
+def inform_master(press_url: str, config: dict, no_benches_found: bool = False) -> None:
     """Let the master know of idle benches"""
     try:
         requests.post(
             f"{press_url}/api/method/press.api.server.benches_are_idle",
-            data={"server": config["name"], "access_token": config["access_token"]},
+            data={
+                "server": config["name"],
+                "access_token": config["access_token"],
+                "no_benches_found": no_benches_found,
+            },
             timeout=10,
         )
         print(f"Informed master at {press_url} that benches are idle")
@@ -53,12 +57,13 @@ def inform_master(press_url: str, config: dict) -> None:
 def main() -> None:
     """Check if all benches are idle and let the master know"""
     config = get_agent_config()
+    no_benches_found = False
     benches_are_idle = False
     benches_directory = config["benches_directory"]
     benches = list(os.scandir(benches_directory))
 
     if not benches:
-        benches_are_idle = True  # There are no benches on this secondary server we can shut it down safely
+        no_benches_found = True  # There are no benches on this secondary server we can shut it down safely
 
     for bench in benches:
         if not bench.name.startswith("bench-"):
@@ -73,8 +78,8 @@ def main() -> None:
         print(f"Bench {bench.name} is idle")
         benches_are_idle = True
 
-    if benches_are_idle:
-        inform_master(config["press_url"], config)
+    if benches_are_idle or no_benches_found:
+        inform_master(config["press_url"], config, no_benches_found)
     else:
         print("Not all benches are idle, skipping master notification")
 
