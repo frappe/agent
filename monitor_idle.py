@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
+import subprocess
 import sys
 import time
 
@@ -24,7 +26,7 @@ def get_agent_config() -> dict[str, str | int]:
         return json.loads(agent_config.read())
 
 
-def check_idle_bench(bench_path: str) -> bool:
+def check_idle_slave(bench_path: str) -> bool:
     """Check if the modified time of the gunicorn access log is older than IDLE_THRESHOLD"""
     access_log = os.path.join(bench_path, "logs", "gunicorn.access.log")
     if not os.path.exists(access_log):
@@ -35,6 +37,11 @@ def check_idle_bench(bench_path: str) -> bool:
     idle_time = current_time - last_modified
 
     return idle_time > IDLE_THRESHOLD
+
+
+def gracefully_stop_slave(bench: str) -> None:
+    """Gracefully stop the bench in favour of enqueued jobs"""
+    subprocess.run(shlex.split(f"docker stop {bench}"))
 
 
 def inform_master(press_url: str, config: dict) -> None:
@@ -61,7 +68,7 @@ def main() -> None:
         if not bench.name.startswith("bench-"):
             continue
 
-        is_idle = check_idle_bench(bench.path)
+        is_idle = check_idle_slave(bench.path)
         if not is_idle:
             print(f"Bench {bench.name} is still active")
             benches_are_idle = False
@@ -69,6 +76,7 @@ def main() -> None:
 
         print(f"Bench {bench.name} is idle")
         benches_are_idle = True
+        gracefully_stop_slave(bench.name)
 
     if benches_are_idle:
         inform_master(config["press_url"], config)
@@ -76,7 +84,19 @@ def main() -> None:
         print("Not all benches are idle, skipping master notification")
 
 
+def verify_if_monitor_should_run():
+    """Ensure this never runs on a primary server as it kills slaves"""
+    config = get_agent_config()
+    name = config["name"]
+
+    if not name.startswith("fs"):
+        print("Executing monitor on primary server is not allowed")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
+    verify_if_monitor_should_run()
+
     while True:
         main()
         time.sleep(CHECK_INTERVAL)
