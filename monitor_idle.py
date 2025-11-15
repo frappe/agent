@@ -54,7 +54,7 @@ def main() -> None:
     """Check if all benches are idle and let the master know"""
     config = get_agent_config()
     benches_are_idle = False
-    benches_directory = config["benches_directory"]
+    benches_directory = "/home/frappe/shared"  # This is where benches are on secondary server!
     benches = list(os.scandir(benches_directory))
 
     for bench in benches:
