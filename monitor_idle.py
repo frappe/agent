@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
-import subprocess
 import sys
 import time
 
@@ -16,7 +14,7 @@ else:
     print("Error: --agent-directory argument required")
     sys.exit(1)
 
-CHECK_INTERVAL = 1
+CHECK_INTERVAL = 5
 IDLE_THRESHOLD = 300  # After which the bench will be requested to die
 
 
@@ -37,11 +35,6 @@ def check_idle_slave(bench_path: str) -> bool:
     idle_time = current_time - last_modified
 
     return idle_time > IDLE_THRESHOLD
-
-
-def gracefully_stop_slave(bench: str) -> None:
-    """Gracefully stop the bench in favour of enqueued jobs"""
-    subprocess.run(shlex.split(f"docker stop {bench}"))
 
 
 def inform_master(press_url: str, config: dict) -> None:
@@ -76,7 +69,6 @@ def main() -> None:
 
         print(f"Bench {bench.name} is idle")
         benches_are_idle = True
-        gracefully_stop_slave(bench.name)
 
     if benches_are_idle:
         inform_master(config["press_url"], config)
@@ -95,7 +87,7 @@ def verify_if_monitor_should_run():
 
 
 if __name__ == "__main__":
-    verify_if_monitor_should_run()
+    # verify_if_monitor_should_run()
 
     while True:
         main()
