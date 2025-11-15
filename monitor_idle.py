@@ -55,7 +55,7 @@ def main() -> None:
     config = get_agent_config()
     benches_are_idle = False
     benches_directory = config["benches_directory"]
-    benches = os.scandir(benches_directory)
+    benches = list(os.scandir(benches_directory))
 
     if not benches:
         benches_are_idle = True  # There are no benches on this secondary server we can shut it down safely
@@ -90,7 +90,7 @@ def verify_if_monitor_should_run():
 
 
 if __name__ == "__main__":
-    verify_if_monitor_should_run()
+    # verify_if_monitor_should_run()
 
     while True:
         main()
