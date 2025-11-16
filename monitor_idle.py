@@ -66,6 +66,12 @@ class IdleMonitor:
             print("Executing monitor on primary server is not allowed")
             sys.exit(1)
 
+    @property
+    def boot_time(self) -> int:
+        """Get boot time of the server"""
+        with open("/proc/uptime") as f:
+            return float(f.read().split()[0])
+
     def monitor(self, force: bool = False) -> None:
         if not force and not self.should_monitor:
             print("Can not run monitor on a primary server!")
@@ -89,7 +95,8 @@ class IdleMonitor:
                 print(f"Bench {bench.name} is idle")
                 benches_are_idle = True
 
-            if benches_are_idle:
+            # ensure that server has been up for long enough
+            if benches_are_idle and self.boot_time > self.idle_threshold:
                 self.inform_master()
             else:
                 print("Not all benches are idle, skipping master notification")
