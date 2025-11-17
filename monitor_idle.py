@@ -115,4 +115,4 @@ if __name__ == "__main__":
         agent_directory=agent_directory,
         check_interval=5,
         idle_threshold=300,
-    ).monitor(force=True)
+    ).monitor()
