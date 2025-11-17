@@ -446,8 +446,8 @@ class Site(Base):
         keys = self.bench.docker_execute(keys_command)
         data = {"keys": keys, "get": [], "delete": []}
         for key in keys["output"].splitlines():
-            get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
-            delete = self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
+            get = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} GET '{key}'")
+            delete = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} DEL '{key}'")
             data["get"].append(get)
             data["delete"].append(delete)
         return data
