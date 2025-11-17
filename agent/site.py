@@ -693,6 +693,7 @@ class Site(Base):
     @step("Rebuild global search")
     def rebuild_global_search_step(self):
         import json
+
         """Execute bench rebuild-global-search command."""
         result = self.bench_execute("rebuild-global-search")
 
