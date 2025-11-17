@@ -90,14 +90,9 @@ class Proxy(Server):
                 Path(os.path.join(host_directory, "codeserver")).touch()
 
     def add_site_domain_to_upstream(self, upstream, site):
-        """Add site domain(s) to upstream configuration"""
-        sites = site if isinstance(site, list) else [site]
-
         with self.proxy_config_modification_lock:
-            for s in sites:
-                self.remove_conflicting_site(s)
-                self.add_site_to_upstream(upstream, s)
-
+            self.remove_conflicting_site(site)
+            self.add_site_to_upstream(upstream, site)
         self.reload_nginx()
 
     @job("Add Site to Upstream")
