@@ -28,6 +28,7 @@ from agent.exceptions import BenchNotExistsException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
+from agent.proxy import Proxy
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
 
@@ -834,8 +835,12 @@ class Server(Base):
         if restart_redis or supervisor_status.get("redis") != "RUNNING":
             self.execute("sudo supervisorctl start agent:redis")
 
-        # Start NGINX Reload Manager if it's a proxy server
         if is_proxy_server:
+            # Call proxy setup to re-generate configuration
+            proxy = Proxy()
+            proxy.setup_proxy()
+
+            # Start NGINX Reload Manager if it's a proxy server
             self.execute("sudo supervisorctl start agent:nginx_reload_manager")
 
         if restart_rq_workers:
