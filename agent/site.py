@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from shlex import quote
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import requests
 
@@ -439,12 +440,14 @@ class Site(Base):
     @step("Reset Site Usage")
     def reset_site_usage(self):
         pattern = f"{self.database}|rate-limit-counter-[0-9]*"
-        keys_command = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
+        password = urlparse(self.bench.config.get("redis_cache")).password
+        password_arg = f"-a '{password}'" if password else ""
+        keys_command = f"redis-cli --raw -p 13000 {password_arg} KEYS '{pattern}'"
         keys = self.bench.docker_execute(keys_command)
         data = {"keys": keys, "get": [], "delete": []}
         for key in keys["output"].splitlines():
-            get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
-            delete = self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
+            get = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} GET '{key}'")
+            delete = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} DEL '{key}'")
             data["get"].append(get)
             data["delete"].append(delete)
         return data
