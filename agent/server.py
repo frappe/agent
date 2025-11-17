@@ -834,8 +834,14 @@ class Server(Base):
         if restart_redis or supervisor_status.get("redis") != "RUNNING":
             self.execute("sudo supervisorctl start agent:redis")
 
-        # Start NGINX Reload Manager if it's a proxy server
         if is_proxy_server:
+            from agent.proxy import Proxy
+
+            # Call proxy setup to re-generate configuration
+            proxy = Proxy()
+            proxy.setup_proxy()
+
+            # Start NGINX Reload Manager if it's a proxy server
             self.execute("sudo supervisorctl start agent:nginx_reload_manager")
 
         if restart_rq_workers:
