@@ -679,12 +679,7 @@ class Bench(Base):
                 "environment_variables": self.bench_config.get("environment_variables"),
                 "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
-<<<<<<< HEAD
-=======
-                "custom_workers": self.common_site_config.get("workers", {}),
-                "custom_workers_group": self._get_custom_workers_group(),
                 "host_server": self.server.config["name"],
->>>>>>> 270cd36 (Revert "Revert "feat(monitor-idle): Shutdown secondary when idle"")
             },
             supervisor_config,
         )
