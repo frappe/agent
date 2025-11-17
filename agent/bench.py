@@ -679,6 +679,7 @@ class Bench(Base):
                 "environment_variables": self.bench_config.get("environment_variables"),
                 "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
+                "host_server": self.server.config["name"],
             },
             supervisor_config,
         )
