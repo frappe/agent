@@ -57,11 +57,9 @@ class IdleMonitor:
         except Exception as e:
             print(f"Error informing master: {e}")
 
-    @property
     def should_monitor(self):
         """Ensure this never runs on a primary server as it kills slaves"""
         name = self.config["name"]
-
         if not name.startswith("fs"):
             print("Executing monitor on primary server is not allowed")
             sys.exit(1)
@@ -72,11 +70,8 @@ class IdleMonitor:
         with open("/proc/uptime") as f:
             return float(f.read().split()[0])
 
-    def monitor(self, force: bool = False) -> None:
-        if not force and not self.should_monitor:
-            print("Can not run monitor on a primary server!")
-            sys.exit(1)
-
+    def monitor(self) -> None:
+        self.should_monitor()
         benches_are_idle = False
         benches_directory = "/home/frappe/shared"  # This is where benches are on secondary server!
         benches = list(os.scandir(benches_directory))
