@@ -882,7 +882,8 @@ print(">>>" + frappe.session.sid + "<<<")
     def get_database_size(self):
         try:
             query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
-            command = f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
+            command = f"mysql -sN -h {self.host} -P {self.db_port} \
+                -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
         except Exception:
             # Fallback to old way if press_meta is not available
@@ -895,7 +896,8 @@ print(">>>" + frappe.session.sid + "<<<")
                     f' WHERE `table_schema` = "{self.database}"'
                     " GROUP BY `table_schema`"
                 )
-                command = f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
+                command = f"mysql -sN -h {self.host} -P {self.db_port} \
+                    -u{self.user} -p{self.password} -e '{query}'"
                 database_size = self.execute(command).get("output")
             except Exception as e:
                 raise e
