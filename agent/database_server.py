@@ -39,7 +39,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.connect(reuse_if_open=True)
             mariadb.execute_sql("SELECT 1;")
@@ -113,7 +113,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             gtid_binlog_pos = self.sql(mariadb, "SELECT @@GLOBAL.gtid_binlog_pos;")[0][
                 "@@GLOBAL.gtid_binlog_pos"
@@ -154,6 +154,7 @@ class DatabaseServer(Server):
         master_private_ip,
         master_mariadb_root_password,
         gtid_slave_pos=None,
+        master_db_port=3306,
     ):
         try:
             """Configure replication on the MariaDB server."""
@@ -162,7 +163,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             mariadb.execute_sql("RESET SLAVE ALL;")
@@ -170,7 +171,7 @@ class DatabaseServer(Server):
                 mariadb.execute_sql(f"SET GLOBAL gtid_slave_pos = '{gtid_slave_pos}';")
             mariadb.execute_sql(f"""CHANGE MASTER TO
                 MASTER_HOST = '{master_private_ip}',
-                MASTER_PORT = 3306,
+                MASTER_PORT = '{master_db_port}',
                 MASTER_USER = 'root',
                 MASTER_PASSWORD = '{master_mariadb_root_password}',
                 MASTER_USE_GTID=slave_pos;
@@ -196,7 +197,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             mariadb.execute_sql("RESET SLAVE ALL;")
@@ -221,7 +222,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("START SLAVE;")
             return {
@@ -245,7 +246,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             return {
@@ -260,6 +261,7 @@ class DatabaseServer(Server):
                 "message": "Failed to stop replication.",
                 "error": traceback.format_exc(),
             }
+
     @property
     def db_port(self):
         return self.config.get("db_port") or 3306
