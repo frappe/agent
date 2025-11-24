@@ -162,7 +162,7 @@ class Database:
             as_dict=True,
         )
         if len(data) == 0:
-            return []
+            return {}
         data = data[0]["output"]
         tables = {}
         for d in data:
