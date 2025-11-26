@@ -1221,6 +1221,15 @@ def physical_restore_database():
     return {"job": job}
 
 
+@application.route("/database/update-schema-sizes", methods=["POST"])
+def update_schema_sizes():
+    data = request.json
+    assert "private_ip" in data, "private_ip is required"
+    assert "mariadb_root_password" in data, "mariadb_root_password is required"
+    job = DatabaseServer().update_schema_sizes_job(**data)
+    return {"job": job}
+
+
 @application.route("/database/binary/logs")
 def get_binary_logs():
     return jsonify(DatabaseServer().binary_logs)

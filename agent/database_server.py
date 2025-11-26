@@ -12,7 +12,7 @@ import psutil
 from mariadb_binlog_indexer import Indexer as BinlogIndexer
 from peewee import MySQLDatabase
 
-from agent.database import Database
+from agent.database import CustomPeeweeDB, Database
 from agent.job import job, step
 from agent.server import Server
 
@@ -49,8 +49,6 @@ class DatabaseServer(Server):
         except Exception:
             return False
 
-<<<<<<< HEAD
-=======
     @step("Setup Metadata Table")
     def setup_press_meta_schema_sizes_table(self, private_ip, mariadb_root_password):
         db = CustomPeeweeDB(
@@ -145,7 +143,6 @@ WHERE `schema` IN (
         self.setup_press_meta_schema_sizes_table(private_ip, mariadb_root_password)
         self.update_schema_sizes(private_ip, mariadb_root_password)
 
->>>>>>> 8edcdc0 (fix(database): If there is no database, don't run schema update query)
     def search_binary_log(
         self,
         log,
