@@ -49,6 +49,112 @@ class DatabaseServer(Server):
         except Exception:
             return False
 
+<<<<<<< HEAD
+=======
+    @step("Setup Metadata Table")
+    def setup_press_meta_schema_sizes_table(self, private_ip, mariadb_root_password):
+        db = CustomPeeweeDB(
+            "mysql",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        # Create database if not exists
+        db.execute_sql("CREATE DATABASE IF NOT EXISTS press_meta;")
+
+        # Re-init database connection to use the newly created database
+        db = CustomPeeweeDB(
+            "press_meta",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
+        # Create `_schema_sizes_internal` table if not exists
+        db.execute_sql(
+            """CREATE TABLE IF NOT EXISTS _schema_sizes_internal (
+    `schema` VARCHAR(255) PRIMARY KEY,
+    `size` BIGINT NOT NULL DEFAULT 0
+) ENGINE=InnoDB;"""
+        )
+
+        # Create `schema_sizes` view if not exists
+        db.execute_sql(
+            """CREATE OR REPLACE
+DEFINER='root'@'localhost'
+SQL SECURITY DEFINER
+VIEW schema_sizes AS
+SELECT
+    `schema`,
+    `size`
+FROM _schema_sizes_internal
+WHERE `schema` IN (
+    SELECT DISTINCT table_schema
+    FROM information_schema.SCHEMA_PRIVILEGES
+    WHERE grantee LIKE CONCAT('%', SUBSTRING_INDEX(USER(), '@', 1), '%')
+    AND privilege_type IN ('SELECT', 'ALL PRIVILEGES')
+    AND table_schema NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys', 'press_meta')
+);
+"""
+        )
+
+        # Find all users
+        users = db.execute_sql(
+            'SELECT DISTINCT user, host FROM mysql.user WHERE user not in ("mysql", "root", "mariadb.sys", "read_all_press_meta", "monitor");'  # noqa: E501
+        ).fetchall()
+        if users:
+            # Grant usage and read_all_press_meta role to all users
+            query = "GRANT USAGE ON press_meta.* TO "
+            query += ", ".join([f"'{user[0]}'@'{user[1]}'" for user in users])
+            query += ";"
+            db.execute_sql(query)
+
+            # Allow select on schema_sizes view to all users
+            query = "GRANT SELECT ON press_meta.schema_sizes TO "
+            query += ", ".join([f"'{user[0]}'@'{user[1]}'" for user in users])
+            query += ";"
+            db.execute_sql(query)
+
+        # Flush privileges
+        db.execute_sql("FLUSH PRIVILEGES;")
+
+    @step("Update Database Schema Size in Metadata Table")
+    def update_schema_sizes(self, private_ip, mariadb_root_password):
+        db = Database(private_ip, 3306, "root", mariadb_root_password, "press_meta")
+        success, output = db.execute_query("SHOW DATABASES;")
+        if not success:
+            raise Exception(f"Failed to fetch databases: {output}")
+
+        databases = [x[0] for x in output[0].get("output").get("data")]
+        database_sizes = {}
+        for database in databases:
+            if database in ("information_schema", "performance_schema", "mysql", "sys", "press_meta"):
+                continue
+
+            with contextlib.suppress(Exception):
+                size = self.execute(f"sudo du -sb /var/lib/mysql/{database} | cut -f1")["output"]
+                database_sizes[database] = int(size)
+
+        query = ""
+        for database, size in database_sizes.items():
+            query += f"REPLACE INTO press_meta._schema_sizes_internal (schema, size) VALUES ('{database}', {size});\n"  # noqa: E501
+
+        if not query:
+            return
+
+        success, msg = db.execute_query(query, commit=True)
+        if not success:
+            raise Exception(f"Failed to update schema sizes: {msg}")
+
+    @job("Update Database Schema Sizes", priority="low")
+    def update_schema_sizes_job(self, private_ip, mariadb_root_password):
+        self.setup_press_meta_schema_sizes_table(private_ip, mariadb_root_password)
+        self.update_schema_sizes(private_ip, mariadb_root_password)
+
+>>>>>>> 06a5c38 (fix(database): Re-init the db connection with press_meta db)
     def search_binary_log(
         self,
         log,
