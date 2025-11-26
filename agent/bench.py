@@ -679,10 +679,19 @@ class Bench(Base):
                 "environment_variables": self.bench_config.get("environment_variables"),
                 "gunicorn_threads_per_worker": self.bench_config.get("gunicorn_threads_per_worker"),
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
+                "custom_workers": self.common_site_config.get("workers", {}),
+                "custom_workers_group": self._get_custom_workers_group(),
                 "host_server": self.server.config["name"],
             },
             supervisor_config,
         )
+
+    def _get_custom_workers_group(self):
+        custom_workers = self.common_site_config.get("workers", {})
+        worker_keys = custom_workers.keys()
+        if worker_keys:
+            return ",".join(f"frappe-bench-{name}-worker" for name in worker_keys)
+        return ""
 
     @step("Generate Docker Compose File")
     def generate_docker_compose_file(self):
@@ -926,6 +935,11 @@ class Bench(Base):
     @property
     def bench_config(self) -> dict:
         with open(self.bench_config_file, "r") as f:
+            return json.load(f)
+
+    @property
+    def common_site_config(self):
+        with open(self.config_file, "r") as f:
             return json.load(f)
 
     def set_bench_config(self, value, indent=1):
