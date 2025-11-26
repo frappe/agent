@@ -800,7 +800,7 @@ class Server(Base):
         skip_patches=False,
     ):
         directory = os.path.join(self.directory, "repo")
-        if skip_repo_setup:
+        if not skip_repo_setup:
             self.execute("git reset --hard", directory=directory)
             self.execute("git clean -fd", directory=directory)
             self.execute("git fetch upstream", directory=directory)
