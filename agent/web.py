@@ -306,22 +306,18 @@ def pull_docker_images():
 def add_to_acl():
     data = request.json
     Server().add_to_acl(
-        primary_server_private_ip=data.get("primary_server_private_ip"),
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
-        shared_directory=data.get("shared_directory"),
     )
-    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+    return {"shared_directory": "/home/frappe/shared"}
 
 
 @application.route("/nfs/remove-from-acl", methods=["POST"])
 def remove_from_acl():
     data = request.json
     Server().remove_from_acl(
-        primary_server_private_ip=data.get("primary_server_private_ip"),
         secondary_server_private_ip=data.get("secondary_server_private_ip"),
-        shared_directory=data.get("shared_directory"),
     )
-    return {"shared_directory": f"/home/frappe/nfs/{data.get('private_ip')}"}
+    return {"shared_directory": "/home/frappe/shared"}
 
 
 @application.route("/nfs/share-sites", methods=["POST"])
@@ -1222,6 +1218,15 @@ def physical_restore_database():
         restore_specific_tables=data.get("restore_specific_tables", False),
         tables_to_restore=data.get("tables_to_restore", []),
     ).create_restore_job()
+    return {"job": job}
+
+
+@application.route("/database/update-schema-sizes", methods=["POST"])
+def update_schema_sizes():
+    data = request.json
+    assert "private_ip" in data, "private_ip is required"
+    assert "mariadb_root_password" in data, "mariadb_root_password is required"
+    job = DatabaseServer().update_schema_sizes_job(**data)
     return {"job": job}
 
 

@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from shlex import quote
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import requests
 
@@ -439,12 +440,14 @@ class Site(Base):
     @step("Reset Site Usage")
     def reset_site_usage(self):
         pattern = f"{self.database}|rate-limit-counter-[0-9]*"
-        keys_command = f"redis-cli --raw -p 13000 KEYS '{pattern}'"
+        password = urlparse(self.bench.config.get("redis_cache")).password
+        password_arg = f"-a '{password}'" if password else ""
+        keys_command = f"redis-cli --raw -p 13000 {password_arg} KEYS '{pattern}'"
         keys = self.bench.docker_execute(keys_command)
         data = {"keys": keys, "get": [], "delete": []}
         for key in keys["output"].splitlines():
-            get = self.bench.docker_execute(f"redis-cli -p 13000 GET '{key}'")
-            delete = self.bench.docker_execute(f"redis-cli -p 13000 DEL '{key}'")
+            get = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} GET '{key}'")
+            delete = self.bench.docker_execute(f"redis-cli -p 13000 {password_arg} DEL '{key}'")
             data["get"].append(get)
             data["delete"].append(delete)
         return data
@@ -857,18 +860,28 @@ print(">>>" + frappe.session.sid + "<<<")
         return json.loads(analytics)
 
     def get_database_size(self):
-        # only specific to mysql/mariaDB. use a different query for postgres.
-        # or try using frappe.db.get_database_size if possible
-        query = (
-            "SELECT SUM(`data_length` + `index_length`)"
-            " FROM information_schema.tables"
-            f' WHERE `table_schema` = "{self.database}"'
-            " GROUP BY `table_schema`"
-        )
-        command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
-        database_size = self.execute(command).get("output")
+        try:
+            query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
+            command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
+            database_size = self.execute(command).get("output")
+        except Exception:
+            # Fallback to old way if press_meta is not available
+            try:
+                # only specific to mysql/mariaDB. use a different query for postgres.
+                # or try using frappe.db.get_database_size if possible
+                query = (
+                    "SELECT SUM(`data_length` + `index_length`)"
+                    " FROM information_schema.tables"
+                    f' WHERE `table_schema` = "{self.database}"'
+                    " GROUP BY `table_schema`"
+                )
+                command = f"mysql -sN -h {self.host} -u{self.user} -p{self.password} -e '{query}'"
+                database_size = self.execute(command).get("output")
+            except Exception as e:
+                raise e
 
         try:
+            assert database_size is not None, "Could not fetch database size"
             return int(database_size)
         except Exception:
             return 0
