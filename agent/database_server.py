@@ -62,6 +62,15 @@ class DatabaseServer(Server):
         # Create database if not exists
         db.execute_sql("CREATE DATABASE IF NOT EXISTS press_meta;")
 
+        # Re-init database connection to use the newly created database
+        db = CustomPeeweeDB(
+            "press_meta",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=3306,
+        )
+
         # Create `_schema_sizes_internal` table if not exists
         db.execute_sql(
             """CREATE TABLE IF NOT EXISTS _schema_sizes_internal (
