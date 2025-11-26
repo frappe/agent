@@ -11,6 +11,7 @@ class NFSHandler:
     def __init__(self, server: "Server"):
         self.server = server
         self.exports_file = "/home/frappe/exports"
+        self.benches_directory = "/home/frappe/benches"
         self.shared_directory = "/home/frappe/shared"
         self.options = "rw,sync,no_subtree_check"
 
@@ -30,14 +31,14 @@ class NFSHandler:
         lock = filelock.SoftFileLock(self.exports_file + ".lock")
 
         with lock.acquire(timeout=10), open(self.exports_file, "a+") as f:
-            f.write(f"{self.shared_directory} {secondary_server_private_ip}({self.options})\n")
+            f.write(f"{self.benches_directory} {secondary_server_private_ip}({self.options})\n")
 
         self.reload_exports()
 
     def remove_from_acl(self, secondary_server_private_ip: str):
         """Unsubscrible a given private IP from a give file system"""
         remove_lines = [
-            f"{self.shared_directory} {secondary_server_private_ip}({self.options})",
+            f"{self.benches_directory} {secondary_server_private_ip}({self.options})",
         ]
         for line in remove_lines:
             lock = filelock.SoftFileLock(self.exports_file + ".lock")
