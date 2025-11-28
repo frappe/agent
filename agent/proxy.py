@@ -107,11 +107,14 @@ class Proxy(Server):
         self._remove_auto_scale_site_from_upstream(primary_upstream)
         self.reload_nginx()
 
+    @step("Remove Auto Scale Site from Upstream")
+    @with_proxy_config_lock()
     def _remove_auto_scale_site_from_upstream(self, primary_upstream: str):
         """Remove secondaries from upstream"""
         self.set_secondaries_for_upstream(primary_upstream, [])
 
     @job("Add Auto Scale Site to Upstream")
+    @with_proxy_config_lock()
     def add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
         """Add secondary server to nginx upstream"""
         self._add_auto_scale_sites_to_upstream(primary_upstream, secondary_upstreams)
