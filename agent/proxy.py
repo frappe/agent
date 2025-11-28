@@ -35,6 +35,7 @@ class Proxy(Server):
         self.name = self.config["name"]
         self.domain = self.config.get("domain")
         self.nginx_directory = self.config["nginx_directory"]
+        self.secondary_config_path = os.path.join(self.nginx_directory, "secondaries.json")
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
@@ -99,6 +100,17 @@ class Proxy(Server):
                 self.add_site_to_upstream(upstream, s)
 
         self.reload_nginx()
+
+    @job("Add Auto Scale Site to Upstream")
+    def add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
+        """Add secondary server to nginx upstream"""
+        self._add_auto_scale_sites_to_upstream(primary_upstream, secondary_upstreams)
+        self.reload_nginx()
+
+    @step("Add Auto Scale Site to Upstream")
+    def _add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
+        """Add secondary server to nginx upstream"""
+        self.set_secondaries_for_upstream(primary_upstream, secondary_upstreams)
 
     @job("Add Site to Upstream")
     def add_site_to_upstream_job(self, upstream, site):
@@ -352,6 +364,41 @@ class Proxy(Server):
             os.symlink(source, destination)
 
     @property
+    def secondaries(self) -> dict[str, list[str]]:
+        """Fetch all the secondaries in this proxy"""
+        if not os.path.exists(self.secondary_config_path):
+            return {}
+
+        with open(self.secondary_config_path, "r") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+
+    def set_secondaries_for_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
+        """
+        Updates secondaries config file with new sites for the same upstream.
+        """
+        os.makedirs(os.path.dirname(self.secondary_config_path), exist_ok=True)
+
+        lock = filelock.SoftFileLock(self.secondary_config_path + ".lock")
+
+        with lock.acquire(timeout=10), open(self.secondary_config_path, "a+") as f:
+            f.seek(0)
+
+            try:
+                secondaries_config = json.load(f)
+            except json.JSONDecodeError:
+                secondaries_config = {}
+
+            secondaries_config[primary_upstream] = secondary_upstreams
+
+            # rewriting the whole file again
+            f.seek(0)
+            f.truncate()
+            json.dump(secondaries_config, f, indent=4, sort_keys=True)
+
+    @property
     def upstreams(self):
         upstreams = {}
         for upstream in os.listdir(self.upstreams_directory):  # for each server ip
@@ -359,7 +406,7 @@ class Proxy(Server):
             if not os.path.isdir(upstream_directory):
                 continue
             hashed_upstream = sha(upstream.encode()).hexdigest()[:16]
-            upstreams[upstream] = {"sites": [], "hash": hashed_upstream}
+            upstreams[upstream] = {"sites": [], "secondaries": [], "hash": hashed_upstream}
             for site in os.listdir(upstream_directory):
                 with open(os.path.join(upstream_directory, site)) as f:
                     status = f.read().strip()
@@ -371,7 +418,10 @@ class Proxy(Server):
                     actual_upstream = status
                 else:
                     actual_upstream = hashed_upstream
+
+                upstreams[upstream]["secondaries"].extend(self.secondaries.get("upstream", []))
                 upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
+
         return upstreams
 
     @property
