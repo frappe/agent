@@ -245,11 +245,15 @@ class Server(Base):
             common_site_config = bench.get_config(for_update=True)
 
             for key in ("redis_cache", "redis_queue", "redis_socketio"):
+                offset = 18000 - bench.bench_config["web_port"]
+                rq_cache_port = 13000 + offset
+
                 if private_ip != "localhost":
                     port = (
                         bench.bench_config["rq_port"]
                         if key == "redis_queue"
-                        else bench.bench_config["rq_cache_port"]
+                        else bench.bench_config.get("rq_cache_port")
+                        or rq_cache_port,  # Sometimes there is no rq cache port
                     )
                 else:
                     port = 11000 if key == "redis_queue" else 13000
