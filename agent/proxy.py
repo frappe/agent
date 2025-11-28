@@ -101,6 +101,16 @@ class Proxy(Server):
 
         self.reload_nginx()
 
+    @job("Remove Auto Scale Site from Upstream")
+    def remove_auto_scale_site_from_upstream(self, primary_upstream: str):
+        """Remove secondaries from upstream"""
+        self._remove_auto_scale_site_from_upstream(primary_upstream)
+        self.reload_nginx()
+
+    def _remove_auto_scale_site_from_upstream(self, primary_upstream: str):
+        """Remove secondaries from upstream"""
+        self.set_secondaries_for_upstream(primary_upstream, [])
+
     @job("Add Auto Scale Site to Upstream")
     def add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
         """Add secondary server to nginx upstream"""
@@ -369,7 +379,8 @@ class Proxy(Server):
         if not os.path.exists(self.secondary_config_path):
             return {}
 
-        with open(self.secondary_config_path, "r") as f:
+        lock = filelock.SoftFileLock(self.secondary_config_path + ".lock")
+        with lock.acquire(timeout=10), open(self.secondary_config_path, "r") as f:
             try:
                 return json.load(f)
             except json.JSONDecodeError:
@@ -419,7 +430,7 @@ class Proxy(Server):
                 else:
                     actual_upstream = hashed_upstream
 
-                upstreams[upstream]["secondaries"].extend(self.secondaries.get("upstream", []))
+                upstreams[upstream]["secondaries"].extend(self.secondaries.get(upstream, []))
                 upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
 
         return upstreams
