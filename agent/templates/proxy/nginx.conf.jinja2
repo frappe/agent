@@ -5,6 +5,9 @@ map $host $subdomain_map {
 {% for name, upstream in upstreams.items() %}
 upstream {{ upstream["hash"] }} {
 	server {{ name }}:80;
+	{% for secondary in upstream["secondaries"] %}
+		server {{ secondary }}:80;
+	{% endfor %}
 	keepalive 100;
 }
 {% endfor %}
