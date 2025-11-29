@@ -1134,6 +1134,19 @@ def proxy_add_upstream_site(upstream):
     return {"job": job}
 
 
+@application.route("/proxy/upstreams/<string:primary_upstream>/auto-scale-site", methods=["POST"])
+def proxy_add_auto_scale_site_to_upstream(primary_upstream):
+    data = request.json
+    job = Proxy().add_auto_scale_sites_to_upstream(primary_upstream, data["secondary_upstreams"])
+    return {"job": job}
+
+
+@application.route("/proxy/upstreams/<string:primary_upstream>/remove-auto-scale-site", methods=["POST"])
+def proxy_remove_auto_scale_site_to_upstream(primary_upstream):
+    job = Proxy().remove_auto_scale_site_from_upstream(primary_upstream)
+    return {"job": job}
+
+
 @application.route("/proxy/upstreams/<string:upstream>/domains", methods=["POST"])
 def proxy_add_upstream_site_domain(upstream):
     data = request.json
