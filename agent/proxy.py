@@ -114,14 +114,20 @@ class Proxy(Server):
         self.set_secondaries_for_upstream(primary_upstream, [])
 
     @job("Add Auto Scale Site to Upstream")
-    @with_proxy_config_lock()
-    def add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
-        """Add secondary server to nginx upstream"""
+    def add_auto_scale_sites_to_upstream(
+        self, primary_upstream: str, secondary_upstreams: list[dict[str, int]]
+    ):
+        """Add secondary server to nginx upstream
+        secondary_upstreams: {'secondary_ip': 3} (with weights)
+        """
         self._add_auto_scale_sites_to_upstream(primary_upstream, secondary_upstreams)
         self.reload_nginx()
 
     @step("Add Auto Scale Site to Upstream")
-    def _add_auto_scale_sites_to_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
+    @with_proxy_config_lock()
+    def _add_auto_scale_sites_to_upstream(
+        self, primary_upstream: str, secondary_upstreams: list[dict[str, int]]
+    ):
         """Add secondary server to nginx upstream"""
         self.set_secondaries_for_upstream(primary_upstream, secondary_upstreams)
 
@@ -389,7 +395,9 @@ class Proxy(Server):
             except json.JSONDecodeError:
                 return {}
 
-    def set_secondaries_for_upstream(self, primary_upstream: str, secondary_upstreams: list[str]):
+    def set_secondaries_for_upstream(
+        self, primary_upstream: str, secondary_upstreams: list[dict[str, int]]
+    ) -> None:
         """
         Updates secondaries config file with new sites for the same upstream.
         """
