@@ -252,8 +252,7 @@ class Server(Base):
                     port = (
                         bench.bench_config["rq_port"]
                         if key == "redis_queue"
-                        else bench.bench_config.get("rq_cache_port")
-                        or rq_cache_port,  # Sometimes there is no rq cache port
+                        else bench.bench_config.get("rq_cache_port") or rq_cache_port
                     )
                 else:
                     port = 11000 if key == "redis_queue" else 13000
