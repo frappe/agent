@@ -249,12 +249,7 @@ class Server(Base):
                 rq_cache_port = 13000 + offset
 
                 if private_ip != "localhost":
-                    port = (
-                        bench.bench_config["rq_port"]
-                        if key == "redis_queue"
-                        else bench.bench_config.get("rq_cache_port")
-                        or rq_cache_port,  # Sometimes there is no rq cache port
-                    )
+                    port = bench.bench_config["rq_port"] if key == "redis_queue" else bench.bench_config.get("rq_cache_port") or rq_cache_port
                 else:
                     port = 11000 if key == "redis_queue" else 13000
 
