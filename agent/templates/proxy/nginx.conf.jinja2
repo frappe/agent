@@ -24,6 +24,7 @@ upstream {{ upstream["hash"] }}_primary {
     server {{ name }}:80;
     keepalive 100;
 }
+
 {%- endif %}
 {%- endfor -%}
 
