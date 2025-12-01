@@ -18,16 +18,14 @@ upstream {{ upstream["hash"] }} {
 }
 {% endfor %}
 
-{% for name, upstream in upstreams.items() %}
-
-	{% if upstream["secondaries"]|length > 0 %}
-		upstream {{ upstream["hash"] }}_primary {
-			server {{ name }}:80;
-			keepalive 100;
-		}
-	{% endif %}
-
-{% endfor %}
+{%- for name, upstream in upstreams.items() %}
+{%- if upstream["secondaries"]|length > 0 %}
+upstream {{ upstream["hash"] }}_primary {
+    server {{ name }}:80;
+    keepalive 100;
+}
+{%- endif %}
+{%- endfor -%}
 
 upstream site_not_found {
 	server 127.0.0.1:10090;
@@ -59,16 +57,16 @@ map $actual_host $upstream_server_hash {
 }
 
 map $actual_host $socket_upstream_hash {
-{% for upstream in upstreams.values() -%}
-	{% for site in upstream["sites"] %}
-    	{% if site.is_auto_scaled %}
-        	{{ site.name }} http://{{ site.upstream }}_primary;
-		{% else %}
-        	{{ site.name }} http://{{ site.upstream }};
-	    {%- endif -%}
-	{%- endfor %}
-{% endfor %}
-	default http://site_not_found;
+{%- for upstream in upstreams.values() -%}
+    {%- for site in upstream["sites"] %}
+        {%- if site.is_auto_scaled %}
+            {{ site.name }} http://{{ site.upstream }}_primary;
+        {%- else %}
+            {{ site.name }} http://{{ site.upstream }};
+        {%- endif -%}
+    {%- endfor %}
+{%- endfor %}
+    default http://site_not_found;
 }
 
 map $host $actual_host {
