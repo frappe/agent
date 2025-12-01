@@ -445,7 +445,7 @@ class Proxy(Server):
                     {
                         "name": site,
                         "upstream": actual_upstream,
-                        "is_auto_scaled": self.secondaries.get(upstream, False) or False,
+                        "is_auto_scaled": bool(self.secondaries.get(upstream, False)),
                     }
                 )
 
