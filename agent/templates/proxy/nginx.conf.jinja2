@@ -25,7 +25,7 @@ upstream {{ upstream["hash"] }}_primary {
     keepalive 100;
 }
 
-{%- endif %}
+{% endif %}
 {%- endfor -%}
 
 upstream site_not_found {
