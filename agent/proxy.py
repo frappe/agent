@@ -441,7 +441,13 @@ class Proxy(Server):
                 else:
                     actual_upstream = hashed_upstream
 
-                upstreams[upstream]["sites"].append({"name": site, "upstream": actual_upstream})
+                upstreams[upstream]["sites"].append(
+                    {
+                        "name": site,
+                        "upstream": actual_upstream,
+                        "is_auto_scaled": bool(self.secondaries.get(upstream, False)),
+                    }
+                )
 
             upstreams[upstream]["secondaries"].extend(self.secondaries.get(upstream, []))
 
