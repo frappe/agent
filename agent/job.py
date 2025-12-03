@@ -36,7 +36,7 @@ if os.environ.get("SENTRY_DSN"):
     except ImportError:
         pass
 
-
+DEFAULT_TIMEOUT = 4 * 3600
 agent_database = SqliteDatabase(
     "jobs.sqlite3",
     timeout=15,
@@ -157,7 +157,6 @@ def step(name):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
-
         instance.step_record.start(name, instance.job_record.model.id)
         try:
             result = wrapped(*args, **kwargs)
@@ -176,11 +175,12 @@ def step(name):
     return wrapper
 
 
-def job(name: str, priority="default", on_success=None, on_failure=None):
+def job(name: str, priority="default", timeout=None, on_success=None, on_failure=None):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
+        from flask import request
         from agent.base import AgentException
-
+        from agent.server import Server
         if get_current_job(connection=connection()):
             instance.job_record.start()
             try:
@@ -195,12 +195,18 @@ def job(name: str, priority="default", on_success=None, on_failure=None):
                 instance.job_record.success(result)
             return result
         agent_job_id = get_agent_job_id()
+        agent_job_timeout = None
+        if request and request.is_json:
+            agent_job_timeout = request.json.get("agent_job_timeout", None)
         instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
+        final_timeout = (
+            agent_job_timeout or timeout or Server().config.get("job_timeout", None) or DEFAULT_TIMEOUT
+        )
         queue(priority).enqueue_call(
             wrapped,
             args=args,
             kwargs=kwargs,
-            timeout=4 * 3600,
+            timeout=final_timeout,
             result_ttl=24 * 3600,
             job_id=str(instance.job_record.model.id),
             on_success=on_success or callback,

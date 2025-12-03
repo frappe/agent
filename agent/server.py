@@ -720,6 +720,10 @@ class Server(Base):
         self.update_config({"sentry_dsn": sentry_dsn})
         self.setup_supervisor()
 
+    def setup_job_timeout(self, job_timeout):
+        self.update_config({"job_timeout": job_timeout})
+        self.setup_supervisor()
+
     def setup_nginx(self):
         self._generate_nginx_config()
         self._generate_agent_nginx_config()

@@ -71,10 +71,11 @@ def ping_server(password: str):
 @click.option("--name", required=True)
 @click.option("--user", default="frappe")
 @click.option("--workers", required=True, type=int)
+@click.option("--job-timeout", required=False, type=int, default=4 * 3600)
 @click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 @click.option("--press-url", required=False, type=str)
-def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
+def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, press_url=None):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
@@ -86,6 +87,7 @@ def config(name, user, workers, proxy_ip=None, sentry_dsn=None, press_url=None):
         "gunicorn_workers": 2,
         "web_port": 25052,
         "press_url": "https://frappecloud.com",
+        "job_timeout": job_timeout,
     }
     if press_url:
         config["press_url"] = press_url
@@ -119,6 +121,12 @@ def authentication(password):
 @click.option("--sentry-dsn", required=True)
 def sentry(sentry_dsn):
     Server().setup_sentry(sentry_dsn)
+
+
+@setup.command()
+@click.option("--job-timeout", required=True)
+def job_timeout(job_timeout):
+    Server().setup_job_timeout(job_timeout)
 
 
 @setup.command()
