@@ -7,6 +7,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import psutil
 from mariadb_binlog_indexer import Indexer as BinlogIndexer
@@ -673,7 +674,11 @@ WHERE `schema` IN (
 
     @property
     def binlog_indexer(self) -> BinlogIndexer:
-        return BinlogIndexer(os.path.join(self.directory, "binlog-indexes"), "queries.db")
+        binlog_indexes_path = os.path.join(os.path.dirname(self.directory), "binlog_indexes")
+        if not os.path.exists(binlog_indexes_path):
+            os.makedirs(binlog_indexes_path, exist_ok=True)
+
+        return BinlogIndexer(os.path.join(os.path.dirname(self.directory), "binlog_indexes"), "queries.db")
 
     @job("Add Binlogs To Indexer", priority="low")
     def add_binlogs_to_index_job(self, binlogs: list[str]) -> dict:
@@ -687,14 +692,40 @@ WHERE `schema` IN (
             "current_binlog": self._get_current_binlog(),
         }
         cpu_usage = psutil.cpu_percent(interval=5)
-        if cpu_usage > 50:
-            data["message"] = "CPU usage > 50%. Skipped indexing"
+        if cpu_usage > 70:
+            data["message"] = "CPU usage > 70%. Skipped indexing"
             return data
+
+        """
+        Check how much memory is available (free + reclaimable)
+        - total memory < 4GB or available memory < 1GB, allow only 200MB for indexing & use low-memory profile
+        - total memory < 8GB or available memory > 1GB, allow only 400MB for indexing & use balanced profile
+        - total memory > 8GB and available memory > 2GB, allow 1GB for indexing & use high-compression profile
+        """
+
+        memory = psutil.virtual_memory()
+        profile = "balanced"
+        if memory.available < (1 * 1024**3) or memory.total <= (4 * 1024**3):
+            allocatable_memory_bytes = 200 * (1024**2)  # 200 MB
+            profile = "low-memory"
+        elif memory.available < (2 * 1024**3) or memory.total <= (8 * 1024**3):
+            allocatable_memory_bytes = 400 * (1024**2)  # 400 MB
+            profile = "balanced"
+        else:
+            allocatable_memory_bytes = 1024 * (1024**2)  # 1 GB
+            profile = "high-compression"
+
+        allocatable_memory_mb = allocatable_memory_bytes // (1024**2)
 
         indexed_binlogs = []
         for binlog in binlogs:
             try:
-                self.binlog_indexer.add(os.path.join(self.mariadb_directory, binlog))
+                self.binlog_indexer.add(
+                    os.path.join(self.mariadb_directory, binlog),
+                    mode=profile,
+                    cpu_quota_percentage=100,  # 1 core at max
+                    memory_hard_limit=allocatable_memory_mb,
+                )
                 indexed_binlogs.append(binlog)
             except Exception as e:
                 data["message"] = f"Failed to index binlog {binlog}: {e}"
@@ -810,9 +841,24 @@ WHERE `schema` IN (
         ]
 
     def get_timeline(
-        self, start_timestamp: int, end_timestamp: int, database: str | None = None, type: str | None = None
+        self,
+        start_timestamp: int,
+        end_timestamp: int,
+        database: str | None = None,
+        table: str | None = None,
+        type: str | None = None,
+        event_size_comparator: Literal["gt", "lt"] | None = None,
+        event_size: int | None = None,
     ):
-        return self.binlog_indexer.get_timeline(start_timestamp, end_timestamp, type, database)
+        return self.binlog_indexer.get_timeline(
+            start_timestamp,
+            end_timestamp,
+            type,
+            database,
+            table,
+            event_size_comparator,
+            event_size,
+        )
 
     def get_row_ids(
         self,
@@ -822,9 +868,18 @@ WHERE `schema` IN (
         database: str,
         table: str | None = None,
         search_str: str | None = None,
+        event_size_comparator: Literal["gt", "lt"] | None = None,
+        event_size: int | None = None,
     ):
         return self.binlog_indexer.get_row_ids(
-            start_timestamp, end_timestamp, type, database, table, search_str
+            start_timestamp,
+            end_timestamp,
+            type,
+            database,
+            table,
+            search_str,
+            event_size_comparator,
+            event_size,
         )
 
     def get_queries(self, row_ids: dict[str, list[int]], database: str):
