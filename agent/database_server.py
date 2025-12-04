@@ -674,7 +674,11 @@ WHERE `schema` IN (
 
     @property
     def binlog_indexer(self) -> BinlogIndexer:
-        return BinlogIndexer(os.path.join(self.directory, "binlog-indexes"), "queries.db")
+        binlog_indexes_path = os.path.join(os.path.dirname(self.directory), "binlog_indexes")
+        if not os.path.exists(binlog_indexes_path):
+            os.makedirs(binlog_indexes_path, exist_ok=True)
+
+        return BinlogIndexer(os.path.join(os.path.dirname(self.directory), "binlog_indexes"), "queries.db")
 
     @job("Add Binlogs To Indexer", priority="low")
     def add_binlogs_to_index_job(self, binlogs: list[str]) -> dict:
