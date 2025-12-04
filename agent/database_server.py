@@ -7,6 +7,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import psutil
 from mariadb_binlog_indexer import Indexer as BinlogIndexer
@@ -842,8 +843,18 @@ WHERE `schema` IN (
         database: str | None = None,
         table: str | None = None,
         type: str | None = None,
+        event_size_comparator: Literal["gt", "lt"] | None = None,
+        event_size: int | None = None,
     ):
-        return self.binlog_indexer.get_timeline(start_timestamp, end_timestamp, type, database, table)
+        return self.binlog_indexer.get_timeline(
+            start_timestamp,
+            end_timestamp,
+            type,
+            database,
+            table,
+            event_size_comparator,
+            event_size,
+        )
 
     def get_row_ids(
         self,
@@ -853,9 +864,18 @@ WHERE `schema` IN (
         database: str,
         table: str | None = None,
         search_str: str | None = None,
+        event_size_comparator: Literal["gt", "lt"] | None = None,
+        event_size: int | None = None,
     ):
         return self.binlog_indexer.get_row_ids(
-            start_timestamp, end_timestamp, type, database, table, search_str
+            start_timestamp,
+            end_timestamp,
+            type,
+            database,
+            table,
+            search_str,
+            event_size_comparator,
+            event_size,
         )
 
     def get_queries(self, row_ids: dict[str, list[int]], database: str):
