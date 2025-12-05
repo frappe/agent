@@ -304,7 +304,9 @@ def pull_docker_images():
 
 @application.route("/server/get-config", methods=["GET"])
 def get_server_config():
-    return Server().config
+    config = Server().config
+    config.pop('access_token', None)
+    return config
 
 
 @application.route("/server/update-config", methods=["POST"])
