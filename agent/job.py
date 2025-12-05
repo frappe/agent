@@ -157,6 +157,7 @@ def step(name):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
+
         instance.step_record.start(name, instance.job_record.model.id)
         try:
             result = wrapped(*args, **kwargs)
@@ -179,8 +180,10 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from flask import request
+
         from agent.base import AgentException
         from agent.server import Server
+
         if get_current_job(connection=connection()):
             instance.job_record.start()
             try:
