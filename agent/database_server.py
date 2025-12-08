@@ -704,16 +704,21 @@ WHERE `schema` IN (
         """
 
         memory = psutil.virtual_memory()
+        cpu_count = psutil.cpu_count(logical=True) or 1
+
         profile = "balanced"
-        if memory.available < (1 * 1024**3) or memory.total <= (4 * 1024**3):
+        if memory.available < (1 * 1024**3) or memory.total <= (4 * 1024**3) or cpu_count <= 2:
             allocatable_memory_bytes = 200 * (1024**2)  # 200 MB
+            cpu_quota_percentage = 30  # 0.3 core at max
             profile = "low-memory"
-        elif memory.available < (2 * 1024**3) or memory.total <= (8 * 1024**3):
+        elif memory.available < (2 * 1024**3) or memory.total <= (8 * 1024**3) or cpu_count <= 4:
             allocatable_memory_bytes = 400 * (1024**2)  # 400 MB
+            cpu_quota_percentage = 60  # 0.6 core at max
             profile = "balanced"
         else:
             allocatable_memory_bytes = 1024 * (1024**2)  # 1 GB
             profile = "high-compression"
+            cpu_quota_percentage = 100  # 1 core at max
 
         allocatable_memory_mb = allocatable_memory_bytes // (1024**2)
 
@@ -723,7 +728,7 @@ WHERE `schema` IN (
                 self.binlog_indexer.add(
                     os.path.join(self.mariadb_directory, binlog),
                     mode=profile,
-                    cpu_quota_percentage=100,  # 1 core at max
+                    cpu_quota_percentage=cpu_quota_percentage,
                     memory_hard_limit=allocatable_memory_mb,
                 )
                 indexed_binlogs.append(binlog)
