@@ -139,7 +139,7 @@ WHERE `schema` IN (
 
         query = ""
         for database, size in database_sizes.items():
-            query += f"REPLACE INTO press_meta._schema_sizes_internal (schema, size) VALUES ('{database}', {size});\n"  # noqa: E501
+            query += f"REPLACE INTO press_meta._schema_sizes_internal (`schema`, `size`) VALUES ('{database}', {size});\n"  # noqa: E501
 
         if not query:
             return
