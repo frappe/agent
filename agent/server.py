@@ -201,6 +201,16 @@ class Server(Base):
             "total": round((unused_images_size + total_archived_folder_size) / 1024**3, 2),
         }
 
+    @job("Push Images to Registry")
+    def push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
+        return self._push_images_to_registry(images, registry_settings)
+
+    @step("Push Images to Registry")
+    def _push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
+        self.docker_login(registry_settings)
+        for image in images:
+            self.execute(f"docker push {image}")
+
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""
         sites_directory = f"/home/frappe/benches/{bench_name}/sites"
