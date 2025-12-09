@@ -290,6 +290,15 @@ def get_docker_image_size(image_tag: str):
     return {"size": size}
 
 
+@application.route("/server/push-images", methods=["POST"])
+def push_docker_images_to_registry():
+    data = request.json
+    job = Server().push_images_to_registry(
+        images=data.get("images"), registry_settings=data.get("registry_settings")
+    )
+    return {"job": job}
+
+
 @application.route("/server/reclaimable-size", methods=["GET"])
 def get_reclaimable_size():
     return Server().get_reclaimable_size()
