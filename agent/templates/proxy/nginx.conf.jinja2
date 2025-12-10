@@ -14,7 +14,11 @@ upstream {{ upstream["hash"] }} {
 
 	{% endfor %}
 
-	keepalive 100;
+	{% if upstream["secondaries"]|length > 0 %}
+		keepalive 0;
+	{% else %}
+		keepalive 100;
+	{% endif %}
 }
 {% endfor %}
 
@@ -22,7 +26,7 @@ upstream {{ upstream["hash"] }} {
 {%- if upstream["secondaries"]|length > 0 %}
 upstream {{ upstream["hash"] }}_primary {
     server {{ name }}:80;
-    keepalive 100;
+    keepalive 0;
 }
 
 {% endif %}
