@@ -40,7 +40,7 @@ class DatabaseServer(Server):
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.connect(reuse_if_open=True)
             mariadb.execute_sql("SELECT 1;")
@@ -217,7 +217,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             gtid_binlog_pos = self.sql(mariadb, "SELECT @@GLOBAL.gtid_binlog_pos;")[0][
                 "@@GLOBAL.gtid_binlog_pos"
@@ -258,6 +258,7 @@ WHERE `schema` IN (
         master_private_ip,
         master_mariadb_root_password,
         gtid_slave_pos=None,
+        master_db_port=3306,
     ):
         try:
             """Configure replication on the MariaDB server."""
@@ -266,7 +267,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             mariadb.execute_sql("RESET SLAVE ALL;")
@@ -274,7 +275,7 @@ WHERE `schema` IN (
                 mariadb.execute_sql(f"SET GLOBAL gtid_slave_pos = '{gtid_slave_pos}';")
             mariadb.execute_sql(f"""CHANGE MASTER TO
                 MASTER_HOST = '{master_private_ip}',
-                MASTER_PORT = 3306,
+                MASTER_PORT = '{master_db_port}',
                 MASTER_USER = 'root',
                 MASTER_PASSWORD = '{master_mariadb_root_password}',
                 MASTER_USE_GTID=slave_pos;
@@ -300,7 +301,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             mariadb.execute_sql("RESET SLAVE ALL;")
@@ -325,7 +326,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("START SLAVE;")
             return {
@@ -349,7 +350,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             mariadb.execute_sql("STOP SLAVE;")
             return {
@@ -365,6 +366,10 @@ WHERE `schema` IN (
                 "error": traceback.format_exc(),
             }
 
+    @property
+    def db_port(self):
+        return self.config.get("db_port") or 3306
+
     def processes(self, private_ip, mariadb_root_password):
         try:
             mariadb = MySQLDatabase(
@@ -372,7 +377,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(mariadb, "SHOW FULL PROCESSLIST")
         except Exception:
@@ -388,7 +393,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(mariadb, "SHOW VARIABLES")
         except Exception:
@@ -404,7 +409,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             return self.sql(
                 mariadb,
@@ -428,7 +433,7 @@ WHERE `schema` IN (
                 user="root",
                 password=mariadb_root_password,
                 host=private_ip,
-                port=3306,
+                port=self.db_port,
             )
             for process in processes:
                 if (
@@ -456,7 +461,7 @@ WHERE `schema` IN (
             user="root",
             password=mariadb_root_password,
             host=private_ip,
-            port=3306,
+            port=self.db_port,
         )
 
         return self.sql(
@@ -491,7 +496,7 @@ WHERE `schema` IN (
         return self.fetch_column_stats(schema, table, private_ip, mariadb_root_password)
 
     def fetch_column_stats(self, schema, table, private_ip, mariadb_root_password):
-        db = Database(private_ip, 3306, "root", mariadb_root_password, schema)
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, schema)
         results = db.fetch_database_column_statistics(table)
         return {"output": json.dumps(results)}
 
@@ -501,7 +506,7 @@ WHERE `schema` IN (
             user="root",
             password=mariadb_root_password,
             host=private_ip,
-            port=3306,
+            port=self.db_port,
         )
 
         if not query.lower().startswith(("select", "update", "delete")):
@@ -550,7 +555,7 @@ WHERE `schema` IN (
 
     def _purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
         try:
-            mariadb = Database(private_ip, 3306, "root", mariadb_root_password, "mysql")
+            mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
             mariadb.execute_query(f"PURGE BINARY LOGS TO '{to_binlog}';", commit=True)
             return True
         except Exception:

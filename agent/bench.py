@@ -56,6 +56,7 @@ class Bench(Base):
         self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(self.directory, "sites", "common_site_config.json")
         self.host = self.config.get("db_host", "localhost")
+        self.db_port = self.config.get("db_port", 3306)
         self.docker_image = self.bench_config.get("docker_image")
         self.mounts = mounts
         if not (
@@ -272,7 +273,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f'mysql -h {self.host} -uroot -p{mariadb_root_password} -e "{query}"'
+            command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
         return database, user, password
 
@@ -285,7 +286,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f'mysql -h {self.host} -uroot -p{mariadb_root_password} -e "{query}"'
+            command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
 
     def fetch_monitor_data(self):
