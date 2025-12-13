@@ -211,6 +211,31 @@ class Server(Base):
         for image in images:
             self.execute(f"docker push {image}")
 
+    @job("Remove Redis Localhost Bind")
+    def remove_redis_localhost_bind(self):
+        """Bind redis to 0.0.0.0 on all benches"""
+        return self._remove_redis_localhost_bind()
+
+    @step("Remove Redis Localhost Bind")
+    def _remove_redis_localhost_bind(self):
+        for bench in self.benches:
+            files = [
+                os.path.join(self.benches_directory, bench, "config", "redis-cache.conf"),
+                os.path.join(self.benches_directory, bench, "config", "redis-queue.conf"),
+            ]
+
+            for path in files:
+                if not os.path.exists(path):
+                    continue
+
+                with open(path, "r") as f:
+                    content = f.read()
+
+                content = content.replace("127.0.0.1", "0.0.0.0")
+
+                with open(path, "w") as f:
+                    f.write(content)
+
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""
         sites_directory = f"/home/frappe/benches/{bench_name}/sites"

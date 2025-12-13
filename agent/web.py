@@ -299,6 +299,12 @@ def push_docker_images_to_registry():
     return {"job": job}
 
 
+@application.route("/server/remove-localhost-redis-bind", methods=["POST"])
+def remove_localhost_redis_bind():
+    job = Server().remove_redis_localhost_bind()
+    return {"job": job}
+
+
 @application.route("/server/reclaimable-size", methods=["GET"])
 def get_reclaimable_size():
     return Server().get_reclaimable_size()
