@@ -59,10 +59,8 @@ class IdleMonitor:
 
     def should_monitor(self):
         """Ensure this never runs on a primary server as it kills slaves"""
-        name = self.config["name"]
-        if not name.startswith("fs"):
-            print("Executing monitor on primary server is not allowed")
-            sys.exit(1)
+        print("Not running idle monitor relying on prometheus for this.")
+        sys.exit(1)
 
     @property
     def boot_time(self) -> int:
