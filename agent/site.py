@@ -828,6 +828,11 @@ print(">>>" + frappe.session.sid + "<<<")
                 f"-u{self.user} -p{self.password} {self.database} -e '{query}'"
             )
 
+        if not tables:
+            return {"output": "No tables to optimize."}
+
+        return {"output": f"Optimized {len(tables)} table(s):\n- " + "\n- ".join(tables)}
+
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates, site_configs = [], [], [], []
         backup_directory = os.path.join(self.directory, "private", "backups")
