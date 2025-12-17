@@ -133,9 +133,30 @@ WHERE `schema` IN (
             if database in ("information_schema", "performance_schema", "mysql", "sys", "press_meta"):
                 continue
 
-            with contextlib.suppress(Exception):
-                size = self.execute(f"sudo du -sb /var/lib/mysql/{database} | cut -f1")["output"]
-                database_sizes[database] = int(size)
+        with contextlib.suppress(Exception):
+            cmd = (
+                f"sudo find /var/lib/mysql/{database} "
+                r"-type f \( -name '*.ibd' -o -name '*.MYD' \) -size +128k "
+                r"-exec du -b --apparent-size {} + | "
+                r"""awk '{
+                    size=$1;
+                    file=$2;
+                    discount=0;
+                    if(file ~ /\.ibd$/){
+                        if(size < 25*1024*1024) discount = 2.5*1024*1024;        # <25 MB -> 2.5 MB
+                        else if(size < 100*1024*1024) discount = 5*1024*1024;    # 25-100 MB -> 5 MB
+                        else if(size < 500*1024*1024) discount = 10*1024*1024;   # 100-500 MB -> 10 MB
+                        else discount = 20*1024*1024;                            # >500 MB -> 20 MB
+                        # Extra extent discount: 1 MB per 64 MB of table size
+                        discount += int(size/(64*1024*1024))*1024*1024
+                    }
+                    sum += size;
+                    sum_discount += discount
+                } END {print sum - sum_discount}'"""
+            )
+
+            size = self.execute(cmd)["output"].strip()
+            database_sizes[database] = max(0, int(size))
 
         query = ""
         for database, size in database_sizes.items():
