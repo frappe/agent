@@ -157,7 +157,7 @@ class Database:
         from agent.utils import cint
 
         data = self._run_sql(
-            f"SELECT table_name, data_length, index_length FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA"
+            f"SELECT table_name, data_length, index_length, data_free FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA"  # noqa: E501
             f"='{self.database_name}'",
             as_dict=True,
         )
@@ -169,11 +169,13 @@ class Database:
             tables[d["table_name"]] = {
                 "data_length": cint(d["data_length"]),
                 "index_length": cint(d["index_length"]),
-                "total_size": cint(d["data_length"]) + cint(d["index_length"]),
+                "data_free": cint(d["data_free"]),
+                "total_size": cint(d["data_length"]) + cint(d["index_length"]) + cint(d["data_free"]),
             }
             d["data_length"] = cint(d["data_length"])
             d["index_length"] = cint(d["index_length"])
-            d["total_size"] = d["data_length"] + d["index_length"]
+            d["data_free"] = cint(d["data_free"])
+            d["total_size"] = d["data_length"] + d["index_length"] + d["data_free"]
         return tables
 
     def fetch_database_table_schema(self, include_index_info: bool = True):
