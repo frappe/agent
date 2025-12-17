@@ -644,7 +644,10 @@ def complete_setup_wizard(bench, site):
 
 @application.route("/benches/<string:bench>/sites/<string:site>/optimize", methods=["POST"])
 def optimize_tables(bench, site):
-    job = Server().benches[bench].sites[site].optimize_tables_job()
+    # check if table name has been passed
+    data = request.json or {}
+    tables = data.get("tables")
+    job = Server().benches[bench].sites[site].optimize_tables_job(tables=tables)
     return {"job": job}
 
 
