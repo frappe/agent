@@ -40,13 +40,13 @@ class DatabasePhysicalBackup(DatabaseServer):
         self.snapshot_trigger_url = snapshot_trigger_url
         self.snapshot_request_key = snapshot_request_key
         self.databases = databases
-        self.db_user = db_user
-        self.db_password = db_password
-        self.db_host = db_host
-        self.db_port = db_port
-        self.db_base_path = db_base_path
-        self.db_directories: dict[str, str] = {
-            db: os.path.join(self.db_base_path, db) for db in self.databases
+        self._db_user = db_user
+        self._db_password = db_password
+        self._db_host = db_host
+        self._db_port = db_port
+        self._db_base_path = db_base_path
+        self._db_directories: dict[str, str] = {
+            db: os.path.join(self._db_base_path, db) for db in self.databases
         }
 
         self.innodb_tables: dict[str, list[str]] = {db: [] for db in self.databases}
@@ -74,7 +74,7 @@ class DatabasePhysicalBackup(DatabaseServer):
     def remove_backups_metadata(self):
         with contextlib.suppress(Exception):
             for db_name in self.databases:
-                os.remove(get_path_of_physical_backup_metadata(self.db_base_path, db_name))
+                os.remove(get_path_of_physical_backup_metadata(self._db_base_path, db_name))
 
     @step("Fetch Database Tables Information")
     def fetch_table_info(self):
@@ -140,9 +140,9 @@ class DatabasePhysicalBackup(DatabaseServer):
         This will ensure that the snapshot is consistent.
         """
         for db_name in self.databases:
-            files = os.listdir(self.db_directories[db_name])
+            files = os.listdir(self._db_directories[db_name])
             for file in files:
-                file_path = os.path.join(self.db_directories[db_name], file)
+                file_path = os.path.join(self._db_directories[db_name], file)
                 """
                 Open the file in binary mode and keep buffering disabled(allowed only for binary mode)
                 https://docs.python.org/3/library/functions.html#open:~:text=buffering%20is%20an%20optional%20integer
@@ -157,7 +157,7 @@ class DatabasePhysicalBackup(DatabaseServer):
     def validate_exportable_files(self):
         for db_name in self.databases:
             # list all the files in the database directory
-            db_files = os.listdir(self.db_directories[db_name])
+            db_files = os.listdir(self._db_directories[db_name])
             db_files = [decode_mariadb_filename(file) for file in db_files]
             """
             InnoDB tables should have the .cfg files to be able to restore it back
@@ -197,12 +197,12 @@ class DatabasePhysicalBackup(DatabaseServer):
     @step("Collect Files Metadata")
     def collect_files_metadata(self):
         for db_name in self.databases:
-            files = os.listdir(self.db_directories[db_name])
+            files = os.listdir(self._db_directories[db_name])
             for file in files:
                 file_extension = os.path.splitext(file)[-1].lower()
                 if file_extension not in [".cfg", ".frm", ".myd", ".myi", ".ibd"]:
                     continue
-                file_path = os.path.join(self.db_directories[db_name], file)
+                file_path = os.path.join(self._db_directories[db_name], file)
                 """
                 cfg, frm files are too important to restore/reconstruct the database.
                 This files are small also, so we can take the checksum of these files.
@@ -237,7 +237,7 @@ class DatabasePhysicalBackup(DatabaseServer):
                 "table_schema": self.table_schemas[db_name],
                 "files_metadata": self.files_metadata[db_name],
             }
-            file_path = get_path_of_physical_backup_metadata(self.db_base_path, db_name)
+            file_path = get_path_of_physical_backup_metadata(self._db_base_path, db_name)
             with open(file_path, "w") as f:
                 json.dump(data, f)
 
@@ -279,8 +279,8 @@ class DatabasePhysicalBackup(DatabaseServer):
         command = [
             "mariadb-dump",
             "-u",
-            self.db_user,
-            "-p" + self.db_password,
+            self._db_user,
+            "-p" + self._db_password,
             "--no-data",
             db_name,
         ]
@@ -311,10 +311,10 @@ class DatabasePhysicalBackup(DatabaseServer):
             raise ValueError(f"Database {db_name} not found")
         self._db_instances[db_name] = CustomPeeweeDB(
             db_name,
-            user=self.db_user,
-            password=self.db_password,
-            host=self.db_host,
-            port=self.db_port,
+            user=self._db_user,
+            password=self._db_password,
+            host=self._db_host,
+            port=self._db_port,
         )
         self._db_instances[db_name].connect()
         # Set session wait timeout to 4 hours [EXPERIMENTAL]
