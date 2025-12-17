@@ -815,18 +815,47 @@ print(">>>" + frappe.session.sid + "<<<")
         return {"backups": backup_files, "offsite": uploaded_files}
 
     @job("Optimize Tables")
-    def optimize_tables_job(self):
-        return self.optimize_tables()
+    def optimize_tables_job(self, tables: list[str] | None):
+        return self.optimize_tables(tables)
 
     @step("Optimize Tables")
-    def optimize_tables(self):
-        tables = [row[0] for row in self.get_database_free_tables()]
+    def optimize_tables(self, tables: list[str] | None = None):
+        if not tables:
+            tables = [row[0] for row in self.get_database_free_tables()]
+
+        optimized_tables = []
+        failed_optimizations = []
+
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
-            self.execute(
-                f"mysql -sN -h {self.host} -P {self.db_port} "
-                f"-u{self.user} -p{self.password} {self.database} -e '{query}'"
+            try:
+                self.execute(
+                    f"mysql -sN -h {self.host} -P {self.db_port} "
+                    f"-u{self.user} -p{self.password} {self.database} -e '{query}'"
+                )
+                optimized_tables.append(table)
+            except:  # noqa # pylint: disable=bare-except
+                failed_optimizations.append(table)
+                continue
+
+        if not tables:
+            return {"output": "No tables require optimization."}
+
+        message_parts = []
+
+        if optimized_tables:
+            message_parts.append(
+                f"Successfully optimized {len(optimized_tables)} table(s):\n- "
+                + "\n- ".join(optimized_tables)
             )
+
+        if failed_optimizations:
+            message_parts.append(
+                f"Failed to optimize {len(failed_optimizations)} table(s):\n- "
+                + "\n- ".join(failed_optimizations)
+            )
+
+        return {"output": "\n\n".join(message_parts)}
 
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates, site_configs = [], [], [], []
@@ -891,7 +920,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 # only specific to mysql/mariaDB. use a different query for postgres.
                 # or try using frappe.db.get_database_size if possible
                 query = (
-                    "SELECT SUM(`data_length` + `index_length`)"
+                    "SELECT SUM(`data_length` + `index_length` + `data_free`)"
                     " FROM information_schema.tables"
                     f' WHERE `table_schema` = "{self.database}"'
                     " GROUP BY `table_schema`"
