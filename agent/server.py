@@ -492,12 +492,14 @@ class Server(Base):
             site.run_app_scripts(before_migrate_scripts)
 
         try:
+            target.update_runtime_limits(2)
             site.migrate(
                 skip_search_index=skip_search_index,
                 skip_failing_patches=skip_failing_patches,
             )
         finally:
             site.log_touched_tables()
+            target.update_runtime_limits()
 
         with suppress(Exception):
             site.bench_execute(
