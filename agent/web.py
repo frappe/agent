@@ -1265,6 +1265,8 @@ def get_binary_logs():
 @application.route("/database/processes", methods=["POST"])
 def get_database_processes():
     data = request.json
+    assert "private_ip" in data, "private_ip is required"
+    assert "mariadb_root_password" in data, "mariadb_root_password is required"
     return jsonify(DatabaseServer().processes(**data))
 
 
