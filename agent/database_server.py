@@ -307,7 +307,7 @@ WHERE `schema` IN (
                 mariadb.execute_sql(f"SET GLOBAL gtid_slave_pos = '{gtid_slave_pos}';")
             mariadb.execute_sql(f"""CHANGE MASTER TO
                 MASTER_HOST = '{master_private_ip}',
-                MASTER_PORT = '{master_db_port}',
+                MASTER_PORT = {master_db_port},
                 MASTER_USER = 'root',
                 MASTER_PASSWORD = '{master_mariadb_root_password}',
                 MASTER_USE_GTID=slave_pos;
