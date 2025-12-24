@@ -317,6 +317,20 @@ def pull_docker_images():
     return {"job": job}
 
 
+@application.route("/server/get-config", methods=["GET"])
+def get_server_config():
+    config = Server().config
+    config.pop("access_token", None)
+    return config
+
+
+@application.route("/server/update-config", methods=["POST"])
+def update_server_config():
+    config = request.json
+    Server().update_config(config)
+    return {"update_config": True}
+
+
 @application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json
