@@ -56,6 +56,16 @@ if TYPE_CHECKING:
 
 application = Flask(__name__)
 
+SENSITIVE_CONFIG_KEYS = {
+    "access_token",
+    "redis_port",
+    "redis_password",
+    "db_password",
+    "db_user",
+    "db_host",
+    "db_port",
+}
+
 
 def validate_bench(fn):
     @wraps(fn)
@@ -319,15 +329,25 @@ def pull_docker_images():
 
 @application.route("/server/get-config", methods=["GET"])
 def get_server_config():
-    config = Server().config
-    config.pop("access_token", None)
-    return config
+    config = dict(Server().config or {})
+    sanitized_config = { 
+        key : value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS
+    }
+    return sanitized_config
 
 
 @application.route("/server/update-config", methods=["POST"])
 def update_server_config():
     config = request.json
-    Server().update_config(config)
+    if not isinstance(config, dict):
+        return jsonify({"error": "Invalid config payload; expected a JSON object."}), 400
+    sanitized_config = {
+        key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS
+    }
+    stripped_keys = set(config.keys()) - set(sanitized_config.keys())
+    if stripped_keys:
+        log.warning("Stripping sensitive config in updating: %s",(",").join(sorted(stripped_keys)))
+    Server().update_config(sanitized_config)
     return {"update_config": True}
 
 
