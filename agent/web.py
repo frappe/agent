@@ -330,8 +330,7 @@ def pull_docker_images():
 @application.route("/server/get-config", methods=["GET"])
 def get_server_config():
     config = dict(Server().config or {})
-    sanitized_config = {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
-    return sanitized_config
+    return {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
 
 
 @application.route("/server/update-config", methods=["POST"])
