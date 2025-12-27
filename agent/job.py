@@ -205,7 +205,7 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
         final_timeout = (
             agent_job_timeout or timeout or Server().config.get("job_timeout", None) or DEFAULT_TIMEOUT
         )
-        if not 0 <= final_timeout <= 24* 3600:
+        if not 0 <= final_timeout <= 24 * 3600:
             final_timeout = DEFAULT_TIMEOUT
         queue(priority).enqueue_call(
             wrapped,
