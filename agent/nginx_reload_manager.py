@@ -151,7 +151,7 @@ class NginxReloadManager:
                 error_msg += f"Stdout: {e.stdout}\n"
             if e.stderr:
                 error_msg += f"Stderr: {e.stderr}"
-            
+
             self.error = error_msg
             self.log(error_msg, print_always=True)
             traceback.print_exc()
