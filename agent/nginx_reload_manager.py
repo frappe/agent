@@ -144,6 +144,18 @@ class NginxReloadManager:
 
             self.last_reload_at = datetime.now()
             return ReloadStatus.Success
+        except subprocess.CalledProcessError as e:
+            error_msg = f"NGINX reload failed (code: {e.returncode})\n"
+            error_msg += f"Command: {e.cmd}\n"
+            if e.stdout:
+                error_msg += f"Stdout: {e.stdout}\n"
+            if e.stderr:
+                error_msg += f"Stderr: {e.stderr}"
+
+            self.error = error_msg
+            self.log(error_msg, print_always=True)
+            traceback.print_exc()
+            return ReloadStatus.Failure
         except Exception as e:
             self.error = e
 
