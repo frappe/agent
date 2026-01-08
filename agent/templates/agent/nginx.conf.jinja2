@@ -46,6 +46,23 @@ server {
 	more_set_headers "Access-Control-Allow-Origin: {{ press_url }}";
 	{%- endif %}
 
+	{% if name.startswith('n') %}
+	# Dynamic upstream routing with regex capture
+    # Matches /{upstream_name}/agent/ or /{upstream_name}/metrics
+	# Supports port: /{upstream_name}:{port}/agent/
+    location ~ ^/([^/]+)?/(agent|metrics|status)(.*)$ {
+		set $upstream_host $1;
+		set $upstream_path $2$3;
+
+		proxy_pass https://$upstream_host/$upstream_path;
+		proxy_ssl_server_name on;
+		proxy_ssl_protocols TLSv1.3;
+		proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+	{% endif %}
+
 	location /agent/ {
 		proxy_http_version 1.1;
 		proxy_cache_bypass $http_upgrade;
@@ -102,7 +119,7 @@ server {
 		location /metrics/mariadb {
 			proxy_pass http://127.0.0.1:9104/metrics;
 		}
-	
+
 		location /metrics/mariadb_proxy {
 			proxy_pass http://127.0.0.1:9104/metrics;
 		}
@@ -126,7 +143,7 @@ server {
 		location /metrics/blackbox {
 			proxy_pass http://127.0.0.1:9115/blackbox/metrics;
 		}
-	
+
 		location /metrics/grafana {
 			proxy_pass http://127.0.0.1:3000/grafana/metrics;
 		}
@@ -209,7 +226,7 @@ server {
 		auth_basic_user_file /home/frappe/agent/nginx/grafana.htpasswd;
 		proxy_pass http://127.0.0.1:9115/blackbox;
 	}
-	
+
 	location /grafana {
 		auth_basic "Grafana UI";
 		auth_basic_user_file /home/frappe/agent/nginx/grafana-ui.htpasswd;
@@ -240,7 +257,7 @@ server {
 	location /kibana/ {
 		auth_basic "Kibana";
 		auth_basic_user_file /home/frappe/agent/nginx/kibana.htpasswd;
-		
+
 		proxy_set_header Upgrade $http_upgrade;
 		proxy_set_header Connection "upgrade";
 		proxy_set_header host $host;
