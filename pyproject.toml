@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent"
+version = "0.0.0"
+description = "Frappe Press Agent"
+authors = [
+    {name = "Frappe Technologies", email = "developers@frappe.io"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "license.txt"}
+keywords = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+dependencies = [
+    "boto3==1.18.0",
+    "certifi==2019.11.28",
+    "chardet==3.0.4",
+    "click==8.1.3",
+    "filewarmer==0.0.17",
+    "Flask==1.1.1",
+    "gunicorn==20.0.4",
+    "honcho==1.0.1",
+    "idna==2.8",
+    "ipython==8.12.3",
+    "itsdangerous==1.1.0",
+    "Jinja2==2.10.3",
+    "MarkupSafe==1.1.1",
+    "passlib==1.7.2",
+    "peewee==3.13.1",
+    "prometheus_client==0.20.0",
+    "PyMySQL==0.9.3",
+    "python-crontab==2.5.1",
+    "python-dateutil==2.8.2",
+    "requests==2.26.0",
+    "rq==1.13.0",
+    "urllib3==1.26.18",
+    "Werkzeug==0.16.0",
+    "wrapt==1.16.0",
+    "docker==6.1.2",
+    "filelock==3.13.1",
+    "sentry-sdk[flask,rq]==2.1.1",
+    "sql_metadata==2.15.0",
+    "py-spy==0.4.0",
+    "mariadb-binlog-indexer==0.0.19",
+    "psutil==7.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/frappe/agent"
+Repository = "https://github.com/frappe/agent"
+
+[project.scripts]
+agent = "agent.cli:cli"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+# Automatically discover packages
+
+[tool.setuptools.package-data]
+agent = ["templates/**/*", "pages/*.html", "patches.txt"]
