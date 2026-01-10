@@ -786,7 +786,10 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @job("Backup Site", priority="low")
     def backup_job(
-        self, with_files=False, offsite=None, keep_files_locally_after_offsite_backup: bool = False
+        self,
+        with_files=False,
+        offsite=None,
+        keep_files_locally_after_offsite_backup: bool = False,
     ):
         backup_files = self.backup(with_files)
         uploaded_files = (
