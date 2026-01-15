@@ -1,26 +1,32 @@
 import iptc
 
+from agent.job import job, step
+
 
 class Firewall:
     CHAIN_MAIN = "Frappe"
     CHAIN_BYPASS = "FrappeBypass"
     CHAIN_INPUT = "INPUT"
 
+    @job("Setup Firewall")
     def setup(self):
         self.setup_main()
         self.setup_bypass()
         self.link_input()
 
+    @step
     def setup_main(self):
         table = self.table()
         table.create_chain(self.CHAIN_MAIN)
         table.commit()
 
+    @step
     def setup_bypass(self):
         table = self.table()
         table.create_chain(self.CHAIN_BYPASS)
         table.commit()
 
+    @step
     def link_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
