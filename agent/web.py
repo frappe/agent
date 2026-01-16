@@ -24,6 +24,7 @@ from agent.database_physical_backup import DatabasePhysicalBackup
 from agent.database_physical_restore import DatabasePhysicalRestore
 from agent.database_server import DatabaseServer
 from agent.exceptions import BenchNotExistsException, SiteNotExistsException
+from agent.firewall import Firewall
 from agent.job import Job as AgentJob
 from agent.job import JobModel, connection
 from agent.minio import Minio
@@ -1906,4 +1907,10 @@ def backup_db():
     database_name = data.get("database_name")
     offsite = data.get("offsite")
     job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
+    return {"job": job}
+
+
+@application.route("/firewall/setup", methods=["POST"])
+def setup_firewall():
+    job = Firewall().setup()
     return {"job": job}
