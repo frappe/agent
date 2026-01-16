@@ -903,7 +903,7 @@ print(">>>" + frappe.session.sid + "<<<")
             # only specific to mysql/mariaDB. use a different query for postgres.
             # or try using frappe.db.get_database_size if possible
             query = (
-                "SELECT SUM(`data_length` + `index_length` + `data_free`)"
+                "SELECT SUM(`data_length` + `index_length`)"
                 " FROM information_schema.tables"
                 f' WHERE `table_schema` = "{self.database}"'
                 " GROUP BY `table_schema`"
