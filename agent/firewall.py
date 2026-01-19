@@ -1,7 +1,7 @@
 import iptc
 
 from agent.base import Base
-from agent.job import job, step
+from agent.job import Job, Step, job, step
 
 
 class Firewall(Base):
@@ -119,3 +119,19 @@ class Firewall(Base):
 
     def pretty_ip(self, ip: str) -> str:
         return ip.split("/").pop(0)
+
+    @property
+    def job_record(self):
+        if self.job is None:
+            self.job = Job()
+        return self.job
+
+    @property
+    def step_record(self):
+        if self.step is None:
+            self.step = Step()
+        return self.step
+
+    @step_record.setter
+    def step_record(self, value):
+        self.step = value
