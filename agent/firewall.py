@@ -29,9 +29,6 @@ class Firewall(Server):
 
     @step("Link Input Chain")
     def link_input(self):
-        self._link_input()
-
-    def _link_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
         for chain_target in (self.CHAIN_MAIN, self.CHAIN_BYPASS):
@@ -60,9 +57,6 @@ class Firewall(Server):
 
     @step("Unlink Input Chain")
     def unlink_input(self):
-        self._unlink_input()
-
-    def _unlink_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
         for rule in chain.rules:
@@ -70,15 +64,46 @@ class Firewall(Server):
                 chain.delete_rule(rule)
         table.commit()
 
+    @job("Sync Upstream")
+    def sync(self, status: bool, rules: list[dict]):
+        self.toggle(status)
+        self.clear_rules()
+        self.sync_rules(rules)
+
+    @step("Toggle Firewall")
+    def toggle(self, status: bool):
+        if status:
+            self.enable()
+        else:
+            self.disable()
+
+    @step("Enable Firewall")
     def enable(self):
-        self._unlink_input()
-        self._link_input()
-        return self.status()
+        self.unlink_input()
+        self.link_input()
 
+    @step("Disable Firewall")
     def disable(self):
-        self._unlink_input()
-        return self.status()
+        self.unlink_input()
 
+    @step("Clear Rules")
+    def clear_rules(self):
+        table = self.table()
+        chain = iptc.Chain(table, self.CHAIN_MAIN)
+        for rule in chain.rules:
+            chain.delete_rule(rule)
+        table.commit()
+
+    @step("Sync Rules")
+    def sync_rules(self, rules: list[dict]):
+        for rule in rules:
+            self.add_rule(
+                source=rule.get("source"),
+                destination=rule.get("destination"),
+                action=rule.get("action"),
+            )
+
+    @step("Add Rule")
     def add_rule(self, source: str, destination: str, action: str):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_MAIN)
@@ -88,8 +113,8 @@ class Firewall(Server):
         rule.target = iptc.Target(rule, self.transform_action(action))
         chain.insert_rule(rule)
         table.commit()
-        return self.status()
 
+    @step("Remove Rule")
     def remove_rule(self, source: str, destination: str, action: str):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_MAIN)
@@ -98,37 +123,9 @@ class Firewall(Server):
             if rule.src == source and rule.dst == destination and rule.target.name == action:
                 chain.delete_rule(rule)
         table.commit()
-        return self.status()
-
-    def status(self):
-        return {
-            "enabled": self.is_enabled(),
-            "rules": list(self.rules()),
-        }
-
-    def is_enabled(self) -> bool:
-        table = self.table()
-        chain = iptc.Chain(table, self.CHAIN_INPUT)
-        for rule in chain.rules:
-            if rule.target.name == self.CHAIN_MAIN:
-                return True
-        return False
-
-    def rules(self):
-        table = self.table()
-        chain = iptc.Chain(table, self.CHAIN_MAIN)
-        for rule in chain.rules:
-            yield {
-                "source": self.pretty_ip(rule.src),
-                "destination": self.pretty_ip(rule.dst),
-                "action": self.transform_action(rule.target.name),
-            }
 
     def table(self) -> iptc.Table:
         return iptc.Table(iptc.Table.FILTER)
-
-    def pretty_ip(self, ip: str) -> str:
-        return ip.split("/").pop(0)
 
     def transform_action(self, action: str) -> str:
         _map = {

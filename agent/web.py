@@ -1922,34 +1922,10 @@ def teardown_firewall():
     return {"job": job}
 
 
-@application.route("/firewall/enable", methods=["POST"])
-def enable_firewall():
-    return Firewall().enable()
-
-
-@application.route("/firewall/disable", methods=["POST"])
-def disable_firewall():
-    return Firewall().disable()
-
-
-@application.route("/firewall/rules", methods=["POST"])
-def add_firewall_rule():
+@application.route("/firewall/sync", methods=["GET"])
+def sync_firewall():
     data = request.json
-    source = data.get("source", "any")
-    destination = data.get("destination", "any")
-    action = data.get("action", "allow")
-    return Firewall().add_rule(source, destination, action)
-
-
-@application.route("/firewall/rules", methods=["DELETE"])
-def remove_firewall_rule():
-    data = request.json
-    source = data.get("source", "any")
-    destination = data.get("destination", "any")
-    action = data.get("action", "allow")
-    return Firewall().remove_rule(source, destination, action)
-
-
-@application.route("/firewall")
-def firewall_status():
-    return Firewall().status()
+    status = data.get("status", False)
+    rules = data.get("rules", [])
+    job = Firewall().sync(status, rules)
+    return {"job": job}
