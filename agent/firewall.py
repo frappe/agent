@@ -37,21 +37,25 @@ class Firewall(Server):
             chain.insert_rule(rule)
         table.commit()
 
+    @job("Teardown Firewall")
     def teardown(self):
         self.remove_main()
         self.remove_bypass()
         self.unlink_input()
 
+    @step("Remove Main Chain")
     def remove_main(self):
         table = self.table()
         table.delete_chain(self.CHAIN_MAIN)
         table.commit()
 
+    @step("Remove Bypass Chain")
     def remove_bypass(self):
         table = self.table()
         table.delete_chain(self.CHAIN_BYPASS)
         table.commit()
 
+    @step("Unlink Input Chain")
     def unlink_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
@@ -63,9 +67,11 @@ class Firewall(Server):
     def enable(self):
         self.unlink_input()
         self.link_input()
+        return self.status()
 
     def disable(self):
         self.unlink_input()
+        return self.status()
 
     def add_rule(self, source: str, destination: str, action: str):
         table = self.table()
@@ -76,6 +82,7 @@ class Firewall(Server):
         rule.target = iptc.Target(rule, action)
         chain.insert_rule(rule)
         table.commit()
+        return self.status()
 
     def remove_rule(self, source: str, destination: str, action: str):
         table = self.table()
@@ -84,6 +91,7 @@ class Firewall(Server):
             if rule.src == source and rule.dst == destination and rule.target.name == action:
                 chain.delete_rule(rule)
         table.commit()
+        return self.status()
 
     def status(self):
         return {
