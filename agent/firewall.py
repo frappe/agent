@@ -29,6 +29,9 @@ class Firewall(Server):
 
     @step("Link Input Chain")
     def link_input(self):
+        self._link_input()
+
+    def _link_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
         for chain_target in (self.CHAIN_MAIN, self.CHAIN_BYPASS):
@@ -57,6 +60,9 @@ class Firewall(Server):
 
     @step("Unlink Input Chain")
     def unlink_input(self):
+        self._unlink_input()
+
+    def _unlink_input(self):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_INPUT)
         for rule in chain.rules:
@@ -65,12 +71,12 @@ class Firewall(Server):
         table.commit()
 
     def enable(self):
-        self.unlink_input()
-        self.link_input()
+        self._unlink_input()
+        self._link_input()
         return self.status()
 
     def disable(self):
-        self.unlink_input()
+        self._unlink_input()
         return self.status()
 
     def add_rule(self, source: str, destination: str, action: str):
