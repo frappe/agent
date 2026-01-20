@@ -85,7 +85,7 @@ class Firewall(Server):
         rule = iptc.Rule()
         rule.src = source
         rule.dst = destination
-        rule.target = iptc.Target(rule, action)
+        rule.target = iptc.Target(rule, self.transform_action(action))
         chain.insert_rule(rule)
         table.commit()
         return self.status()
@@ -93,6 +93,7 @@ class Firewall(Server):
     def remove_rule(self, source: str, destination: str, action: str):
         table = self.table()
         chain = iptc.Chain(table, self.CHAIN_MAIN)
+        action = self.transform_action(action)
         for rule in chain.rules:
             if rule.src == source and rule.dst == destination and rule.target.name == action:
                 chain.delete_rule(rule)
@@ -120,7 +121,7 @@ class Firewall(Server):
             yield {
                 "source": self.pretty_ip(rule.src),
                 "destination": self.pretty_ip(rule.dst),
-                "action": rule.target.name,
+                "action": self.transform_action(rule.target.name),
             }
 
     def table(self) -> iptc.Table:
@@ -128,3 +129,12 @@ class Firewall(Server):
 
     def pretty_ip(self, ip: str) -> str:
         return ip.split("/").pop(0)
+
+    def transform_action(self, action: str) -> str:
+        _map = {
+            "ACCEPT": "Allow",
+            "DROP": "Block",
+        }
+        _map_reversed = {v: k for k, v in _map.items()}
+        _map_merged = {**_map, **_map_reversed}
+        return _map_merged.get(action, action)
