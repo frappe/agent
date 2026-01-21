@@ -220,6 +220,7 @@ def build_image():
         no_push=data.get("no_push"),
         registry=data.get("registry"),
         platform=data.get("platform", "linux/amd64"),
+        build_token=data.get("build_token"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}

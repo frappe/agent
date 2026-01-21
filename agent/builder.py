@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import tempfile
 import time
 from datetime import datetime
 from subprocess import Popen
@@ -34,6 +35,7 @@ class ImageBuilder(Base):
         no_push: bool,
         registry: dict,
         platform: str,
+        build_token: str,
     ) -> None:
         super().__init__()
 
@@ -53,6 +55,8 @@ class ImageBuilder(Base):
         self.no_push = no_push
         self.last_published = datetime.now()
         self.build_failed = False
+        self.build_token = build_token
+        self.secret_path = None
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
@@ -114,6 +118,19 @@ class ImageBuilder(Base):
 
     def _get_build_command(self) -> str:
         command = f"docker buildx build --platform {self.platform}"
+
+        if self.build_token:
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                mode="w",
+                prefix="buildtoken-secret-",
+            ) as tmp:
+                tmp.write(self.build_token)
+                os.chmod(tmp.name, 0o600)
+                self.secret_path = tmp.name
+
+            command = f"{command} --secret id=build_token,src={self.secret_path}"
+
         command = f"{command} -t {self._get_image_name()}"
 
         if self.no_cache:
@@ -235,6 +252,9 @@ class ImageBuilder(Base):
 
         self.build_failed = return_code != 0
         self.data.update({"build_failed": self.build_failed})
+
+        if self.secret_path:
+            os.remove(self.secret_path)
 
     @step("Cleanup Context")
     def _cleanup_context(self):
