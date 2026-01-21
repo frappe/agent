@@ -1922,7 +1922,7 @@ def teardown_firewall():
     return {"job": job}
 
 
-@application.route("/firewall/sync", methods=["GET"])
+@application.route("/firewall/sync", methods=["POST"])
 def sync_firewall():
     data = request.json
     status = data.get("status", False)
