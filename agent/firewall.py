@@ -9,6 +9,9 @@ class Firewall(Server):
     CHAIN_BYPASS = "FrappeBypass"
     CHAIN_INPUT = "INPUT"
 
+    def __init__(self, directory=None):
+        super().__init__(directory)
+
     @job("Setup Firewall")
     def setup(self):
         self.setup_main()
