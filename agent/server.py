@@ -730,6 +730,17 @@ class Server(Base):
             secondary_server_private_ip=secondary_server_private_ip,
         )
 
+    @job("Update NGINX IP access")
+    def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str]):
+        self.update_config_ip(ip_accept, ip_drop)
+        self._generate_nginx_config()
+
+    @step("Update config IP access")
+    def update_config_ip(self, ip_accept: list[str], ip_drop: list[str]):
+        config = self.get_config(for_update=True)
+        config.update({"ip_accept": ip_accept, "ip_drop": ip_drop})
+        self.set_config(config, indent=4)
+
     def update_config(self, value):
         config = self.get_config(for_update=True)
         config.update(value)
@@ -1105,6 +1116,8 @@ class Server(Base):
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
                 "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
+                "ip_accept": self.config.get("ip_accept", []),
+                "ip_drop": self.config.get("ip_drop", []),
             },
             nginx_config,
         )

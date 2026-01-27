@@ -328,6 +328,16 @@ def pull_docker_images():
     return {"job": job}
 
 
+@application.route("/server/update-nginx-access", methods=["POST"])
+def update_nginx_ip_access():
+    data = request.json
+    job = Server().update_nginx_access(
+        ip_accept=data.get("ip_accept", []),
+        ip_drop=data.get("ip_drop", []),
+    )
+    return {"job": job}
+
+
 @application.route("/server/get-config", methods=["GET"])
 def get_server_config():
     config = dict(Server().config or {})
