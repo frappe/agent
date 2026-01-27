@@ -10,3 +10,14 @@
     job: "{{ job }}"
     __metrics_path__: /metrics/{{ job }}
 ## endfor ##
+
+## for job, servers in (cluster.jobs.proxied | default({})).items() ##
+##- for server in servers ##
+- targets:
+    - "{{ server.proxy }}"
+  labels:
+    cluster: "{{ cluster.name }}"
+    job: "{{ job }}"
+    __metrics_path__: {{ server.server }}/metrics/{{ job }}
+##- endfor ##
+## endfor ##
