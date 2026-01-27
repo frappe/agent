@@ -733,7 +733,8 @@ class Server(Base):
     @job("Update NGINX IP access")
     def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str]):
         self.update_config_ip(ip_accept, ip_drop)
-        self._generate_nginx_config()
+        self.update_agent_nginx_config()
+        self.reload_nginx()
 
     @step("Update config IP access")
     def update_config_ip(self, ip_accept: list[str], ip_drop: list[str]):
