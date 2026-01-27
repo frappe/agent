@@ -32,7 +32,7 @@ http {
 	{% endfor -%}
 
 	{%- for ip in ip_drop -%}
-	deny {{ ip }}
+	deny {{ ip }};
 	{% endfor -%}
 
 	{% if nginx_vts_module_enabled %}
