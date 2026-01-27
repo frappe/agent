@@ -318,6 +318,16 @@ def pull_docker_images():
     return {"job": job}
 
 
+@application.route("/server/update-nginx-access", methods=["POST"])
+def update_nginx_ip_access():
+    data = request.json
+    job = Server().update_nginx_access(
+        ip_accept=data.get("ip_accept", []),
+        ip_drop=data.get("ip_drop", []),
+    )
+    return {"job": job}
+
+
 @application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json
