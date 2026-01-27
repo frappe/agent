@@ -318,6 +318,38 @@ def pull_docker_images():
     return {"job": job}
 
 
+<<<<<<< HEAD
+=======
+@application.route("/server/update-nginx-access", methods=["POST"])
+def update_nginx_ip_access():
+    data = request.json
+    job = Server().update_nginx_access(
+        ip_accept=data.get("ip_accept", []),
+        ip_drop=data.get("ip_drop", []),
+    )
+    return {"job": job}
+
+
+@application.route("/server/get-config", methods=["GET"])
+def get_server_config():
+    config = dict(Server().config or {})
+    return {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
+
+
+@application.route("/server/update-config", methods=["POST"])
+def update_server_config():
+    config = request.json
+    if not isinstance(config, dict):
+        return jsonify({"error": "Invalid config payload; expected a JSON object."}), 400
+    sanitized_config = {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
+    stripped_keys = set(config.keys()) - set(sanitized_config.keys())
+    if stripped_keys:
+        log.warning("Stripping sensitive config in updating: %s", (",").join(sorted(stripped_keys)))
+    Server().update_config(sanitized_config)
+    return {"update_config": True}
+
+
+>>>>>>> fc53794 (feat(nginx): Firewall (or access IPs) (#426))
 @application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json
