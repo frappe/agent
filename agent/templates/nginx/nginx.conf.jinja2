@@ -24,9 +24,16 @@ http {
 	{%- for ip in ip_whitelist -%}
 	allow {{ ip }};
 	{% endfor -%}
-
 	deny all;
 	{%- endif %}
+
+	{%- for ip in ip_accept -%}
+	allow {{ ip }};
+	{% endfor -%}
+
+	{%- for ip in ip_drop -%}
+	deny {{ ip }}
+	{% endfor -%}
 
 	{% if nginx_vts_module_enabled %}
 	vhost_traffic_status_zone;
