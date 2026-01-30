@@ -149,7 +149,7 @@ server {
 	{% if host_options.redirect %}
 
 	location / {
-		return 301 https://{{ host_options.redirect }}$request_uri;
+		return 308 https://{{ host_options.redirect }}$request_uri;
 	}
 
 	{% else %}
@@ -200,6 +200,7 @@ server {
 		proxy_set_header Host $host;
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
+		proxy_set_header X-Client-Port $remote_port;
 		proxy_set_header X-Forwarded-Proto $scheme;
 		{% if host_options.codeserver %}
 		proxy_set_header Connection "upgrade";
@@ -226,6 +227,30 @@ server {
 		root {{ error_pages_directory }};
 		internal;
 	}
+
+	# show custom 500 page only if not x-page-name header is present
+	# this avoids overriding app level error pages
+	error_page 500 /internal_server_error.html;
+	location /internal_server_error.html {
+		if ($upstream_http_x_page_name) {
+			return 500;
+		}
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
 	{% endif %}
 }
 
@@ -239,7 +264,7 @@ server {
 		return 301 http://ssl.{{ domain }}$request_uri;
 	}
 	location / {
-		return 301 https://$host$request_uri;
+		return 308 https://$host$request_uri;
 	}
 }
 
