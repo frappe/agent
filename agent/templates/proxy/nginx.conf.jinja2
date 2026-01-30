@@ -226,6 +226,30 @@ server {
 		root {{ error_pages_directory }};
 		internal;
 	}
+
+	# show custom 500 page only if not x-page-name header is present
+	# this avoids overriding app level error pages
+	error_page 500 /internal_server_error.html;
+	location /internal_server_error.html {
+		if ($upstream_http_x_page_name) {
+			return 500;
+		}
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
 	{% endif %}
 }
 
