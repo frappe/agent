@@ -849,10 +849,10 @@ class Bench(Base):
         self._update_runtime_limits(memory_high, memory_max, memory_swap, vcpu)
         self._start()
 
-    def update_runtime_limits(self):
-        memory_high = self.bench_config.get("memory_high")
-        memory_max = self.bench_config.get("memory_max")
-        memory_swap = self.bench_config.get("memory_swap")
+    def update_runtime_limits(self, multiplier=1.0):
+        memory_high = self.bench_config.get("memory_high", 0) * multiplier
+        memory_max = self.bench_config.get("memory_max", 0) * multiplier
+        memory_swap = self.bench_config.get("memory_swap", 0) * multiplier
         vcpu = self.bench_config.get("vcpu")
         if not any([memory_high, memory_max, memory_swap, vcpu]):
             return
