@@ -23,6 +23,7 @@ map $host $site_name_{{ bench_name_slug }} {
 {% for site in sites + ( domains.keys() | list ) %}
 server {
 	listen 443 http2 ssl;
+	listen [::]:443 http2 ssl;
 	server_name {{ site.name or site}};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ site.host or site }}/fullchain.pem;
@@ -152,6 +153,7 @@ server {
 
 server {
 	listen 80;
+	listen [::]:80;
 	server_name
 		{% for site in sites -%}
 			{{ site.name }}
@@ -171,6 +173,7 @@ server {
 {% else %}
 server {
 	listen 80;
+	listen [::]:80;
 
 	server_name
 		{% for site in sites -%}
@@ -283,6 +286,7 @@ server {
 {% if code_server -%}
 server {
     listen 80;
+    listen [::]:80;
 	server_name {{ code_server.name }};
 
     location / {

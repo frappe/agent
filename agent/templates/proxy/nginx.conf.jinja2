@@ -109,6 +109,7 @@ proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 
 
 server {
 	listen 443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
+	listen [::]:443 http2 ssl{% if ns.host.strip("*.") == domain %} default_server{% endif %};
 	server_name {{ ns.host }};
 
 	{%- for wildcard_domain in wildcards -%}
@@ -258,6 +259,7 @@ server {
 
 server {
 	listen 80;
+	listen [::]:80;
 	server_name _;
 
 	location ^~ /.well-known/acme-challenge/ {
@@ -271,6 +273,7 @@ server {
 
 server {
 	listen 127.0.0.1:10090;
+	listen [::1]:10090;
 	location / {
 		return 307 https://{{ domain }}/dashboard/#/sites/new?domain=$host;
 	}
@@ -278,6 +281,7 @@ server {
 
 server {
 	listen 127.0.0.1:10091;
+	listen [::1]:10091;
 
 	root {{ error_pages_directory }};
 	error_page 503 /deactivated.html;
@@ -294,6 +298,7 @@ server {
 
 server {
 	listen 127.0.0.1:10092;
+	listen [::1]:10092;
 
 	root {{ error_pages_directory }};
 	error_page 402 /suspended.html;
@@ -310,6 +315,7 @@ server {
 
 server {
 	listen 127.0.0.1:10093;
+	listen [::1]:10093;
 
 	root {{ error_pages_directory }};
 	error_page 402 /suspended_saas.html;
