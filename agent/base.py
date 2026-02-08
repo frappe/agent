@@ -36,7 +36,7 @@ class Base:
         self.data: dict[str, str] = {}
 
         # internal
-        self._config_file_lock: filelock.SoftFileLock | None = None
+        self._config_file_lock: filelock.FileLock | None = None
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
@@ -206,7 +206,7 @@ class Base:
         """
         if for_update:
             if not self._config_file_lock:
-                self._config_file_lock = filelock.SoftFileLock(self.config_file + ".lock")
+                self._config_file_lock = filelock.FileLock(self.config_file + ".lock")
             self._config_file_lock.acquire()
 
         with open(self.config_file, "r") as f:

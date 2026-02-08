@@ -28,7 +28,7 @@ class NFSHandler:
         os.makedirs(self.shared_directory, exist_ok=True)
         self.server.execute(f"chown -R frappe:frappe {self.shared_directory}")
 
-        lock = filelock.SoftFileLock(self.exports_file + ".lock")
+        lock = filelock.FileLock(self.exports_file + ".lock")
 
         with lock.acquire(timeout=10), open(self.exports_file, "a+") as f:
             f.write(f"{self.benches_directory} {secondary_server_private_ip}({self.options})\n")
@@ -41,7 +41,7 @@ class NFSHandler:
             f"{self.benches_directory} {secondary_server_private_ip}({self.options})",
         ]
         for line in remove_lines:
-            lock = filelock.SoftFileLock(self.exports_file + ".lock")
+            lock = filelock.FileLock(self.exports_file + ".lock")
             with lock.acquire(timeout=10):
                 self.server.execute(f"sed -i '\\|{line}|d' {self.exports_file}")
 
