@@ -326,7 +326,7 @@ class Site(Base):
         )
 
         queries = [
-            f"DELETE FROM mysql.user WHERE user = '{user}'",
+            f"DROP USER IF EXISTS '{user}'@'%'",
             "FLUSH PRIVILEGES",
             f"CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'",
             f"GRANT {privileges} ON {database}.* TO '{user}'@'%'",
