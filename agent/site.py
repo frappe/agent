@@ -326,9 +326,9 @@ class Site(Base):
         )
 
         queries = [
-            f"DROP USER IF EXISTS '{user}'@'%'",
-            f"CREATE OR REPLACE USER '{user}'@'%' IDENTIFIED BY '{password}'",
-            f"GRANT {privileges} ON {database}.* TO '{user}'@'%'",
+            f"CREATE USER IF NOT EXISTS `{user}`@`%` IDENTIFIED BY '{password}'",
+            f"ALTER USER `{user}`@`%` IDENTIFIED BY '{password}'",
+            f"GRANT {privileges} ON {database}.* TO `{user}`@`%`",
             "FLUSH PRIVILEGES",
         ]
 
