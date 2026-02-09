@@ -307,37 +307,29 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
-    def create_database_access_credentials(
-        self,
-        mariadb_root_password: str,
-        mode: bool | None = None,
-    ):
-        """If the mode is not passed we will grant all privileges to user on the database"""
-        database = self.database
-        user = f"{self.user}_{mode}" if mode else self.user
-        password = self.bench.get_random_string(16) if mode else self.password
-        privileges = (
-            {
-                "read_only": "SELECT",
-                "read_write": "ALL",
-            }.get(mode, "SELECT")
-            if mode
-            else "ALL"
-        )
+    def create_database_access_credentials(self, mariadb_root_password: str):
+        """Grant access to the database for the user from any host if not already granted."""
+        database = self.db_instance(username="root", password=mariadb_root_password)
 
-        queries = [
-            f"DROP USER IF EXISTS '{user}'@'%'",
-            "FLUSH PRIVILEGES",
-            f"CREATE USER '{user}'@'%' IDENTIFIED BY '{password}'",
-            f"GRANT {privileges} ON {database}.* TO '{user}'@'%'",
-            "FLUSH PRIVILEGES",
-        ]
+        # Check if the user already has access from any host
+        query = f"SELECT host FROM mysql.user WHERE user = '{self.user}'"
+        status, result = database.execute_query(query, as_dict=True)
 
-        for query in queries:
-            command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
-            self.execute(command)
+        if not status:
+            # Query failed for some reason?
+            return None
 
-        return {"database": database, "user": user, "password": password}
+        hosts = [row["Host"] for row in result]
+        if "%" in hosts:
+            # User already has access from any host
+            return {"database": self.database, "user": self.user, "password": self.password}
+
+        # Grant access from any host by renaming the user
+        for host in hosts:
+            database.rename_user(f"'{self.user}'@'{host}'", f"'{self.user}'@'%'")
+            break  # Rename only the first occurrence mostly won't be needed by just in case
+
+        return {"database": self.database, "user": self.user, "password": self.password}
 
     def revoke_database_access_credentials(self, user, mariadb_root_password):
         if user == self.user:
