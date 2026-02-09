@@ -319,7 +319,7 @@ class Site(Base):
             # Query failed for some reason?
             return None
 
-        hosts = [row["Host"] for row in result]
+        hosts = [row["Host"] for row in result[0]["output"]]
         if "%" in hosts:
             # User already has access from any host
             return {"database": self.database, "user": self.user, "password": self.password}
