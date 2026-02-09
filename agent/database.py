@@ -154,12 +154,10 @@ class Database:
 
         self._run_sql(queries_str, commit=True, allow_all_stmt_types=True)
 
-    def rename_user(self, old_username: str, new_username: str):
-        """Allow rename of a user"""
-        self._run_sql(
-            f"RENAME USER '{old_username}' TO '{new_username};",
-            commit=True,
-        )
+    def rename_user(self, old_user: str, old_host: str, new_user: str, new_host: str):
+        """Pass components separately to avoid quoting crap"""
+        sql = f"RENAME USER '{old_user}'@'{old_host}' TO '{new_user}'@'{new_host}';"
+        self._run_sql(sql, commit=True)
 
     def fetch_database_table_sizes(self) -> dict:
         from agent.utils import cint

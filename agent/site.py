@@ -324,9 +324,8 @@ class Site(Base):
             # User already has access from any host
             return {"database": self.database, "user": self.user, "password": self.password}
 
-        # Grant access from any host by renaming the user
         for host in hosts:
-            database.rename_user(f"'{self.user}'@'{host}'", f"'{self.user}'@'%'")
+            database.rename_user(old_user=self.user, old_host=host, new_user=self.user, new_host="%")
             break  # Rename only the first occurrence mostly won't be needed by just in case
 
         return {"database": self.database, "user": self.user, "password": self.password}
