@@ -1004,7 +1004,11 @@ def update_site_recover(bench, site):
 @validate_bench
 def archive_site(bench, site):
     data = request.json
-    job = Server().benches[bench].archive_site(site, data["mariadb_root_password"], data.get("force"))
+    job = (
+        Server()
+        .benches[bench]
+        .archive_site(site, data["mariadb_root_password"], data.get("force"), data.get("offsite", {}))
+    )
     return {"job": job}
 
 
