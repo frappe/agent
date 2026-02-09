@@ -307,22 +307,35 @@ class Site(Base):
         self.bench.setup_nginx()
         self.bench.server.reload_nginx()
 
-    def create_database_access_credentials(self, mode, mariadb_root_password):
+    def create_database_access_credentials(
+        self,
+        mariadb_root_password: str,
+        mode: bool | None = None,
+    ):
+        """If the mode is not passed we will grant all privileges to user on the database"""
         database = self.database
-        user = f"{self.user}_{mode}"
-        password = self.bench.get_random_string(16)
-        privileges = {
-            "read_only": "SELECT",
-            "read_write": "ALL",
-        }.get(mode, "SELECT")
+        user = f"{self.user}_{mode}" if mode else self.user
+        password = self.bench.get_random_string(16) if mode else self.password
+        privileges = (
+            {
+                "read_only": "SELECT",
+                "read_write": "ALL",
+            }.get(mode, "SELECT")
+            if mode
+            else "ALL"
+        )
+
         queries = [
+            f"DROP USER IF EXISTS '{user}'@'%'",
             f"CREATE OR REPLACE USER '{user}'@'%' IDENTIFIED BY '{password}'",
             f"GRANT {privileges} ON {database}.* TO '{user}'@'%'",
             "FLUSH PRIVILEGES",
         ]
+
         for query in queries:
             command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
             self.execute(command)
+
         return {"database": database, "user": user, "password": password}
 
     def revoke_database_access_credentials(self, user, mariadb_root_password):

@@ -1101,7 +1101,9 @@ def site_create_database_access_credentials(bench, site):
         Server()
         .benches[bench]
         .sites[site]
-        .create_database_access_credentials(data["mode"], data["mariadb_root_password"])
+        .create_database_access_credentials(
+            mode=data.get("mode"), mariadb_root_password=data.get("mariadb_root_password")
+        )
     )
 
 
