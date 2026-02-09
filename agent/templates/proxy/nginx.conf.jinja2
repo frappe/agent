@@ -235,6 +235,9 @@ server {
 		if ($upstream_http_x_page_name) {
 			return 500;
 		}
+		if ($upstream_http_content_type ~* "application/json") {
+			return 500;
+		}
 		root {{ error_pages_directory }};
 		internal;
 	}
