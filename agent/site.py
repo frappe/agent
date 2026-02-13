@@ -976,7 +976,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def _add_database_index(self, doctype, columns):
         command = f"add-database-index --doctype '{doctype}' "
         for column in columns:
-            command += f"--column {column} "
+            command += f"--column '{column}' "
 
         return self.bench_execute(command)
 
