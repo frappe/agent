@@ -139,7 +139,6 @@ WHERE `schema` IN (
             with contextlib.suppress(Exception):
                 result = calculate_table_usage(
                     database,
-                    excluded_tables=["_id_seq"],
                     use_sudo=True,
                     io_ops_limit=io_ops_limit,
                     concurrency=concurrency,

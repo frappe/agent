@@ -915,7 +915,14 @@ print(">>>" + frappe.session.sid + "<<<")
         return json.loads(analytics)
 
     def get_database_size(self):
+        config = {}
+        with open(os.path.join(os.getcwd(), "config.json")) as f:
+            config = json.load(f)
+
         try:
+            if not (config and config.get("use_press_meta_for_database_size")):
+                raise Exception("Press Meta not enabled for database size calculation")
+
             query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
             command = f"mysql -sN -h {self.host} -P {self.db_port} \
                     -u{self.user} -p{self.password} -e '{query}'"
@@ -926,18 +933,15 @@ print(">>>" + frappe.session.sid + "<<<")
 
             # only specific to mysql/mariaDB. use a different query for postgres.
             # or try using frappe.db.get_database_size if possible
-            try:
-                query = (
-                    "SELECT SUM(`data_length` + `index_length`)"
-                    " FROM information_schema.tables"
-                    f' WHERE `table_schema` = "{self.database}"'
-                    " GROUP BY `table_schema`"
-                )
-                command = f"mysql -sN -h {self.host} -P {self.db_port} \
-                    -u{self.user} -p{self.password} -e '{query}'"
-                database_size = self.execute(command).get("output")
-            except Exception as e:
-                raise e
+            query = (
+                "SELECT SUM(`data_length` + `index_length`)"
+                " FROM information_schema.tables"
+                f' WHERE `table_schema` = "{self.database}"'
+                " GROUP BY `table_schema`"
+            )
+            command = f"mysql -sN -h {self.host} -P {self.db_port} \
+                -u{self.user} -p{self.password} -e '{query}'"
+            database_size = self.execute(command).get("output")
 
         try:
             assert database_size is not None, "Could not fetch database size"
