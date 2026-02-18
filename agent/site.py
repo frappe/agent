@@ -99,7 +99,7 @@ class Site(Base):
 
     @step("Uninstall App from Site")
     def uninstall_app(self, app):
-        return self.bench_execute(f"uninstall-app {app} --yes --force")
+        return self.bench_execute(f"uninstall-app {app} --no-backup --yes --force")
 
     @step("Restore Site")
     def restore_site(
@@ -273,15 +273,18 @@ class Site(Base):
     def uninstall_app_job(self, app, offsite=None):
         backups = None
         if offsite:
-            backup_files = self.backup(with_files=True)
-            uploaded_files = (
-                self.upload_offsite_backup(
-                    backup_files, offsite, keep_files_locally_after_offsite_backup=False
+            try:
+                backup_files = self.backup(with_files=True)
+                uploaded_files = (
+                    self.upload_offsite_backup(
+                        backup_files, offsite, keep_files_locally_after_offsite_backup=False
+                    )
+                    if (backup_files)
+                    else {}
                 )
-                if (backup_files)
-                else {}
-            )
-            backups = {"backups": backup_files, "offsite": uploaded_files}
+                backups = {"backups": backup_files, "offsite": uploaded_files}
+            except Exception as e:
+                raise e
         self.uninstall_app(app)
         return backups
 
