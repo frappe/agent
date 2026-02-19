@@ -480,18 +480,15 @@ class Bench(Base):
         if os.path.exists(site_directory):
             if offsite:
                 site = Site(name, self)
-                try:
-                    backup_files = site.backup(with_files=True)
-                    uploaded_files = (
-                        site.upload_offsite_backup(
-                            backup_files, offsite, keep_files_locally_after_offsite_backup=False
-                        )
-                        if (backup_files)
-                        else {}
+                backup_files = site.backup(with_files=True)
+                uploaded_files = (
+                    site.upload_offsite_backup(
+                        backup_files, offsite, keep_files_locally_after_offsite_backup=False
                     )
-                    backups = {"backups": backup_files, "offsite": uploaded_files}
-                except Exception as e:
-                    raise e
+                    if (backup_files)
+                    else {}
+                )
+                backups = {"backups": backup_files, "offsite": uploaded_files}
 
             self.bench_archive_site(
                 name,

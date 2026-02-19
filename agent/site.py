@@ -273,18 +273,15 @@ class Site(Base):
     def uninstall_app_job(self, app, offsite=None):
         backups = None
         if offsite:
-            try:
-                backup_files = self.backup(with_files=True)
-                uploaded_files = (
-                    self.upload_offsite_backup(
-                        backup_files, offsite, keep_files_locally_after_offsite_backup=False
-                    )
-                    if (backup_files)
-                    else {}
+            backup_files = self.backup(with_files=True)
+            uploaded_files = (
+                self.upload_offsite_backup(
+                    backup_files, offsite, keep_files_locally_after_offsite_backup=False
                 )
-                backups = {"backups": backup_files, "offsite": uploaded_files}
-            except Exception as e:
-                raise e
+                if (backup_files)
+                else {}
+            )
+            backups = {"backups": backup_files, "offsite": uploaded_files}
         self.uninstall_app(app)
         return backups
 

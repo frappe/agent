@@ -694,7 +694,7 @@ def install_app_site(bench, site):
 )
 @validate_bench_and_site
 def uninstall_app_site(bench, site, app):
-    data = request.json
+    data = request.json or {}
     job = Server().benches[bench].sites[site].uninstall_app_job(app, data.get("offsite", {}))
     return {"job": job}
 
