@@ -46,7 +46,9 @@ class Site(Base):
             raise OSError(f"Path {self.config_file} does not exist")
 
         self.database = self.config["db_name"]
-        self.user = self.config["db_name"]
+        self.user = (
+            self.config.get("db_user") or self.config["db_name"]
+        )  # Prefer the db user specified in site config, fallback to db name for backward compatibility
         self.password = self.config["db_password"]
         self.host = self.config.get("db_host", self.bench.host)
         self.db_port = self.config.get("db_port", self.bench.db_port)
