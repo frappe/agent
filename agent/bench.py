@@ -467,12 +467,39 @@ class Bench(Base):
         shutil.rmtree(backup_files_directory)
 
     @job("Archive Site")
-    def archive_site(self, name, mariadb_root_password, force):
+    def archive_site(
+        self,
+        name,
+        mariadb_root_password,
+        force,
+        offsite=None,
+    ):
         site_directory = os.path.join(self.sites_directory, name)
+        backups = None
+
         if os.path.exists(site_directory):
-            self.bench_archive_site(name, mariadb_root_password, force)
-        self.setup_nginx()
-        self.server._reload_nginx()
+            if offsite:
+                site = Site(name, self)
+                backup_files = site.backup(with_files=True)
+                uploaded_files = (
+                    site.upload_offsite_backup(
+                        backup_files, offsite, keep_files_locally_after_offsite_backup=False
+                    )
+                    if (backup_files)
+                    else {}
+                )
+                backups = {"backups": backup_files, "offsite": uploaded_files}
+
+            self.bench_archive_site(
+                name,
+                mariadb_root_password,
+                force,
+            )
+
+            self.setup_nginx()
+            self.server._reload_nginx()
+
+        return backups
 
     @step("Bench Setup NGINX")
     def setup_nginx(self):
