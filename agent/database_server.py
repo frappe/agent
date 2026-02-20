@@ -185,6 +185,21 @@ WHERE `schema` IN (
         self.setup_press_meta_schema_sizes_table(private_ip, mariadb_root_password)
         self.update_schema_sizes(private_ip, mariadb_root_password)
 
+    @job("Flush Tables")
+    def flush_tables_job(self, private_ip: str, mariadb_root_password: str):
+        self.flush_tables(private_ip, mariadb_root_password)
+
+    @step("Flush Tables")
+    def flush_tables(self, private_ip: str, mariadb_root_password: str):
+        mariadb = MySQLDatabase(
+            "mysql",
+            user="root",
+            password=mariadb_root_password,
+            host=private_ip,
+            port=self.db_port,
+        )
+        mariadb.execute_sql("FLUSH TABLES;")
+
     def search_binary_log(
         self,
         log,
