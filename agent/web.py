@@ -1302,9 +1302,16 @@ def physical_restore_database():
 @application.route("/database/update-schema-sizes", methods=["POST"])
 def update_schema_sizes():
     data = request.json
-    assert "private_ip" in data, "private_ip is required"
-    assert "mariadb_root_password" in data, "mariadb_root_password is required"
-    job = DatabaseServer().update_schema_sizes_job(**data)
+    private_ip = data.get("private_ip")
+    mariadb_root_password = data.get("mariadb_root_password")
+    io_ops_limit = data.get("io_ops_limit", 200)
+    concurrency = data.get("concurrency", 20)
+    job = DatabaseServer().update_schema_sizes_job(
+        private_ip=private_ip,
+        mariadb_root_password=mariadb_root_password,
+        io_ops_limit=io_ops_limit,
+        concurrency=concurrency,
+    )
     return {"job": job}
 
 

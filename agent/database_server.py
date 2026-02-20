@@ -11,6 +11,7 @@ from typing import Literal
 
 import psutil
 from mariadb_binlog_indexer import Indexer as BinlogIndexer
+from mariadb_table_usage import usage as calculate_table_usage
 from peewee import MySQLDatabase
 
 from agent.database import CustomPeeweeDB, Database
@@ -121,7 +122,9 @@ WHERE `schema` IN (
         db.execute_sql("FLUSH PRIVILEGES;")
 
     @step("Update Database Schema Size in Metadata Table")
-    def update_schema_sizes(self, private_ip, mariadb_root_password):
+    def update_schema_sizes(
+        self, private_ip: str, mariadb_root_password: str, io_ops_limit: int, concurrency: int
+    ):
         db = Database(private_ip, 3306, "root", mariadb_root_password, "press_meta")
         success, output = db.execute_query("SHOW DATABASES;")
         if not success:
@@ -134,40 +137,13 @@ WHERE `schema` IN (
                 continue
 
             with contextlib.suppress(Exception):
-                """
-                1. Exlcude files smaller than 128 KB
-                2. Only check for ibd and MYD files
-                3. Discount for filesystem overhead
-                - For ibd files:
-                    - <25 MB -> 2.5 MB
-                    - 25-100 MB -> 5 MB
-                    - 100-500 MB -> 10 MB
-                    - >500 MB -> 20 MB
-                    - Extra extent discount: 1 MB per 64 MB of table size
-                """
-
-                cmd = (
-                    f"sudo find /var/lib/mysql/{database} "
-                    r"-type f \( -name '*.ibd' -o -name '*.MYD' \) -size +128k "
-                    r"-exec du -b --apparent-size {} + | "
-                    r"""awk '{
-                        size=$1;
-                        file=$2;
-                        discount=0;
-                        if(file ~ /\.ibd$/){
-                            if(size < 25*1024*1024) discount = 2.5*1024*1024;
-                            else if(size < 100*1024*1024) discount = 5*1024*1024;
-                            else if(size < 500*1024*1024) discount = 10*1024*1024;
-                            else discount = 20*1024*1024;
-                            discount += int(size/(64*1024*1024))*1024*1024
-                        }
-                        sum += size;
-                        sum_discount += discount
-                    } END {print sum - sum_discount}'"""
+                result = calculate_table_usage(
+                    database,
+                    use_sudo=True,
+                    io_ops_limit=io_ops_limit,
+                    concurrency=concurrency,
                 )
-
-                size = self.execute(cmd)["output"].strip()
-                database_sizes[database] = max(0, int(size))
+                database_sizes[database] = max(0, int(result.data_length + result.index_length))
 
         query = ""
         for database, size in database_sizes.items():
@@ -181,9 +157,16 @@ WHERE `schema` IN (
             raise Exception(f"Failed to update schema sizes: {msg}")
 
     @job("Update Database Schema Sizes", priority="low")
-    def update_schema_sizes_job(self, private_ip, mariadb_root_password):
+    def update_schema_sizes_job(
+        self, private_ip: str, mariadb_root_password: str, io_ops_limit: int, concurrency: int
+    ):
         self.setup_press_meta_schema_sizes_table(private_ip, mariadb_root_password)
-        self.update_schema_sizes(private_ip, mariadb_root_password)
+        self.update_schema_sizes(
+            private_ip,
+            mariadb_root_password,
+            io_ops_limit=io_ops_limit,
+            concurrency=concurrency,
+        )
 
     @job("Flush Tables")
     def flush_tables_job(self, private_ip: str, mariadb_root_password: str):

@@ -919,8 +919,6 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return {
             "database": b2mb(self.get_database_size()),
-            "database_free_tables": self.get_database_free_tables(),
-            "database_free": b2mb(self.get_database_free_size()),
             "public": b2mb(get_size(public_directory)),
             "private": b2mb(get_size(private_directory, ignore_dirs=["backups"])),
             "backups": b2mb(get_size(backup_directory)),
@@ -931,15 +929,22 @@ print(">>>" + frappe.session.sid + "<<<")
         return json.loads(analytics)
 
     def get_database_size(self):
-        # try:
-        #     query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
-        #     command = f"mysql -sN -h {self.host} -P {self.db_port} \
-        #         -u{self.user} -p{self.password} -e '{query}'"
-        #     database_size = self.execute(command).get("output")
-        # except Exception:
-        # # Fallback to old way if press_meta is not available
+        config = {}
+        with open(os.path.join(os.getcwd(), "config.json")) as f:
+            config = json.load(f)
 
         try:
+            if not (config and config.get("use_press_meta_for_database_size")):
+                raise Exception("Press Meta not enabled for database size calculation")
+
+            query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
+            command = f"mysql -sN -h {self.host} -P {self.db_port} \
+                    -u{self.user} -p{self.password} -e '{query}'"
+            database_size = self.execute(command).get("output")
+
+        except Exception:
+            # Fallback to old way if press_meta is not available
+
             # only specific to mysql/mariaDB. use a different query for postgres.
             # or try using frappe.db.get_database_size if possible
             query = (
@@ -951,8 +956,7 @@ print(">>>" + frappe.session.sid + "<<<")
             command = f"mysql -sN -h {self.host} -P {self.db_port} \
                 -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
-        except Exception as e:
-            raise e
+
         try:
             assert database_size is not None, "Could not fetch database size"
             return int(database_size)
