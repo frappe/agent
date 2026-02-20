@@ -357,6 +357,14 @@ def update_server_config():
     return {"update_config": True}
 
 
+@application.route("/server/earlyoom/logs", methods=["GET"])
+def get_earlyoom_logs():
+    start_time = request.args.get("start_time")
+    end_time = request.args.get("end_time")
+    logs = Server().get_earlyoom_logs(start_time=start_time, end_time=end_time)
+    return {"logs": logs}
+
+
 @application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json

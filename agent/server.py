@@ -744,6 +744,19 @@ class Server(Base):
         config.update({"ip_accept": ip_accept, "ip_drop": ip_drop})
         self.set_config(config, indent=4)
 
+    def get_earlyoom_logs(self, start_time: str, end_time: str) -> list[dict[str, str]] | None:
+        """Get earlyoom logs between the given time range time range must be in UTC"""
+        journalctl_command = (
+            f"journalctl -u earlyoom --since '{start_time}' --until '{end_time}' --output=json --no-pager"
+        )
+        result = self.execute(journalctl_command)
+
+        if result["output"]:
+            logs = result["output"].split("\n")
+            return [json.loads(log) for log in logs if log.strip()]
+
+        return None
+
     def update_config(self, value):
         config = self.get_config(for_update=True)
         config.update(value)
