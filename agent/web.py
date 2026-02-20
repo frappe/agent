@@ -1274,6 +1274,17 @@ def update_schema_sizes():
     return {"job": job}
 
 
+@application.route("/database/flush-tables", methods=["POST"])
+def flush_tables():
+    data = request.json
+    assert "private_ip" in data, "private_ip is required"
+    assert "mariadb_root_password" in data, "mariadb_root_password is required"
+    job = DatabaseServer().flush_tables_job(
+        private_ip=data["private_ip"], mariadb_root_password=data["mariadb_root_password"]
+    )
+    return {"job": job}
+
+
 @application.route("/database/binary/logs")
 def get_binary_logs():
     return jsonify(DatabaseServer().binary_logs)
