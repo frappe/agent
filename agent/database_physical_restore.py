@@ -18,7 +18,11 @@ from agent.database_physical_backup import (
 )
 from agent.database_server import DatabaseServer
 from agent.job import job, step
-from agent.utils import compute_file_hash, get_mariadb_table_name_from_path
+from agent.utils import (
+    compute_file_hash,
+    get_mariadb_table_name_from_path,
+    parse_fts_index_prefixlen_from_cfg,
+)
 
 
 class DatabasePhysicalRestore(DatabaseServer):
@@ -60,6 +64,7 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.innodb_tables: list[str] = []
         self.myisam_tables: list[str] = []
         self.sequence_tables: list[str] = []
+        self.innodb_index_metadata: dict[str, dict[str, int]] = {}
 
         super().__init__()
 
@@ -73,9 +78,11 @@ class DatabasePhysicalRestore(DatabaseServer):
         self.warmup_myisam_files()
         self.check_and_fix_myisam_table_files()
         self.warmup_innodb_files()
+        self.collect_innodb_fts_index_metadata()
         # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#importing-transportable-tablespaces-for-non-partitioned-tables
         self.prepare_target_db_for_restore()
         self.create_tables_from_table_schema()
+        self.sync_fts_indexes_prefix_length()
         self.discard_innodb_tablespaces_from_target_db()
         self.perform_innodb_file_operations()
         self.import_tablespaces_in_target_db()
@@ -198,6 +205,16 @@ class DatabasePhysicalRestore(DatabaseServer):
         file_paths = [file for file in file_paths if self.is_db_file_need_to_be_restored(file)]
         self._warmup_files(file_paths)
 
+    @step("Collect InnoDB FTS Index Metadata")
+    def collect_innodb_fts_index_metadata(self):
+        for table in self.innodb_tables:
+            cfg_file_path = os.path.join(self.backup_db_directory, f"{table}.cfg").replace(" ", "@0020")
+            if os.path.exists(cfg_file_path):
+                try:
+                    self.innodb_index_metadata[table] = parse_fts_index_prefixlen_from_cfg(cfg_file_path)
+                except Exception as e:
+                    raise Exception(f"Failed to parse .cfg file for table {table}") from e
+
     @step("Prepare Database for Restoration")
     def prepare_target_db_for_restore(self):
         # Only perform this, if we are restoring all tables
@@ -258,6 +275,52 @@ class DatabasePhysicalRestore(DatabaseServer):
         # re-enable foreign key checks
         self._get_target_db().execute_sql("SET SESSION FOREIGN_KEY_CHECKS = 1;")
 
+    @step("Sync FTS Indexes Prefix Length")
+    def sync_fts_indexes_prefix_length(self):
+        """
+        In this case, we are discussing on prefixlen of FTS Index in .cfg file.
+        It's not related to general index's prefix length.
+
+        Case 1 : If prefixlen = 0, the FTS index was added inline. e.g.
+            CREATE TABLE articles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(200),
+                content TEXT,
+                FULLTEXT INDEX ft_content (content)
+            ) ENGINE=InnoDB;
+
+        Case 2 : If prefixlen > 0, the FTS index was added as separate index. e.g.
+            CREATE TABLE articles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(200),
+                content TEXT
+            ) ENGINE=InnoDB;
+            ALTER TABLE articles ADD FULLTEXT INDEX ft_content (content);
+
+        Non-FTS indexes doesn't have issue during tablespace import.
+        MariaDB only raises issue of prefixlen for FTS indexes.
+        """
+        for table in self.innodb_tables:
+            fts_indexes = self._get_fts_indexes_of_table(table)
+            index_metadata = self.innodb_index_metadata.get(table, {})
+
+            for index_name, columns in fts_indexes.items():
+                prefix_len = index_metadata.get(index_name)
+                if prefix_len:
+                    # Drop the existing index
+                    self._kill_other_active_db_connections()
+                    run_sql_query(
+                        self._get_target_db(raise_error_on_connection_closed=False),
+                        f"ALTER TABLE `{table}` DROP INDEX `{index_name}`;",
+                    )
+                    # Recreate the FULLTEXT index without column prefix lengths (not supported by MariaDB)
+                    columns_list = ", ".join([f"`{col}`" for col in columns.split(",")])
+                    self._kill_other_active_db_connections()
+                    run_sql_query(
+                        self._get_target_db(raise_error_on_connection_closed=False),
+                        f"ALTER TABLE `{table}` ADD FULLTEXT INDEX `{index_name}` ({columns_list});",
+                    )
+
     @step("Discard InnoDB Tablespaces")
     def discard_innodb_tablespaces_from_target_db(self):
         # https://mariadb.com/kb/en/innodb-file-per-table-tablespaces/#foreign-key-constraints
@@ -277,7 +340,10 @@ class DatabasePhysicalRestore(DatabaseServer):
     def import_tablespaces_in_target_db(self):
         for table in self.innodb_tables:
             self._kill_other_active_db_connections()
-            self._get_target_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
+            try:
+                self._get_target_db().execute_sql(f"ALTER TABLE `{table}` IMPORT TABLESPACE;")
+            except Exception as e:
+                raise Exception(f"Failed to import tablespace for table {table}") from e
 
     @step("Hold Write Lock on MyISAM Tables")
     def hold_write_lock_on_myisam_tables(self):
