@@ -32,7 +32,6 @@ from agent.nginx_reload_manager import NginxReloadManager
 from agent.nginx_reload_manager import ReloadStatus as NginxReloadStatus
 from agent.proxy import Proxy
 from agent.proxysql import ProxySQL
-from agent.security import Security
 from agent.server import Server
 from agent.snapshot_recovery import SnapshotRecovery
 from agent.ssh import SSHProxy
@@ -461,16 +460,6 @@ def get_logs(bench, site):
 @validate_bench_and_site
 def get_log(bench, site, log):
     return {log: Server().benches[bench].sites[site].retrieve_log(log)}
-
-
-@application.route("/security/ssh_session_logs")
-def get_ssh_session_logs():
-    return {"logs": Security().ssh_session_logs}
-
-
-@application.route("/security/retrieve_ssh_session_log/<string:filename>")
-def retrieve_ssh_session_log(filename):
-    return {"log_details": Security().retrieve_ssh_session_log(filename)}
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/sid", methods=["GET", "POST"])
