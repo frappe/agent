@@ -538,17 +538,23 @@ class DatabasePhysicalRestore(DatabaseServer):
 
     def recreate_fts_indexes(self, table: str):
         fts_indexes = self._get_fts_indexes_of_table(table)
+        if not fts_indexes:
+            return
+
+        query = f"ALTER TABLE `{table}` "
         for index_name, _ in fts_indexes.items():
-            self._kill_other_active_db_connections()
-            run_sql_query(
-                self._get_target_db(raise_error_on_connection_closed=False),
-                f"ALTER TABLE `{table}` DROP INDEX IF EXISTS `{index_name}`;",
-            )
+            query += f"DROP INDEX IF EXISTS `{index_name}`, "
+
+        query = query.rstrip(", ")
+        self._kill_other_active_db_connections()
+        run_sql_query(self._get_target_db(raise_error_on_connection_closed=False), query)
+
         # Optimize table to fix existing corruptions
         self._kill_other_active_db_connections()
         run_sql_query(
             self._get_target_db(raise_error_on_connection_closed=False), f"OPTIMIZE TABLE `{table}`;"
         )
+
         # Recreate the indexes
         for index_name, columns in fts_indexes.items():
             self._kill_other_active_db_connections()
