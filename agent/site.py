@@ -934,8 +934,8 @@ print(">>>" + frappe.session.sid + "<<<")
             config = json.load(f)
 
         try:
-            if not (config and config.get("use_press_meta_for_database_size")):
-                raise Exception("Press Meta not enabled for database size calculation")
+            if not config or config.get("disable_press_meta_for_database_size"):
+                raise Exception("Press Meta is disabled for database size calculation")
 
             query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
             command = f"mysql -sN -h {self.host} -P {self.db_port} \
