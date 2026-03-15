@@ -11,7 +11,7 @@
     __metrics_path__: /metrics/{{ job }}
 ## endfor ##
 
-## for job, proxied_servers in (cluster.jobs.proxied | default({})).items() ##
+## for job, proxied_servers in cluster.proxied_jobs.items() ##
 ##- for proxy, servers in proxied_servers.items() ##
 - targets:
     ##- for server in servers ##
