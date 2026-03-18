@@ -193,11 +193,16 @@ WHERE `schema` IN (
         if not tables:
             return
 
-        tables_str = ", ".join([f"`{t}`" for t in tables])
-        query = f"ANALYZE TABLE {tables_str};"
-        success, msg = db.execute_query(query)
-        if not success:
-            raise Exception(f"Failed to analyze tables for {database}: {msg}")
+        # Batch tables to avoid exceeding server statement-size limits / max_allowed_packet
+        batch_size = 100
+        for start in range(0, len(tables), batch_size):
+            batch = tables[start : start + batch_size]
+            tables_str = ", ".join(f"`{t}`" for t in batch)
+            query = f"ANALYZE TABLE {tables_str};"
+            success, msg = db.execute_query(query)
+            if not success:
+                batch_index = start // batch_size + 1
+                raise Exception(f"Failed to analyze tables for {database} in batch {batch_index}: {msg}")
 
     @step("Update Database Schema Size")
     def update_database_schema_size(
