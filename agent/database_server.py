@@ -168,6 +168,55 @@ WHERE `schema` IN (
             concurrency=concurrency,
         )
 
+    @job("Refresh Database Usage")
+    def refresh_database_usage_job(
+        self,
+        private_ip: str,
+        mariadb_root_password: str,
+        database: str,
+        io_ops_limit: int = 200,
+        concurrency: int = 20,
+    ):
+        self.analyze_tables_of_database(private_ip, mariadb_root_password, database)
+        self.update_database_schema_size(
+            private_ip, mariadb_root_password, database, io_ops_limit, concurrency
+        )
+
+    @step("Analyze Tables of Database")
+    def analyze_tables_of_database(self, private_ip: str, mariadb_root_password: str, database: str):
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, database)
+        success, output = db.execute_query("SHOW TABLES;")
+        if not success:
+            raise Exception(f"Failed to fetch tables for {database}: {output}")
+
+        tables = [x[0] for x in output[0].get("output").get("data")]
+        if not tables:
+            return
+
+        tables_str = ", ".join([f"`{t}`" for t in tables])
+        query = f"ANALYZE TABLE {tables_str};"
+        success, msg = db.execute_query(query)
+        if not success:
+            raise Exception(f"Failed to analyze tables for {database}: {msg}")
+
+    @step("Update Database Schema Size")
+    def update_database_schema_size(
+        self, private_ip: str, mariadb_root_password: str, database: str, io_ops_limit: int, concurrency: int
+    ):
+        result = calculate_table_usage(
+            database,
+            use_sudo=True,
+            io_ops_limit=io_ops_limit,
+            concurrency=concurrency,
+        )
+        size = max(0, int(result.data_length + result.index_length))
+
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, "press_meta")
+        query = f"REPLACE INTO press_meta._schema_sizes_internal (`schema`, `size`) VALUES ('{database}', {size});"  # noqa: E501
+        success, msg = db.execute_query(query, commit=True)
+        if not success:
+            raise Exception(f"Failed to update schema size for {database}: {msg}")
+
     @job("Flush Tables")
     def flush_tables_job(self, private_ip: str, mariadb_root_password: str):
         self.flush_tables(private_ip, mariadb_root_password)

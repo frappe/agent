@@ -1315,6 +1315,24 @@ def flush_tables():
     return {"job": job}
 
 
+@application.route("/database/refresh-usage", methods=["POST"])
+def refresh_database_usage():
+    data = request.json
+    private_ip = data.get("private_ip")
+    mariadb_root_password = data.get("mariadb_root_password")
+    database = data.get("database")
+    io_ops_limit = data.get("io_ops_limit", 200)
+    concurrency = data.get("concurrency", 20)
+    job = DatabaseServer().refresh_database_usage_job(
+        private_ip=private_ip,
+        mariadb_root_password=mariadb_root_password,
+        database=database,
+        io_ops_limit=io_ops_limit,
+        concurrency=concurrency,
+    )
+    return {"job": job}
+
+
 @application.route("/database/binary/logs")
 def get_binary_logs():
     return jsonify(DatabaseServer().binary_logs)
