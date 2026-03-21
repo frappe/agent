@@ -311,14 +311,17 @@ def parse_fts_index_prefixlen_from_cfg(file_path: str) -> dict[str, int]:  # noq
 
         # read fields: row_import_cfg_read_index_fields()
         # each field: prefix_len (u32), fixed_len (u32), name string
+        max_prefix_len = 0
         for _ in range(n_fields):
             # lower 12 bits are the actual prefix_len (field->prefix_len & ((1U<<12)-1))
             prefix_len = _u32() & ((1 << 12) - 1)
             _skip(4)  # fixed_len: bit31=descending flag, lower 10 bits=fixed_len
             _read_string()  # field name
+            if prefix_len > max_prefix_len:
+                max_prefix_len = prefix_len
 
-        # prefix_len of the last field - for FTS indexes there is only one user field
-        if index_type == 32 and n_fields == 1:
-            result[index_name] = prefix_len
+        # For FTS indexes, store the max prefix_len across all fields
+        if index_type == 32:
+            result[index_name] = max_prefix_len
 
     return result
