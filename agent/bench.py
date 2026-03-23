@@ -858,8 +858,8 @@ class Bench(Base):
 
     def stop(self):
         if self.bench_config.get("single_container"):
-            self.execute(f"docker stop {self.name}")
-            return self.execute(f"docker rm {self.name}")
+            return self.execute(f"docker rm {self.name} --force")
+
         return self.execute(f"docker stack rm {self.name}")
 
     @step("Stop Bench")
