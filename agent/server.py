@@ -208,6 +208,11 @@ class Server(Base):
     @step("Force Remove Zombie Benches")
     def _force_remove_zombie_benches(self, bench_names: list[str]):
         for bench_name in bench_names:
+            try:
+                self.execute(f"""docker ps --all --filter "name=^{bench_name}$" | grep {bench_name}""")
+            except AgentException:
+                continue  # Bench is gone
+
             self.disable_production_on_bench(bench_name)
             self.move_bench_to_archived_directory(bench_name)
 
