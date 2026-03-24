@@ -201,6 +201,16 @@ class Server(Base):
             "total": round((unused_images_size + total_archived_folder_size) / 1024**3, 2),
         }
 
+    @job("Force Remove Zombie Benches")
+    def force_remove_zombie_benches(self, bench_names: list[str]):
+        return self._force_remove_zombie_benches(bench_names)
+
+    @step("Force Remove Zombie Benches")
+    def _force_remove_zombie_benches(self, bench_names: list[str]):
+        for bench_name in bench_names:
+            self.disable_production_on_bench(bench_name)
+            self.move_bench_to_archived_directory(bench_name)
+
     @job("Push Images to Registry")
     def push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
         return self._push_images_to_registry(images, registry_settings)

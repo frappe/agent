@@ -523,6 +523,14 @@ def archive_bench(bench):
     return {"job": job}
 
 
+@application.route("/benches/force-remove", methods=["POST"])
+def force_remove_zombie_benches():
+    data = request.json
+    benches = data.get("benches", [])
+    job = Server().force_remove_zombie_benches(benches)
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/restart", methods=["POST"])
 @validate_bench
 def restart_bench(bench):
