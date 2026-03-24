@@ -214,7 +214,7 @@ class Server(Base):
                 continue  # Bench is gone
 
             self.disable_production_on_bench(bench_name)
-            self.move_bench_to_archived_directory(bench_name)
+            self._move_bench_to_archived_directory(bench_name)
 
     @job("Push Images to Registry")
     def push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
@@ -471,8 +471,7 @@ class Server(Base):
             "after": after,
         }
 
-    @step("Move Bench to Archived Directory")
-    def move_bench_to_archived_directory(self, bench_name):
+    def _move_bench_to_archived_directory(self, bench_name):
         if not os.path.exists(self.archived_directory):
             os.mkdir(self.archived_directory)
         target = os.path.join(self.archived_directory, bench_name)
@@ -486,6 +485,10 @@ class Server(Base):
             shutil.rmtree(assets_directory)
 
         self.execute(f"mv {bench_directory} {self.archived_directory}")
+
+    @step("Move Bench to Archived Directory")
+    def move_bench_to_archived_directory(self, bench_name):
+        self._move_bench_to_archived_directory(bench_name)
 
     @job("Update Site Pull", priority="low")
     def update_site_pull_job(self, name, source, target, activate):
