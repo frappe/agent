@@ -16,6 +16,26 @@ map $host $site_name_{{ bench_name_slug }} {
 	default $host;
 }
 
+{% if cors_origins %}
+map "$host:$http_origin" $cors_origin_{{ bench_name_slug }} {
+	default "";
+	{% for matcher, origin in cors_origins -%}
+		{{ matcher }} {{ origin }};
+	{% endfor %}
+}
+
+map $cors_origin_{{ bench_name_slug }} $cors_methods_{{ bench_name_slug }} {
+	"" "";
+	default "GET, OPTIONS";
+}
+
+map $cors_origin_{{ bench_name_slug }} $cors_vary_{{ bench_name_slug }} {
+	"" "";
+	"*" "";
+	default "Origin";
+}
+{% endif %}
+
 # server blocks
 {% if sites -%}
 
@@ -58,6 +78,18 @@ server {
 	location /assets {
 		try_files $uri =404;
 		add_header Cache-Control "max-age=31536000, immutable";
+		{% if cors_origins %}
+		add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+		add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+		add_header Vary $cors_vary_{{ bench_name_slug }} always;
+		if ($request_method = OPTIONS) {
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Access-Control-Max-Age 86400 always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			return 204;
+		}
+		{% endif %}
 	}
 
 	location ~ ^/protected/(.*) {
@@ -82,14 +114,30 @@ server {
 		rewrite ^(.+)/index\.html$ https://$host$1 permanent;
 		rewrite ^(.+)\.html$ https://$host$1 permanent;
 
+		{% if cors_origins %}
+		add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+		add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+		add_header Vary $cors_vary_{{ bench_name_slug }} always;
+		{% endif %}
+
 		location ~* ^/files/.*.(htm|html|svg|xml) {
 			add_header Content-disposition "attachment";
 			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			{% if cors_origins %}
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			{% endif %}
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 
 		location ~* ^/files/.*.(png|jpe?g|gif|css|js|mp3|wav|ogg|flac|avi|mov|mp4|m4v|mkv|webm) {
 			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			{% if cors_origins %}
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			{% endif %}
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 
@@ -191,6 +239,18 @@ server {
 	location /assets {
 		try_files $uri =404;
 		add_header Cache-Control "max-age=31536000, immutable";
+		{% if cors_origins %}
+		add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+		add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+		add_header Vary $cors_vary_{{ bench_name_slug }} always;
+		if ($request_method = OPTIONS) {
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Access-Control-Max-Age 86400 always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			return 204;
+		}
+		{% endif %}
 	}
 
 	location ~ ^/protected/(.*) {
@@ -215,14 +275,30 @@ server {
 		rewrite ^(.+)/index\.html$ https://$host$1 permanent;
 		rewrite ^(.+)\.html$ https://$host$1 permanent;
 
+		{% if cors_origins %}
+		add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+		add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+		add_header Vary $cors_vary_{{ bench_name_slug }} always;
+		{% endif %}
+
 		location ~* ^/files/.*.(htm|html|svg|xml) {
 			add_header Content-disposition "attachment";
 			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			{% if cors_origins %}
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			{% endif %}
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 
 		location ~* ^/files/.*.(png|jpe?g|gif|css|js|mp3|wav|ogg|flac|avi|mov|mp4|m4v|mkv|webm) {
 			add_header Cache-Control "max-age=3600,stale-while-revalidate=86400";
+			{% if cors_origins %}
+			add_header Access-Control-Allow-Origin $cors_origin_{{ bench_name_slug }} always;
+			add_header Access-Control-Allow-Methods $cors_methods_{{ bench_name_slug }} always;
+			add_header Vary $cors_vary_{{ bench_name_slug }} always;
+			{% endif %}
 			try_files /$site_name_{{ bench_name_slug }}/public/$uri @webserver;
 		}
 

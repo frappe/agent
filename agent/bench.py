@@ -547,6 +547,7 @@ class Bench(Base):
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
             "code_server": codeserver,
+            "cors_origins": _get_cors_origins(sites, self.common_site_config.get("allow_cors")),
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
@@ -1412,6 +1413,46 @@ def _get_domains(sites: list[Site]):
         for domain in site.config.get("domains", []):
             domains[domain] = site.name
     return domains
+
+
+def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
+    if origins is None:
+        return []
+
+    if isinstance(origins, str):
+        origins = [origins]
+
+    return [origin.strip() for origin in origins if origin and origin.strip()]
+
+
+def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
+    """Return nginx map entries for site-aware CORS responses.
+
+    Exact origins are matched against ``$host:$http_origin`` and echoed back
+    as ``$http_origin``. Wildcards are matched per-host and return ``"*"``.
+
+    Site-level ``allow_cors`` overrides bench-level (``common_site_config``).
+    A site explicitly setting ``allow_cors`` to ``[]`` disables CORS even if
+    the bench default is set.
+    """
+    pairs: set[tuple[str, str]] = set()
+    default_origins = _normalize_cors_origins(bench_cors)
+
+    for site in sites:
+        site_cors = site.config.get("allow_cors")
+        origins = _normalize_cors_origins(site_cors) if site_cors is not None else default_origins
+        if not origins:
+            continue
+
+        hostnames = [site.name, *site.config.get("domains", [])]
+        for hostname in hostnames:
+            for origin in origins:
+                if origin == "*":
+                    pairs.add((rf"~^{re.escape(hostname)}:.*$", '"*"'))
+                else:
+                    pairs.add((f'"{hostname}:{origin}"', "$http_origin"))
+
+    return sorted(pairs)
 
 
 def _get_codeserver_config(bench_directory: str):

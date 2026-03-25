@@ -4,10 +4,11 @@ import json
 import os
 import shutil
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent.base import AgentException
-from agent.bench import Bench
+from agent.bench import Bench, _get_cors_origins
 from agent.server import Server
 from agent.site import Site
 
@@ -73,6 +74,33 @@ class TestSite(unittest.TestCase):
         server.benches_directory = self.benches_directory
         return Bench(self.bench_name, server)
 
+    def _render_bench_nginx(self, cors_origins, standalone=False):
+        output_file = os.path.join(self.test_dir, "nginx.conf")
+        with patch.object(Server, "__init__", new=lambda x: None):
+            server = Server()
+
+        context = {
+            "bench_name": self.bench_name,
+            "bench_name_slug": self.bench_name.replace("-", "_"),
+            "domain": "example.com",
+            "sites": [SimpleNamespace(name="site.test", host="site.test")],
+            "domains": {},
+            "http_timeout": 120,
+            "web_port": 8000,
+            "socketio_port": 9000,
+            "sites_directory": self.sites_directory,
+            "standalone": standalone,
+            "error_pages_directory": os.path.join(self.test_dir, "errors"),
+            "nginx_directory": os.path.join(self.test_dir, "nginx"),
+            "tls_protocols": None,
+            "code_server": {},
+            "cors_origins": cors_origins,
+        }
+        server._render_template("bench/nginx.conf.jinja2", context, output_file)
+
+        with open(output_file) as f:
+            return f.read()
+
     def test_rename_site_works_for_existing_site(self):
         """Ensure rename_site renames site."""
         bench = self._get_test_bench()
@@ -124,3 +152,108 @@ class TestSite(unittest.TestCase):
             bench.valid_sites[site_name]
         except KeyError:
             self.fail("Site not found in bench.sites")
+
+    def test_get_cors_origins_normalizes_string_defaults_and_overrides(self):
+        sites = [
+            SimpleNamespace(name="site-a.test", config={"domains": ["cdn.site-a.test"]}),
+            SimpleNamespace(
+                name="site-b.test",
+                config={"allow_cors": "https://portal.example.com"},
+            ),
+            SimpleNamespace(name="site-c.test", config={"allow_cors": []}),
+        ]
+
+        self.assertCountEqual(
+            _get_cors_origins(sites, "https://bench.example.com"),
+            [
+                ('"site-a.test:https://bench.example.com"', "$http_origin"),
+                ('"cdn.site-a.test:https://bench.example.com"', "$http_origin"),
+                ('"site-b.test:https://portal.example.com"', "$http_origin"),
+            ],
+        )
+
+    def test_get_cors_origins_supports_wildcard_values(self):
+        sites = [
+            SimpleNamespace(
+                name="site.test",
+                config={"domains": ["cdn.site.test"], "allow_cors": "*"},
+            )
+        ]
+
+        self.assertCountEqual(
+            _get_cors_origins(sites),
+            [
+                (r"~^site\.test:.*$", '"*"'),
+                (r"~^cdn\.site\.test:.*$", '"*"'),
+            ],
+        )
+
+    def test_rendered_bench_nginx_adds_cors_headers_to_assets(self):
+        rendered = self._render_bench_nginx(
+            _get_cors_origins(
+                [
+                    SimpleNamespace(
+                        name="site.test",
+                        config={"allow_cors": "https://portal.example.com"},
+                    )
+                ]
+            )
+        )
+
+        self.assertRegex(
+            rendered,
+            r"location /assets \{\s+try_files \$uri =404;\s+"
+            r"add_header Cache-Control \"max-age=31536000, immutable\";\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"if \(\$request_method = OPTIONS\) \{\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Access-Control-Max-Age 86400 always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"return 204;",
+        )
+
+    def test_rendered_standalone_bench_nginx_adds_cors_headers_to_assets(self):
+        rendered = self._render_bench_nginx(
+            _get_cors_origins(
+                [
+                    SimpleNamespace(
+                        name="site.test",
+                        config={"allow_cors": "*"},
+                    )
+                ]
+            ),
+            standalone=True,
+        )
+
+        self.assertIn('~^site\\.test:.*$ "*";', rendered)
+        self.assertIn(
+            (
+                "map $cors_origin_test_bench $cors_vary_test_bench {\n"
+                '\t"" "";\n\t"*" "";\n\tdefault "Origin";\n}'
+            ),
+            rendered,
+        )
+        self.assertRegex(
+            rendered,
+            r"location /assets \{\s+try_files \$uri =404;\s+"
+            r"add_header Cache-Control \"max-age=31536000, immutable\";\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"if \(\$request_method = OPTIONS\) \{\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Access-Control-Max-Age 86400 always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"return 204;",
+        )
+
+    def test_rendered_bench_nginx_omits_cors_when_no_origins(self):
+        rendered = self._render_bench_nginx([])
+
+        self.assertNotIn("cors_origin_test_bench", rendered)
+        self.assertNotIn("Access-Control-Allow-Origin", rendered)
+        self.assertNotIn("$request_method = OPTIONS", rendered)
