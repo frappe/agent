@@ -140,7 +140,7 @@ class Server(Base):
         """
         for attempt in range(max_retries):
             try:
-                self.execute(f"""docker ps --all --filter "name=^{name}$" | grep {name}""")
+                self.execute(f"docker inspect {name}")
             except AgentException:
                 break  # container does not exist
             else:
