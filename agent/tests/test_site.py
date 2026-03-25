@@ -202,17 +202,17 @@ class TestSite(unittest.TestCase):
 
         self.assertRegex(
             rendered,
-            r'location /assets \{\s+try_files \$uri =404;\s+'
-            r'add_header Cache-Control "max-age=31536000, immutable";\s+'
+            r"location /assets \{\s+try_files \$uri =404;\s+"
+            r"add_header Cache-Control \"max-age=31536000, immutable\";\s+"
             r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
-            r'add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+'
-            r'add_header Vary \$cors_vary_test_bench always;\s+'
-            r'if \(\$request_method = OPTIONS\) \{\s+'
-            r'add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+'
-            r'add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+'
-            r'add_header Access-Control-Max-Age 86400 always;\s+'
-            r'add_header Vary \$cors_vary_test_bench always;\s+'
-            r'return 204;',
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"if \(\$request_method = OPTIONS\) \{\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Access-Control-Max-Age 86400 always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"return 204;",
         )
 
     def test_rendered_standalone_bench_nginx_adds_cors_headers_to_assets(self):
@@ -231,24 +231,24 @@ class TestSite(unittest.TestCase):
         self.assertIn('~^site\\.test:.*$ "*";', rendered)
         self.assertIn(
             (
-                'map $cors_origin_test_bench $cors_vary_test_bench {\n'
+                "map $cors_origin_test_bench $cors_vary_test_bench {\n"
                 '\t"" "";\n\t"*" "";\n\tdefault "Origin";\n}'
             ),
             rendered,
         )
         self.assertRegex(
             rendered,
-            r'location /assets \{\s+try_files \$uri =404;\s+'
-            r'add_header Cache-Control "max-age=31536000, immutable";\s+'
+            r"location /assets \{\s+try_files \$uri =404;\s+"
+            r"add_header Cache-Control \"max-age=31536000, immutable\";\s+"
             r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
-            r'add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+'
-            r'add_header Vary \$cors_vary_test_bench always;\s+'
-            r'if \(\$request_method = OPTIONS\) \{\s+'
-            r'add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+'
-            r'add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+'
-            r'add_header Access-Control-Max-Age 86400 always;\s+'
-            r'add_header Vary \$cors_vary_test_bench always;\s+'
-            r'return 204;',
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"if \(\$request_method = OPTIONS\) \{\s+"
+            r"add_header Access-Control-Allow-Origin \$cors_origin_test_bench always;\s+"
+            r"add_header Access-Control-Allow-Methods \$cors_methods_test_bench always;\s+"
+            r"add_header Access-Control-Max-Age 86400 always;\s+"
+            r"add_header Vary \$cors_vary_test_bench always;\s+"
+            r"return 204;",
         )
 
     def test_rendered_bench_nginx_omits_cors_when_no_origins(self):

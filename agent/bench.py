@@ -547,9 +547,7 @@ class Bench(Base):
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
             "code_server": codeserver,
-            "cors_origins": _get_cors_origins(
-                sites, self.common_site_config.get("allow_cors")
-            ),
+            "cors_origins": _get_cors_origins(sites, self.common_site_config.get("allow_cors")),
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
@@ -1427,9 +1425,7 @@ def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
     return [origin.strip() for origin in origins if origin and origin.strip()]
 
 
-def _get_cors_origins(
-    sites: list[Site], bench_cors: str | list[str] | None = None
-) -> list[tuple[str, str]]:
+def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
     """Return nginx map entries for site-aware CORS responses.
 
     Exact origins are matched against ``$host:$http_origin`` and echoed back
@@ -1444,11 +1440,7 @@ def _get_cors_origins(
 
     for site in sites:
         site_cors = site.config.get("allow_cors")
-        origins = (
-            _normalize_cors_origins(site_cors)
-            if site_cors is not None
-            else default_origins
-        )
+        origins = _normalize_cors_origins(site_cors) if site_cors is not None else default_origins
         if not origins:
             continue
 
