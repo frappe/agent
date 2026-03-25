@@ -140,7 +140,7 @@ class Server(Base):
         """
         for attempt in range(max_retries):
             try:
-                self.execute(f"""docker ps --all --filter "name=^{name}$" | grep {name}""")
+                self.execute(f"docker inspect {name}")
             except AgentException:
                 break  # container does not exist
             else:
@@ -200,6 +200,21 @@ class Server(Base):
             "images": formatted_unused_image_size,
             "total": round((unused_images_size + total_archived_folder_size) / 1024**3, 2),
         }
+
+    @job("Force Remove Zombie Benches")
+    def force_remove_zombie_benches(self, bench_names: list[str]):
+        return self._force_remove_zombie_benches(bench_names)
+
+    @step("Force Remove Zombie Benches")
+    def _force_remove_zombie_benches(self, bench_names: list[str]):
+        for bench_name in bench_names:
+            try:
+                self.execute(f"""docker ps --all --filter "name=^{bench_name}$" | grep {bench_name}""")
+            except AgentException:
+                continue  # Bench is gone
+
+            self.disable_production_on_bench(bench_name)
+            self._move_bench_to_archived_directory(bench_name)
 
     @job("Push Images to Registry")
     def push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
@@ -456,8 +471,7 @@ class Server(Base):
             "after": after,
         }
 
-    @step("Move Bench to Archived Directory")
-    def move_bench_to_archived_directory(self, bench_name):
+    def _move_bench_to_archived_directory(self, bench_name):
         if not os.path.exists(self.archived_directory):
             os.mkdir(self.archived_directory)
         target = os.path.join(self.archived_directory, bench_name)
@@ -471,6 +485,10 @@ class Server(Base):
             shutil.rmtree(assets_directory)
 
         self.execute(f"mv {bench_directory} {self.archived_directory}")
+
+    @step("Move Bench to Archived Directory")
+    def move_bench_to_archived_directory(self, bench_name):
+        self._move_bench_to_archived_directory(bench_name)
 
     @job("Update Site Pull", priority="low")
     def update_site_pull_job(self, name, source, target, activate):
@@ -806,6 +824,10 @@ class Server(Base):
             return self.benches[bench]
         except KeyError as exc:
             raise BenchNotExistsException(bench) from exc
+
+    def get_running_bench_containers(self) -> list[str]:
+        """Get the actual containers skipping the `Server.benches` property"""
+        return self.execute("docker ps --format '{{.Names}}'")["output"].split("\n")
 
     @property
     def job_record(self):

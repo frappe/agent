@@ -256,6 +256,11 @@ def start_bench_workers():
     return {"job": job}
 
 
+@application.route("/server/running-benches", methods=["GET"])
+def get_running_benches():
+    return {"benches": Server().get_running_bench_containers()}
+
+
 @application.route("/server/force-remove-all-benches", methods=["POST"])
 def force_remove_all_benches():
     job = Server().force_remove_all_benches()
@@ -509,6 +514,14 @@ def new_bench():
 @application.route("/benches/<string:bench>/archive", methods=["POST"])
 def archive_bench(bench):
     job = Server().archive_bench(bench)
+    return {"job": job}
+
+
+@application.route("/benches/force-remove", methods=["POST"])
+def force_remove_zombie_benches():
+    data = request.json
+    benches = data.get("benches", [])
+    job = Server().force_remove_zombie_benches(benches)
     return {"job": job}
 
 
