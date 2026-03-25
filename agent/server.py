@@ -825,6 +825,10 @@ class Server(Base):
         except KeyError as exc:
             raise BenchNotExistsException(bench) from exc
 
+    def get_running_bench_containers(self) -> list[str]:
+        """Get the actual containers skipping the `Server.benches` property"""
+        return self.execute("docker ps --format '{{.Names}}'")["output"].split("\n")
+
     @property
     def job_record(self):
         if self.job is None:
