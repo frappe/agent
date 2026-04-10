@@ -50,7 +50,7 @@ server {
 	# Dynamic upstream routing with regex capture
     # Matches /{upstream_name}/agent/ or /{upstream_name}/metrics
 	# Supports port: /{upstream_name}:{port}/agent/
-    location ~ ^/([^/]+)/(agent|metrics|status)(.*)$ {
+    location ~ ^/([^/]+)/(agent(?!-jobs)|metrics|status)(.*)$ {
 		set $upstream_host $1;
 		set $upstream_path $2$3;
 
