@@ -1422,7 +1422,20 @@ def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
     if isinstance(origins, str):
         origins = [origins]
 
-    return [origin.strip() for origin in origins if origin and origin.strip()]
+    normalized = []
+    for origin in origins:
+        if not origin:
+            continue
+        origin = origin.strip().strip('"').strip("'").strip()
+        if not origin:
+            continue
+        if origin == "*":
+            normalized.append(origin)
+            continue
+        parsed = urlparse(origin)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            normalized.append(f"{parsed.scheme}://{parsed.netloc}")
+    return normalized
 
 
 def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
