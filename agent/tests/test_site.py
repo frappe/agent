@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from agent.base import AgentException
-from agent.bench import Bench, _get_cors_origins
+from agent.bench import Bench, _get_cors_origins, _normalize_cors_origins
 from agent.server import Server
 from agent.site import Site
 
@@ -257,3 +257,47 @@ class TestSite(unittest.TestCase):
         self.assertNotIn("cors_origin_test_bench", rendered)
         self.assertNotIn("Access-Control-Allow-Origin", rendered)
         self.assertNotIn("$request_method = OPTIONS", rendered)
+
+    def test_normalize_cors_origins_strips_embedded_quotes(self):
+        self.assertEqual(
+            _normalize_cors_origins('"https://example.com"'),
+            ["https://example.com"],
+        )
+        self.assertEqual(
+            _normalize_cors_origins(['"https://a.com"', "'https://b.com'"]),
+            ["https://a.com", "https://b.com"],
+        )
+
+    def test_normalize_cors_origins_rejects_invalid_urls(self):
+        self.assertEqual(_normalize_cors_origins("not-a-url"), [])
+        self.assertEqual(_normalize_cors_origins("javascript:alert(1)"), [])
+        self.assertEqual(_normalize_cors_origins(["/relative/path", ""]), [])
+        self.assertEqual(
+            _normalize_cors_origins(["https://valid.com", "garbage"]),
+            ["https://valid.com"],
+        )
+
+    def test_normalize_cors_origins_strips_path_from_url(self):
+        self.assertEqual(
+            _normalize_cors_origins("https://example.com/some/path?q=1"),
+            ["https://example.com"],
+        )
+
+    def test_get_cors_origins_with_quoted_allow_cors(self):
+        sites = [
+            SimpleNamespace(
+                name="site.test",
+                config={
+                    "domains": ["cdn.site.test"],
+                    "allow_cors": '"https://portal.example.com"',
+                },
+            )
+        ]
+
+        self.assertCountEqual(
+            _get_cors_origins(sites),
+            [
+                ('"site.test:https://portal.example.com"', "$http_origin"),
+                ('"cdn.site.test:https://portal.example.com"', "$http_origin"),
+            ],
+        )
