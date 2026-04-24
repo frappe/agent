@@ -483,7 +483,7 @@ class Site(Base):
     @step("Backup Site")
     def backup(self, with_files=False):
         with_files = "--with-files" if with_files else ""
-        self.bench_execute(f"backup {with_files}")
+        self.bench_execute(f"backup {with_files} --verbose")
         return self.fetch_latest_backup(with_files=with_files)
 
     @step("Upload Site Backup to S3")
