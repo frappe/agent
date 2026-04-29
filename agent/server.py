@@ -897,7 +897,11 @@ class Server(Base):
                 self.execute(f"sudo supervisorctl stop agent:worker-{worker_id}", non_zero_throw=False)
 
         # Stop NGINX Reload Manager if it's a proxy server
-        is_proxy_server = self.config.get("domain") and self.config.get("name").startswith("n")
+        is_proxy_server = (
+            self.config.get("domain")
+            and self.config.get("name").startswith("n")
+            and not self.config.get("name").startswith("nat")
+        )
         if is_proxy_server:
             self.execute("sudo supervisorctl stop agent:nginx_reload_manager", non_zero_throw=False)
 
@@ -1189,7 +1193,7 @@ class Server(Base):
             "sentry_dsn": self.config.get("sentry_dsn"),
             "is_standalone": self.config.get("standalone", False),
         }
-        if self.config.get("name").startswith("n"):
+        if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):
             data["is_proxy_server"] = True
 
         if self.config.get("name", "").startswith("fs"):

@@ -46,7 +46,7 @@ server {
 	more_set_headers "Access-Control-Allow-Origin: {{ press_url }}";
 	{%- endif %}
 
-	{% if name.startswith('n') %}
+	{% if name.startswith('n') and not name.startswith('nat') %}
 	# Dynamic upstream routing with regex capture
     # Matches /{upstream_name}/agent/ or /{upstream_name}/metrics
 	# Supports port: /{upstream_name}:{port}/agent/
