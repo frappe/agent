@@ -2,25 +2,40 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
 from datetime import datetime
 from subprocess import Popen
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import docker
+import jinja2
 
 from agent.base import Base
-from agent.exceptions import RegistryDownException
+from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.utils import is_registry_healthy
 
 if TYPE_CHECKING:
     from typing import Literal
 
-    OutputKey = Literal["build", "push"]
+    OutputKey = Literal["pre-build", "build", "push"]
     Output = dict[OutputKey, list[str]]
+
+
+class AppInfo(TypedDict):
+    app: str
+    url: str
+    release: str
+    source: str
+    hash: str
+    branch: str
+
+
+class CloneError(AgentException):
+    pass
 
 
 class ImageBuilder(Base):
@@ -28,7 +43,7 @@ class ImageBuilder(Base):
 
     def __init__(
         self,
-        filename: str,
+        # filename: str,
         image_repository: str,
         image_tag: str,
         no_cache: bool,
@@ -36,6 +51,11 @@ class ImageBuilder(Base):
         registry: dict,
         platform: str,
         build_token: str,
+        dockerfile: str,
+        clone_instructions: list[AppInfo],
+        group: str,
+        build_name: str,
+        deploy_candidate_params: dict,
     ) -> None:
         super().__init__()
 
@@ -46,11 +66,17 @@ class ImageBuilder(Base):
         self.platform = platform
 
         # Build context, params
-        self.filename = filename
-        self.filepath = os.path.join(
-            get_image_build_context_directory(),
-            self.filename,
-        )
+        # self.filename = filename
+        # self.filepath = os.path.join(
+        #     get_image_build_context_directory(),
+        #     self.filename,
+        # )
+        self.dockerfile = dockerfile
+        self.clone_instructions = clone_instructions
+        self.group = group
+        self.build_name = build_name
+        self.deploy_candidate_params = deploy_candidate_params
+
         self.no_cache = no_cache
         self.no_push = no_push
         self.last_published = datetime.now()
@@ -60,13 +86,11 @@ class ImageBuilder(Base):
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
+        self.build_config_path = os.path.join(os.getcwd(), "repo", "agent", "build_configs")
 
         # Lines from build and push are sent to press for processing
         # and updating the respective Deploy Candidate
-        self.output = {
-            "build": [],
-            "push": [],
-        }
+        self.output = {"pre-build": [], "build": [], "push": []}
         self.push_output_lines = []
 
         self.job = None
@@ -90,16 +114,134 @@ class ImageBuilder(Base):
 
     @job("Run Remote Builder")
     def run_remote_builder(self):
-        try:
-            return self._build_and_push()
-        finally:
-            self._cleanup_context()
+        self._clone_repositories()
+        self._prepare_build_context()
+
+        # try:
+        #     return self._build_and_push()
+        # finally:
+        #     self._cleanup_context()
 
     def _build_and_push(self):
         self._build_image()
         if not self.build_failed and not self.no_push:
             self._push_docker_image()
         return self.data
+
+    def _clone_repository(self, app_info: AppInfo, clone_dir: str):
+        """Clone the repository for the given app"""
+        repo_url = app_info["url"]
+        branch = app_info["branch"]
+        source = app_info["source"]
+        commit_hash = app_info["hash"]
+        clone_path = os.path.join(clone_dir, source, commit_hash[:10])
+        output = f"git clone {app_info['app']}"
+
+        if os.path.exists(clone_path):
+            return output + " CACHED\n"
+
+        output += "\n"
+        os.makedirs(clone_path, exist_ok=True)
+
+        try:
+            output += self._run_git_command("git init", clone_path) + "\n"
+
+            origin_exists = "origin" in self._run_git_command("git remote", clone_path).split()
+            if origin_exists:
+                output += self._run_git_command(f"git remote set-url origin {repo_url}", clone_path) + "\n"
+            else:
+                output += self._run_git_command(f"git remote add origin {repo_url}", clone_path) + "\n"
+
+            output += self._run_git_command("git config credential.helper ''", clone_path) + "\n"
+            output += self._run_git_command(f"git fetch --depth 1 origin {commit_hash}", clone_path) + "\n"
+
+            output += self._run_git_command(f"git checkout -B {branch}", clone_path) + "\n"
+            output += self._run_git_command(f"git checkout {commit_hash}", clone_path) + "\n"
+        except CloneError as e:
+            raise CloneError(
+                {"traceback": f"Failed to clone repository for {app_info['app']} - {e!s}"}
+            ) from None
+
+        return output
+
+    def _generate_build_config_files(self):
+        """Generate redis and supervisor config for build"""
+        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+        configs_to_generate = ["redis-cache.conf", "redis-queue.conf", "supervisor.conf"]
+        template_folder = os.path.join(self.build_config_path, "config")
+        dest_folder = os.path.join(build_directory, "config")
+
+        if not os.path.exists(dest_folder):
+            os.makedirs(dest_folder, exist_ok=True)
+
+        for config in configs_to_generate:
+            template_config_file = os.path.join(template_folder, config)
+            with open(template_config_file, "r") as file:
+                template = jinja2.Template(file.read())
+
+            rendered_config = template.render(doc=self.deploy_candidate_params, platform=self.platform)
+            rendered_config_path = os.path.join(dest_folder, config)
+
+            with open(rendered_config_path, "w") as output_file:
+                output_file.write(rendered_config)
+
+    def _copy_build_config_files(self):
+        """Copy generic build config files to the build context"""
+        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
+            shutil.copy(os.path.join(self.build_config_path, filename), build_directory)
+
+        shutil.copytree(
+            os.path.join(self.build_config_path, "redis"),
+            os.path.join(build_directory, "redis"),
+        )
+
+    @step("Clone Repositories")
+    def _clone_repositories(self):
+        """Clone the apps passed from build instructions"""
+        import time
+        clone_directory = get_clone_directory()
+        self.output["pre-build"] = []
+
+        for app_info in self.clone_instructions:
+            self.output["pre-build"].append(
+                self._clone_repository(app_info, clone_directory),
+            )
+            self._publish_throttled_output(True)
+            time.sleep(300) # Remove post testing
+
+
+        return self.output["pre-build"]
+
+    @step("Prepare Build Context")
+    def _prepare_build_context(self):
+        """Clone the apps passed from build instructions"""
+        clone_directory = get_clone_directory()
+        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+
+        if not os.path.exists(build_directory):
+            os.makedirs(build_directory, exist_ok=True)
+
+        for app_info in self.clone_instructions:
+            source_path = os.path.join(clone_directory, app_info["source"], app_info["hash"][:10])
+            dest_path = os.path.join(build_directory, "apps", app_info["app"])
+
+            if os.path.exists(dest_path):
+                shutil.rmtree(dest_path)
+
+            shutil.copytree(source_path, dest_path, symlinks=True)
+
+        self._copy_build_config_files()
+        self._generate_build_config_files()
+
+        with open(os.path.join(build_directory, "Dockerfile"), "w") as dockerfile:
+            dockerfile.write(self.dockerfile)
+
+        with open(os.path.join(build_directory, "apps.txt"), "w") as apps_file:
+            apps_file.write(
+                "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
+            )
 
     @step("Build Image")
     def _build_image(self):
@@ -226,6 +368,27 @@ class ImageBuilder(Base):
     def _get_image_name(self):
         return f"{self.image_repository}:{self.image_tag}"
 
+    def _run_git_command(self, command: str, cwd: str) -> str:
+        """Run a git command in a directory"""
+        process = Popen(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            universal_newlines=True,
+        )
+        output, _ = process.communicate()
+        return_code = process.returncode
+
+        self.build_failed = return_code != 0
+        if self.build_failed:
+            self.data.update({"build_failed": True})
+
+        if return_code != 0:
+            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
+
+        return output
+
     def _run(
         self,
         command: str,
@@ -267,6 +430,20 @@ class ImageBuilder(Base):
 
 def get_image_build_context_directory():
     path = os.path.join(os.getcwd(), "build_context")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
+
+def get_clone_directory():
+    path = os.path.join(os.getcwd(), ".clones")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
+
+def get_builds_directory():
+    path = os.path.join(os.getcwd(), ".docker-builds")
     if not os.path.exists(path):
         os.makedirs(path)
     return path
