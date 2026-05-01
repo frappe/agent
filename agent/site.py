@@ -16,7 +16,7 @@ import requests
 from agent.base import AgentException, Base
 from agent.database import Database
 from agent.job import job, step
-from agent.utils import b2mb, compute_file_hash, get_size
+from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get_size
 
 if TYPE_CHECKING:
     from agent.bench import Bench
@@ -413,7 +413,7 @@ class Site(Base):
             output = self.execute(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"mysql -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -575,9 +575,7 @@ class Site(Base):
         with open(self.previous_tables_file, "w") as ptf:
             json.dump(tables, ptf, indent=4, sort_keys=True)
 
-        # Check if mariadb-dump is available, if not fallback to mysqldump
-        mariadb_dump_available = shutil.which("mariadb-dump") is not None
-        dump_command = "mariadb-dump" if mariadb_dump_available else "mysqldump"
+        dump_command = db_dump_cli()
 
         data = {"tables": {}}
         for table in tables:
@@ -672,7 +670,7 @@ class Site(Base):
                 output = self.execute(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"mysql -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -687,7 +685,7 @@ class Site(Base):
         data = {"dropped": {}}
         for table in new_tables:
             output = self.execute(
-                f"mysql -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -794,7 +792,7 @@ print(">>>" + frappe.session.sid + "<<<")
         )
         try:
             timezone = self.execute(
-                f"mysql -h {self.host} -P {self.db_port} -u{self.database} -p{self.password} "
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u{self.database} -p{self.password} "
                 f'--connect-timeout 3 -sN -e "{query}"'
             )["output"].strip()
         except Exception:
@@ -804,7 +802,7 @@ print(">>>" + frappe.session.sid + "<<<")
     @property
     def tables(self):
         return self.execute(
-            "mysql --disable-column-names -B -e 'SHOW TABLES' "
+            f"{db_client_cli()} --disable-column-names -B -e 'SHOW TABLES' "
             f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} {self.database}"
         )["output"].split("\n")
 
@@ -856,7 +854,7 @@ print(">>>" + frappe.session.sid + "<<<")
             query = f"OPTIMIZE TABLE `{table}`"
             try:
                 self.execute(
-                    f"mysql -sN -h {self.host} -P {self.db_port} "
+                    f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} "
                     f"-u{self.user} -p{self.password} {self.database} -e '{query}'"
                 )
                 optimized_tables.append(table)
@@ -942,7 +940,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 raise Exception("Press Meta is disabled for database size calculation")
 
             query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
-            command = f"mysql -sN -h {self.host} -P {self.db_port} \
+            command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} \
                     -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
 
@@ -957,7 +955,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 f' WHERE `table_schema` = "{self.database}"'
                 " GROUP BY `table_schema`"
             )
-            command = f"mysql -sN -h {self.host} -P {self.db_port} \
+            command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} \
                 -u{self.user} -p{self.password} -e '{query}'"
             database_size = self.execute(command).get("output")
 
@@ -1009,7 +1007,7 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
+        command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"  # noqa: E501
         database_size = self.execute(command).get("output")
 
         try:
@@ -1027,9 +1025,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
-            command = (
-                f"mysql -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"
-            )
+            command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"  # noqa: E501
             output = self.execute(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:

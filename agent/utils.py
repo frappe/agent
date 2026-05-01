@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import struct
 import subprocess
 from collections import defaultdict
@@ -325,3 +326,19 @@ def parse_fts_index_prefixlen_from_cfg(file_path: str) -> dict[str, int]:  # noq
             result[index_name] = max_prefix_len
 
     return result
+
+
+def db_client_cli():
+    if shutil.which("mariadb") is not None:
+        return "mariadb"
+    if shutil.which("mysql") is not None:
+        return "mysql"
+    raise RuntimeError("Neither 'mariadb' nor 'mysql' client is installed on the system.")
+
+
+def db_dump_cli():
+    if shutil.which("mariadb-dump") is not None:
+        return "mariadb-dump"
+    if shutil.which("mysqldump") is not None:
+        return "mysqldump"
+    raise RuntimeError("Neither 'mariadb-dump' nor 'mysqldump' client is installed on the system.")
