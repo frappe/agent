@@ -743,6 +743,9 @@ WHERE `schema` IN (
         binlogs_in_disk = []
         for file in Path(self.mariadb_directory).iterdir():
             if re.match(r"mysql-bin.\d+", file.name):
+                if file.name.endswith(".index") or file.name.endswith(".idx"):
+                    continue
+
                 stat = file.stat()
                 binlogs_in_disk.append(
                     {
