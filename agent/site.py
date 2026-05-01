@@ -575,12 +575,16 @@ class Site(Base):
         with open(self.previous_tables_file, "w") as ptf:
             json.dump(tables, ptf, indent=4, sort_keys=True)
 
+        # Check if mariadb-dump is available, if not fallback to mysqldump
+        mariadb_dump_available = shutil.which("mariadb-dump") is not None
+        dump_command = "mariadb-dump" if mariadb_dump_available else "mysqldump"
+
         data = {"tables": {}}
         for table in tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             output = self.execute(
                 "set -o pipefail && "
-                "mysqldump --single-transaction --quick --lock-tables=false "
+                f"{dump_command} --single-transaction --quick --lock-tables=false "
                 f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
                 f"{self.database} '{table}' "
                 f" | gzip > '{backup_file}'",
