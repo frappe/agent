@@ -3,12 +3,12 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 from agent.job import job, step
 from agent.server import Server
+from agent.utils import db_dump_cli
 
 
 def read_json(file_path: str) -> dict | None:
@@ -152,9 +152,7 @@ class SnapshotRecovery(Server):
     def _backup_db(
         self, site: str, database_ip: str, database_name: str, mariadb_root_password: str, file_path: str
     ) -> str:
-        # Check if mariadb-dump is available, if not fallback to mysqldump
-        mariadb_dump_available = shutil.which("mariadb-dump") is not None
-        dump_command = "mariadb-dump" if mariadb_dump_available else "mysqldump"
+        dump_command = db_dump_cli()
 
         command = [
             dump_command,
