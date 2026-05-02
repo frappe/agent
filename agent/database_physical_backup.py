@@ -260,7 +260,9 @@ class DatabasePhysicalBackup(DatabaseServer):
                     "name": self.site_backup_name,
                     "key": self.snapshot_request_key,
                 },
+                timeout=(10, 30),
             )
+
             if response.status_code in [417, 500, 502, 503, 504] and retries <= 10:
                 retries += 1
                 time.sleep(15 + randint(2, 8))
