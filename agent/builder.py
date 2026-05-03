@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass, field
 from datetime import datetime
 from subprocess import Popen
 from typing import TYPE_CHECKING, TypedDict
@@ -38,131 +39,79 @@ class CloneError(AgentException):
     pass
 
 
-class ImageBuilder(Base):
-    output: Output
+@dataclass
+class JobContext:
+    job: Job | None = None
+    step: Step | None = None
 
-    def __init__(
-        self,
-        # filename: str,
-        image_repository: str,
-        image_tag: str,
-        no_cache: bool,
-        no_push: bool,
-        registry: dict,
-        platform: str,
-        build_token: str,
-        dockerfile: str,
-        clone_instructions: list[AppInfo],
-        group: str,
-        build_name: str,
-        deploy_candidate_params: dict,
-    ) -> None:
-        super().__init__()
 
-        # Image push params
-        self.image_repository = image_repository
-        self.image_tag = image_tag
-        self.registry = registry
-        self.platform = platform
-
-        # Build context, params
-        # self.filename = filename
-        # self.filepath = os.path.join(
-        #     get_image_build_context_directory(),
-        #     self.filename,
-        # )
-        self.dockerfile = dockerfile
-        self.clone_instructions = clone_instructions
-        self.group = group
-        self.build_name = build_name
-        self.deploy_candidate_params = deploy_candidate_params
-
-        self.no_cache = no_cache
-        self.no_push = no_push
-        self.last_published = datetime.now()
-        self.build_failed = False
-        self.build_token = build_token
-        self.secret_path = None
-
-        cwd = os.getcwd()
-        self.config_file = os.path.join(cwd, "config.json")
-        self.build_config_path = os.path.join(os.getcwd(), "repo", "agent", "build_configs")
-
-        # Lines from build and push are sent to press for processing
-        # and updating the respective Deploy Candidate
-        self.output = {"pre-build": [], "build": [], "push": []}
-        self.push_output_lines = []
-
-        self.job = None
-        self.step = None
+class JobMixin:
+    _job_context: JobContext
 
     @property
     def job_record(self):
-        if self.job is None:
-            self.job = Job()
-        return self.job
+        if self._job_context.job is None:
+            self._job_context.job = Job()
+        return self._job_context.job
 
     @property
     def step_record(self):
-        if self.step is None:
-            self.step = Step()
-        return self.step
+        if self._job_context.step is None:
+            self._job_context.step = Step()
+        return self._job_context.step
 
     @step_record.setter
     def step_record(self, value):
-        self.step = value
+        self._job_context.step = value
 
-    @job("Run Remote Builder")
-    def run_remote_builder(self):
-        self._clone_repositories()
-        self._prepare_build_context()
 
-        # try:
-        #     return self._build_and_push()
-        # finally:
-        #     self._cleanup_context()
+@dataclass
+class ContextManager(Base, JobMixin):
+    _job_context: JobContext
+    clone_instructions: list[AppInfo]
+    group: str
+    build_name: str
+    dockerfile: str
+    platform: Literal["arm64", "x86_64"]
+    build_config_path: str = field(
+        default_factory=lambda: os.path.join(os.getcwd(), "repo", "agent", "build_configs")
+    )
+    deploy_candidate_params: dict = field(default_factory=dict)
 
-    def _build_and_push(self):
-        self._build_image()
-        if not self.build_failed and not self.no_push:
-            self._push_docker_image()
-        return self.data
+    def __post_init__(self):
+        super().__init__()
+        self.output: dict[str, list[str]] = {"pre-build": []}
 
-    def _clone_repository(self, app_info: AppInfo, clone_dir: str):
-        """Clone the repository for the given app"""
-        repo_url = app_info["url"]
-        branch = app_info["branch"]
-        source = app_info["source"]
-        commit_hash = app_info["hash"]
-        clone_path = os.path.join(clone_dir, source, commit_hash[:10])
-        output = f"git clone {app_info['app']}"
+    def _run_git_command(self, command: str, cwd: str) -> str:
+        """Run a git command in a directory"""
+        process = Popen(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            universal_newlines=True,
+        )
+        output, _ = process.communicate()
+        return_code = process.returncode
 
-        if os.path.exists(clone_path):
-            return output + " CACHED\n"
+        self.build_failed = return_code != 0
 
-        output += "\n"
-        os.makedirs(clone_path, exist_ok=True)
-
-        try:
-            output += self._run_git_command("git init", clone_path) + "\n"
-
-            origin_exists = "origin" in self._run_git_command("git remote", clone_path).split()
-            if origin_exists:
-                output += self._run_git_command(f"git remote set-url origin {repo_url}", clone_path) + "\n"
-            else:
-                output += self._run_git_command(f"git remote add origin {repo_url}", clone_path) + "\n"
-
-            output += self._run_git_command("git config credential.helper ''", clone_path) + "\n"
-            output += self._run_git_command(f"git fetch --depth 1 origin {commit_hash}", clone_path) + "\n"
-
-            output += self._run_git_command(f"git checkout -B {branch}", clone_path) + "\n"
-            output += self._run_git_command(f"git checkout {commit_hash}", clone_path) + "\n"
-        except CloneError as e:
-            raise CloneError(
-                {"traceback": f"Failed to clone repository for {app_info['app']} - {e!s}"}
-            ) from None
+        if return_code != 0:
+            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
 
         return output
+
+    def _copy_build_config_files(self):
+        """Copy generic build config files to the build context"""
+        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
+            shutil.copy(os.path.join(self.build_config_path, filename), build_directory)
+
+        shutil.copytree(
+            os.path.join(self.build_config_path, "redis"),
+            os.path.join(build_directory, "redis"),
+        )
 
     def _generate_build_config_files(self):
         """Generate redis and supervisor config for build"""
@@ -185,22 +134,44 @@ class ImageBuilder(Base):
             with open(rendered_config_path, "w") as output_file:
                 output_file.write(rendered_config)
 
-    def _copy_build_config_files(self):
-        """Copy generic build config files to the build context"""
-        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+    def _clone_repository(self, app_info: AppInfo, clone_dir: str):
+        """Clone the repository for the given app"""
+        source = app_info["source"]
+        commit_hash = app_info["hash"]
+        clone_path = os.path.join(clone_dir, source, commit_hash[:10])
 
-        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
-            shutil.copy(os.path.join(self.build_config_path, filename), build_directory)
+        if os.path.exists(clone_path):
+            return f"git clone {app_info['app']} CACHED\n"
 
-        shutil.copytree(
-            os.path.join(self.build_config_path, "redis"),
-            os.path.join(build_directory, "redis"),
-        )
+        os.makedirs(clone_path, exist_ok=True)
+
+        commands = [
+            "git init",
+            f"git remote add origin {app_info['url']}",
+            "git config credential.helper ''",
+            f"git fetch --depth 1 origin {commit_hash}",
+            f"git checkout -B {app_info['branch']}",
+            f"git checkout {commit_hash}",
+        ]
+
+        output = f"git clone {app_info['app']}\n"
+        try:
+            for command in commands:
+                result = self.execute(command, directory=clone_path)
+                output += result.get("output", "") + "\n"
+        except AgentException as e:
+            cleanup_parital_clones(clone_path)
+            raise CloneError(
+                {
+                    "traceback": f"Failed to clone repository for {app_info['app']} - {e.data.get('output', '')}"
+                }
+            ) from None
+
+        return output
 
     @step("Clone Repositories")
-    def _clone_repositories(self):
+    def clone_repositories(self):
         """Clone the apps passed from build instructions"""
-        import time
         clone_directory = get_clone_directory()
         self.output["pre-build"] = []
 
@@ -208,14 +179,12 @@ class ImageBuilder(Base):
             self.output["pre-build"].append(
                 self._clone_repository(app_info, clone_directory),
             )
-            self._publish_throttled_output(True)
-            time.sleep(300) # Remove post testing
-
+            self.publish_data(self.output)
 
         return self.output["pre-build"]
 
     @step("Prepare Build Context")
-    def _prepare_build_context(self):
+    def prepare_build_context(self):
         """Clone the apps passed from build instructions"""
         clone_directory = get_clone_directory()
         build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
@@ -242,6 +211,77 @@ class ImageBuilder(Base):
             apps_file.write(
                 "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
             )
+
+
+class ImageBuilder(Base, JobMixin):
+    output: Output
+
+    def __init__(
+        self,
+        image_repository: str,
+        image_tag: str,
+        no_cache: bool,
+        no_push: bool,
+        registry: dict,
+        platform: str,
+        build_token: str,
+        dockerfile: str,
+        clone_instructions: list[AppInfo],
+        group: str,
+        build_name: str,
+        deploy_candidate_params: dict,
+    ) -> None:
+        super().__init__()
+
+        # Image push params
+        self.image_repository = image_repository
+        self.image_tag = image_tag
+        self.registry = registry
+        self.platform = platform
+
+        self._job_context = JobContext()
+
+        self.context_manager = ContextManager(
+            clone_instructions=clone_instructions,
+            build_name=build_name,
+            group=group,
+            dockerfile=dockerfile,
+            deploy_candidate_params=deploy_candidate_params,
+            platform=platform,
+            _job_context=self._job_context,
+        )
+
+        self.no_cache = no_cache
+        self.no_push = no_push
+        self.last_published = datetime.now()
+        self.build_failed = False
+        self.build_token = build_token
+        self.secret_path = None
+
+        cwd = os.getcwd()
+        self.config_file = os.path.join(cwd, "config.json")
+        self.build_config_path = os.path.join(os.getcwd(), "repo", "agent", "build_configs")
+
+        # Lines from build and push are sent to press for processing
+        # and updating the respective Deploy Candidate
+        self.output = {"build": [], "push": []}
+        self.push_output_lines = []
+
+    @job("Run Remote Builder")
+    def run_remote_builder(self):
+        self.context_manager.clone_repositories()
+        self.context_manager.prepare_build_context()
+
+        # try:
+        #     return self._build_and_push()
+        # finally:
+        #     self._cleanup_context()
+
+    def _build_and_push(self):
+        self._build_image()
+        if not self.build_failed and not self.no_push:
+            self._push_docker_image()
+        return self.data
 
     @step("Build Image")
     def _build_image(self):
@@ -368,27 +408,6 @@ class ImageBuilder(Base):
     def _get_image_name(self):
         return f"{self.image_repository}:{self.image_tag}"
 
-    def _run_git_command(self, command: str, cwd: str) -> str:
-        """Run a git command in a directory"""
-        process = Popen(
-            shlex.split(command),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
-            universal_newlines=True,
-        )
-        output, _ = process.communicate()
-        return_code = process.returncode
-
-        self.build_failed = return_code != 0
-        if self.build_failed:
-            self.data.update({"build_failed": True})
-
-        if return_code != 0:
-            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
-
-        return output
-
     def _run(
         self,
         command: str,
@@ -447,3 +466,8 @@ def get_builds_directory():
     if not os.path.exists(path):
         os.makedirs(path)
     return path
+
+
+def cleanup_parital_clones(clone_path: str):
+    """Cleanup partially clone repositories which might behave as cache and cause build failures"""
+    shutil.rmtree(clone_path, ignore_errors=True)
