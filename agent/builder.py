@@ -6,21 +6,27 @@ import shutil
 import subprocess
 import tempfile
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from subprocess import Popen
 from typing import TYPE_CHECKING, TypedDict
 
 import docker
 import jinja2
+import semantic_version as sv
 
 from agent.base import Base
+from agent.build_utils.validations import get_package_manager_files
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.utils import is_registry_healthy
 
 if TYPE_CHECKING:
     from typing import Literal
+
+    from agent.build_utils.validations import PackageManagers
 
     OutputKey = Literal["pre-build", "build", "push"]
     Output = dict[OutputKey, list[str]]
@@ -36,6 +42,30 @@ class AppInfo(TypedDict):
 
 
 class CloneError(AgentException):
+    pass
+
+
+class ContextValidationError(AgentException):
+    def __init__(
+        self,
+        message: str,
+        app,
+        actual: str | None = None,
+        expected: str | None = None,
+        package: str | None = None,
+    ):
+        super().__init__(
+            {
+                "message": message,
+                "app": app,
+                "actual": actual,
+                "expected": expected,
+                "package": package,
+            }
+        )
+
+
+class BuildWarning(Warning):
     pass
 
 
@@ -67,6 +97,8 @@ class JobMixin:
 
 @dataclass
 class ContextManager(Base, JobMixin):
+    # We need to keep the job context same everywhere.
+    # Therefore pass this from the ImageBuilder
     _job_context: JobContext
     clone_instructions: list[AppInfo]
     group: str
@@ -81,44 +113,23 @@ class ContextManager(Base, JobMixin):
     def __post_init__(self):
         super().__init__()
         self.output: dict[str, list[str]] = {"pre-build": []}
-
-    def _run_git_command(self, command: str, cwd: str) -> str:
-        """Run a git command in a directory"""
-        process = Popen(
-            shlex.split(command),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=cwd,
-            universal_newlines=True,
-        )
-        output, _ = process.communicate()
-        return_code = process.returncode
-
-        self.build_failed = return_code != 0
-
-        if return_code != 0:
-            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
-
-        return output
+        self.build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
 
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
-        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
-
         for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
-            shutil.copy(os.path.join(self.build_config_path, filename), build_directory)
+            shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
 
         shutil.copytree(
             os.path.join(self.build_config_path, "redis"),
-            os.path.join(build_directory, "redis"),
+            os.path.join(self.build_directory, "redis"),
         )
 
     def _generate_build_config_files(self):
         """Generate redis and supervisor config for build"""
-        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
         configs_to_generate = ["redis-cache.conf", "redis-queue.conf", "supervisor.conf"]
         template_folder = os.path.join(self.build_config_path, "config")
-        dest_folder = os.path.join(build_directory, "config")
+        dest_folder = os.path.join(self.build_directory, "config")
 
         if not os.path.exists(dest_folder):
             os.makedirs(dest_folder, exist_ok=True)
@@ -163,7 +174,9 @@ class ContextManager(Base, JobMixin):
             cleanup_parital_clones(clone_path)
             raise CloneError(
                 {
-                    "traceback": f"Failed to clone repository for {app_info['app']} - {e.data.get('output', '')}"
+                    "traceback": (
+                        f"Failed to clone repository for {app_info['app']} - {e.data.get('output', '')}"
+                    )
                 }
             ) from None
 
@@ -185,16 +198,15 @@ class ContextManager(Base, JobMixin):
 
     @step("Prepare Build Context")
     def prepare_build_context(self):
-        """Clone the apps passed from build instructions"""
+        """Clone the apps passed from build instructions and return the build context directory path"""
         clone_directory = get_clone_directory()
-        build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
 
-        if not os.path.exists(build_directory):
-            os.makedirs(build_directory, exist_ok=True)
+        if not os.path.exists(self.build_directory):
+            os.makedirs(self.build_directory, exist_ok=True)
 
         for app_info in self.clone_instructions:
             source_path = os.path.join(clone_directory, app_info["source"], app_info["hash"][:10])
-            dest_path = os.path.join(build_directory, "apps", app_info["app"])
+            dest_path = os.path.join(self.build_directory, "apps", app_info["app"])
 
             if os.path.exists(dest_path):
                 shutil.rmtree(dest_path)
@@ -204,13 +216,121 @@ class ContextManager(Base, JobMixin):
         self._copy_build_config_files()
         self._generate_build_config_files()
 
-        with open(os.path.join(build_directory, "Dockerfile"), "w") as dockerfile:
+        with open(os.path.join(self.build_directory, "Dockerfile"), "w") as dockerfile:
             dockerfile.write(self.dockerfile)
 
-        with open(os.path.join(build_directory, "apps.txt"), "w") as apps_file:
+        with open(os.path.join(self.build_directory, "apps.txt"), "w") as apps_file:
             apps_file.write(
                 "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
             )
+
+
+@dataclass
+class ValidationManager(Base, JobMixin):
+    _job_context: JobContext
+    dependencies: dict[str, str]
+
+    def get_dependency_version(self, dependency_name: str) -> str | None:
+        for dep, version in self.dependencies.items():
+            if dep.replace("_VERSION", "").casefold() == dependency_name.casefold():
+                return version
+
+        raise Exception(f"Dependency version not found for {dependency_name}")
+
+    @step("Run Validations")
+    def validate(self, apps: list[str], build_directory: str):
+        repo_path_map = {}
+        for app in apps:
+            repo_path_map[app] = os.path.join(build_directory, "apps", app)
+
+        self.pmf = get_package_manager_files(repo_path_map)
+        self._validate()
+
+    def _validate(self):
+        self._validate_python_dependency_files()
+        self._validate_python_requirement()
+        self._validate_node_requirement()
+
+    @staticmethod
+    def check_version(actual: str, expected: str) -> bool:
+        # Python version mentions on press dont mention the patch version.
+        if actual.count(".") == 1:
+            actual += ".0"
+
+        sv_actual = sv.Version(actual)
+        sv_expected = sv.SimpleSpec(expected)
+
+        return sv_actual in sv_expected
+
+    def _validate_python_requirement(self):
+        actual = self.get_dependency_version("python")
+        for app, pm in self.pmf.items():
+            self._validate_python_version(app, actual, pm)
+
+    def _validate_python_version(self, app: str, actual: str, pm: PackageManagers):
+        expected = (pm["pyproject"] or {}).get("project", {}).get("requires-python")
+        if expected is None or self.check_version(actual, expected):
+            return
+
+        # Do not change args without updating deploy_notifications.py
+        raise ContextValidationError(
+            "Incompatible Python version found",
+            app,
+            actual,
+            expected,
+        )
+
+    def _validate_node_requirement(self):
+        actual = self.get_dependency_version("node")
+        for app, pm in self.pmf.items():
+            self._validate_node_version(app, actual, pm)
+
+    def _validate_node_version(self, app: str, actual: str, pm: PackageManagers):
+        for pckj in pm["packagejsons"]:
+            expected = pckj.get("engines", {}).get("node")
+            if expected is None or self.check_version(actual, expected):
+                continue
+
+            package_name = pckj.get("name")
+
+            # Do not change args without updating deploy_notifications.py
+            raise ContextValidationError(
+                "Incompatible Node version found",
+                app,
+                actual,
+                expected,
+                package_name,
+            )
+
+    def _validate_python_dependency_files(self) -> None:
+        """Check pyproject.toml and requirements.txt for each app."""
+        for app, pm in self.pmf.items():
+            repo_path = Path(pm["repo_path"])
+            has_pyproject = (repo_path / "pyproject.toml").exists()
+            has_requirements = (repo_path / "requirements.txt").exists()
+
+            if not has_pyproject and not has_requirements:
+                raise ContextValidationError(
+                    "No python dependency file found",
+                    app,
+                )
+
+            if has_pyproject and has_requirements:
+                warnings.warn(
+                    f"Both pyproject.toml and requirements.txt found for app '{app}'. "
+                    "pyproject.toml file will have precedence.",
+                    BuildWarning,
+                    stacklevel=2,
+                    source={"app": app},
+                )
+
+            elif has_requirements and not has_pyproject:
+                warnings.warn(
+                    f"App '{app}' uses only requirements.txt. Consider migrating to pyproject.toml.",
+                    BuildWarning,
+                    stacklevel=2,
+                    source={"app": app},
+                )
 
 
 class ImageBuilder(Base, JobMixin):
@@ -250,6 +370,11 @@ class ImageBuilder(Base, JobMixin):
             platform=platform,
             _job_context=self._job_context,
         )
+        self.build_directory = self.context_manager.build_directory
+        self.validation_manager = ValidationManager(
+            _job_context=self._job_context,
+            dependencies=deploy_candidate_params.get("dependencies"),
+        )
 
         self.no_cache = no_cache
         self.no_push = no_push
@@ -271,6 +396,10 @@ class ImageBuilder(Base, JobMixin):
     def run_remote_builder(self):
         self.context_manager.clone_repositories()
         self.context_manager.prepare_build_context()
+        self.validation_manager.validate(
+            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+            build_directory=self.context_manager.build_directory,
+        )
 
         # try:
         #     return self._build_and_push()
