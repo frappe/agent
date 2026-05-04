@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import os
 import re
 import shutil
 import struct
 import subprocess
+import time
+import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from math import ceil
@@ -13,6 +17,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 if TYPE_CHECKING:
     from typing import Literal, TypedDict
@@ -34,6 +39,65 @@ if TYPE_CHECKING:
         output: str | None
         returncode: int | None
         traceback: str | None
+
+
+_PRIVATE_KEY = None
+_LAST_MTIME = 0
+
+
+def get_private_key():
+    KEY_PATH = "/home/frappe/agent/private.key"
+
+    global _PRIVATE_KEY, _LAST_MTIME
+
+    try:
+        mtime = os.path.getmtime(KEY_PATH)
+    except FileNotFoundError as err:
+        raise RuntimeError("Agent private key not found") from err
+
+    # reload if not loaded OR file changed
+    if _PRIVATE_KEY is None or mtime > _LAST_MTIME:
+        with open(KEY_PATH, "rb") as f:
+            key_data = f.read()
+
+        _PRIVATE_KEY = load_pem_private_key(
+            key_data,
+            password=None,
+        )
+
+        _LAST_MTIME = mtime
+
+    return _PRIVATE_KEY
+
+
+def generate_agent_token(payload, method: str, path: str):
+    private_key = get_private_key()
+
+    timestamp = int(time.time())
+    nonce = str(uuid.uuid4())
+
+    message = json.dumps(
+        {
+            "method": method,
+            "path": path,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "payload": payload,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+
+    # sign
+    signature = private_key.sign(message)
+
+    token = {
+        "timestamp": timestamp,
+        "nonce": nonce,
+        "signature": base64.b64encode(signature).decode(),
+    }
+
+    return base64.b64encode(json.dumps(token).encode()).decode()
 
 
 def format_size(bytes_val):
