@@ -5,6 +5,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 import warnings
@@ -517,28 +518,37 @@ class ImageBuilder(Base, JobMixin):
         self.output = {"build": [], "push": []}
         self.push_output_lines = []
 
+    def tar_build_context(self) -> str:
+        """Tar the build context to send to the build process"""
+        tmp_file_path = tempfile.mkstemp(suffix=".tar.gz")[1]
+        with tarfile.open(tmp_file_path, "w:gz", compresslevel=5) as tar:
+            tar.add(self.build_directory, arcname=".")
+
+        return tmp_file_path
+
     @job("Run Remote Builder")
     def run_remote_builder(self):
         self.context_manager.clone_repositories()
         self.context_manager.prepare_build_context()
         self.validation_manager.validate(
             apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
-            build_directory=self.context_manager.build_directory,
+            build_directory=self.build_directory,
         )
+        context_tar_filepath = self.tar_build_context()
 
-        # try:
-        #     return self._build_and_push()
-        # finally:
-        #     self._cleanup_context()
+        try:
+            return self._build_and_push(context_tar_filepath)
+        finally:
+            self._cleanup_context(context_tar_filepath)
 
-    def _build_and_push(self):
-        self._build_image()
+    def _build_and_push(self, context_tar_filepath: str):
+        self._build_image(context_tar_filepath=context_tar_filepath)
         if not self.build_failed and not self.no_push:
             self._push_docker_image()
         return self.data
 
     @step("Build Image")
-    def _build_image(self):
+    def _build_image(self, context_tar_filepath: str):
         # Note: build command and environment are different from when
         # build runs on the press server.
         command = self._get_build_command()
@@ -546,7 +556,7 @@ class ImageBuilder(Base, JobMixin):
         result = self._run(
             command=command,
             environment=environment,
-            input_filepath=self.filepath,
+            input_filepath=context_tar_filepath,
         )
         self.output["build"] = []
         self._publish_docker_build_output(result)
@@ -693,11 +703,13 @@ class ImageBuilder(Base, JobMixin):
             os.remove(self.secret_path)
 
     @step("Cleanup Context")
-    def _cleanup_context(self):
-        if not os.path.exists(self.filepath):
-            return {"cleanup": False}
+    def _cleanup_context(self, context_tar_filepath: str):
+        if os.path.exists(self.build_directory):
+            shutil.rmtree(self.build_directory, ignore_errors=True)
 
-        os.remove(self.filepath)
+        if os.path.exists(context_tar_filepath):
+            os.remove(context_tar_filepath)
+
         return {"cleanup": True}
 
 
