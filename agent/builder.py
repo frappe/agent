@@ -188,9 +188,6 @@ class ContextManager(Base, JobMixin):
         output = f"git clone {app_info['app']}\n"
         try:
             for command in commands:
-                if app_info["app"] == "telephony" and command == f"git fetch --depth 1 origin {commit_hash}":
-                    command = f"git fetches origin {commit_hash}"
-
                 result = self._run_git_command(command, cwd=clone_path)
                 output += result + "\n"
         except CloneError as e:
@@ -524,10 +521,10 @@ class ImageBuilder(Base, JobMixin):
     def run_remote_builder(self):
         self.context_manager.clone_repositories()
         self.context_manager.prepare_build_context()
-        # self.validation_manager.validate(
-        #     apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
-        #     build_directory=self.context_manager.build_directory,
-        # )
+        self.validation_manager.validate(
+            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+            build_directory=self.context_manager.build_directory,
+        )
 
         # try:
         #     return self._build_and_push()
