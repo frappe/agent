@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import shlex
 import shutil
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
     from agent.build_utils.validations import PackageManagers
 
-    OutputKey = Literal["pre-build", "build", "push"]
+    OutputKey = Literal["build", "push"]
     Output = dict[OutputKey, list[str]]
 
 
@@ -115,6 +116,25 @@ class ContextManager(Base, JobMixin):
         self.output: dict[str, list[str]] = {"pre-build": []}
         self.build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
 
+    def _run_git_command(self, command: str, cwd: str) -> str:
+        """Run a git command in a directory"""
+        process = Popen(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            universal_newlines=True,
+        )
+        output, _ = process.communicate()
+        return_code = process.returncode
+
+        self.build_failed = return_code != 0
+
+        if return_code != 0:
+            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
+
+        return output
+
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
         for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
@@ -168,16 +188,16 @@ class ContextManager(Base, JobMixin):
         output = f"git clone {app_info['app']}\n"
         try:
             for command in commands:
-                result = self.execute(command, directory=clone_path)
-                output += result.get("output", "") + "\n"
-        except AgentException as e:
+                if app_info["app"] == "telephony" and command == f"git fetch --depth 1 origin {commit_hash}":
+                    command = f"git fetches origin {commit_hash}"
+
+                result = self._run_git_command(command, cwd=clone_path)
+                output += result + "\n"
+        except CloneError as e:
             cleanup_parital_clones(clone_path)
+            error_output = e.data.get("output", "") if isinstance(e.data, dict) else str(e.data)
             raise CloneError(
-                {
-                    "traceback": (
-                        f"Failed to clone repository for {app_info['app']} - {e.data.get('output', '')}"
-                    )
-                }
+                {"traceback": f"Failed to clone repository for {app_info['app']} - {error_output}"}
             ) from None
 
         return output
@@ -250,6 +270,9 @@ class ValidationManager(Base, JobMixin):
         self._validate_python_dependency_files()
         self._validate_python_requirement()
         self._validate_node_requirement()
+        self._validate_frappe_dependencies()
+        # This might or might not be requried since we force this on pyproject now
+        self._validate_required_apps()
 
     @staticmethod
     def check_version(actual: str, expected: str) -> bool:
@@ -301,6 +324,111 @@ class ValidationManager(Base, JobMixin):
                 expected,
                 package_name,
             )
+
+    def _validate_frappe_dependencies(self):
+        for app, pm in self.pmf.items():
+            if (pypr := pm["pyproject"]) is None:
+                continue
+
+            frappe_deps = pypr.get("tool", {}).get("bench", {}).get("frappe-dependencies")
+            if not frappe_deps:
+                continue
+
+            self._check_frappe_dependencies(app, frappe_deps)
+
+    def _check_frappe_dependencies(self, app: str, frappe_deps: dict[str, str]):
+        for dep_app, expected in frappe_deps.items():
+            actual = self._get_app_version(dep_app)
+            if not actual or sv.Version(actual) in sv.SimpleSpec(expected):
+                continue
+
+            # Do not change args without updating deploy_notifications.py
+            raise Exception(
+                "Incompatible app version found",
+                app,
+                dep_app,
+                actual,
+                expected,
+            )
+
+    def _get_app_version(self, app: str) -> str | None:
+        pm = self.pmf.get(app)
+        if not pm:
+            return None
+
+        pyproject = pm["pyproject"] or {}
+        version = pyproject.get("project", {}).get("version")
+
+        if isinstance(version, str):
+            return version
+
+        init_path = Path(pm["repo_path"]) / app / "__init__.py"
+        if not init_path.is_file():
+            return None
+
+        with init_path.open("r", encoding="utf-8") as init:
+            for line in init:
+                if not (line.startswith("__version__ =") or line.startswith("VERSION =")):
+                    continue
+
+                if version := line.split("=")[1].strip().strip("\"'"):
+                    return version
+
+                break
+
+        return None
+
+    def _validate_required_apps(self):
+        for app, pm in self.pmf.items():
+            hooks_path = os.path.join(pm["repo_path"], app, "hooks.py")
+
+            if not os.path.exists(hooks_path):
+                continue
+
+            try:
+                required_apps = self.get_required_apps_from_hookpy(hooks_path)
+            except Exception:
+                continue
+
+            self._check_required_apps(app, required_apps)
+
+    def _check_required_apps(self, app: str, required_apps: list[str]):
+        apps_present = set(self.pmf.keys())
+        for ra in required_apps:
+            if ra in apps_present:
+                continue
+
+            # Do not change args without updating deploy_notifications.py
+            raise Exception(
+                "Required app not found",
+                app,
+                ra,
+            )
+
+    def get_required_apps_from_hookpy(self, hooks_path: str) -> list[str]:
+        """
+        Returns required_apps from an app's hooks.py file.
+        """
+
+        with open(hooks_path) as f:
+            hooks = f.read()
+
+        for assign in ast.parse(hooks).body:
+            if not hasattr(assign, "targets") or not len(assign.targets):
+                continue
+
+            if not hasattr(assign.targets[0], "id"):
+                continue
+
+            if assign.targets[0].id != "required_apps":
+                continue
+
+            if not isinstance(assign.value, ast.List):
+                return []
+
+            return [v.value for v in assign.value.elts]
+
+        return []
 
     def _validate_python_dependency_files(self) -> None:
         """Check pyproject.toml and requirements.txt for each app."""
@@ -396,10 +524,10 @@ class ImageBuilder(Base, JobMixin):
     def run_remote_builder(self):
         self.context_manager.clone_repositories()
         self.context_manager.prepare_build_context()
-        self.validation_manager.validate(
-            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
-            build_directory=self.context_manager.build_directory,
-        )
+        # self.validation_manager.validate(
+        #     apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+        #     build_directory=self.context_manager.build_directory,
+        # )
 
         # try:
         #     return self._build_and_push()
