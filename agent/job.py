@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 import traceback
+from threading import Lock
 from typing import TYPE_CHECKING
 
 import wrapt
@@ -48,6 +49,25 @@ agent_database = SqliteDatabase(
     },
 )
 
+job_updates = {}  # Dictionary to hold the latest job updates
+job_updates_lock = Lock()
+
+
+def update_job(model: Model):
+    with job_updates_lock:
+        if isinstance(model, JobModel):
+            job_updates[model.id] = model
+
+        elif isinstance(model, StepModel):
+            job_updates[model.job.id] = model.job
+
+
+def get_updated_jobs():
+    with job_updates_lock:
+        jobs = list(job_updates.values())
+        job_updates.clear()
+    return jobs
+
 
 def connection():
     from agent.server import Server
@@ -75,10 +95,14 @@ class Action:
         self.model.data = json.dumps(data, default=str)
         self.end()
 
+        update_job(self.model)
+
     def failure(self, data):
         self.model.data = json.dumps(data, default=str)
         self.model.status = "Failure"
         self.end()
+
+        update_job(self.model)
 
     @save
     def end(self):
@@ -98,6 +122,8 @@ class Step(Action):
         self.model.start = datetime.datetime.now()
         self.model.status = "Running"
 
+        update_job(self.model)
+
 
 class Job(Action):
     if TYPE_CHECKING:
@@ -114,6 +140,8 @@ class Job(Action):
     def start(self):
         self.model.start = datetime.datetime.now()
         self.model.status = "Running"
+
+        update_job(self.model)
 
     @save
     def enqueue(self, name, function, args, kwargs, agent_job_id=None):
@@ -132,6 +160,8 @@ class Job(Action):
             indent=4,
         )
         self.model.agent_job_id = agent_job_id
+
+        update_job(self.model)
 
     @save
     def cancel(self):
