@@ -20,7 +20,7 @@ import jinja2
 import semantic_version as sv
 
 from agent.base import Base
-from agent.build_utils.validations import get_package_manager_files
+from agent.build_utils.validations import check_python_syntax, get_package_manager_files
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.utils import is_registry_healthy
@@ -51,10 +51,11 @@ class ContextValidationError(AgentException):
     def __init__(
         self,
         message: str,
-        app,
+        app: str | None = None,
         actual: str | None = None,
         expected: str | None = None,
         package: str | None = None,
+        invalid_releases: list[dict[str, str]] | None = None,
     ):
         super().__init__(
             {
@@ -63,6 +64,7 @@ class ContextValidationError(AgentException):
                 "actual": actual,
                 "expected": expected,
                 "package": package,
+                "invalid_releases": invalid_releases,
             }
         )
 
@@ -247,6 +249,7 @@ class ContextManager(Base, JobMixin):
 class ValidationManager(Base, JobMixin):
     _job_context: JobContext
     dependencies: dict[str, str]
+    clone_instructions: list[AppInfo]
 
     def get_dependency_version(self, dependency_name: str) -> str | None:
         for dep, version in self.dependencies.items():
@@ -265,6 +268,7 @@ class ValidationManager(Base, JobMixin):
         self._validate()
 
     def _validate(self):
+        self._validate_repositories()
         self._validate_python_dependency_files()
         self._validate_python_requirement()
         self._validate_node_requirement()
@@ -282,6 +286,27 @@ class ValidationManager(Base, JobMixin):
         sv_expected = sv.SimpleSpec(expected)
 
         return sv_actual in sv_expected
+
+    def _validate_repositories(self):
+        invalid_releases = []
+        for app, pm in self.pmf.items():
+            invalidation_reason = check_python_syntax(pm["repo_path"])
+
+            if invalidation_reason:
+                app_info = next((info for info in self.clone_instructions if info["app"] == app), None)
+
+                if not app_info:
+                    continue
+
+                invalid_releases.append(
+                    {"app": app, "invalid_release": app_info["release"], "reason": invalidation_reason}
+                )
+
+        if invalid_releases:
+            # This needs to be addressed in the process_job_updates function
+            # To handle this structure of multiple invalid releases
+            # Ensuring next deploys with these releases don't run since they are invalid
+            raise ContextValidationError("Invalid release found", invalid_releases=invalid_releases)
 
     def _validate_python_requirement(self):
         actual = self.get_dependency_version("python")
@@ -500,6 +525,7 @@ class ImageBuilder(Base, JobMixin):
         self.validation_manager = ValidationManager(
             _job_context=self._job_context,
             dependencies=deploy_candidate_params.get("dependencies"),
+            clone_instructions=clone_instructions,
         )
 
         self.no_cache = no_cache
