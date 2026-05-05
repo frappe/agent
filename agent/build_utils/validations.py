@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
+import shlex
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, TypedDict
+
+import semantic_version as sv
+import tomli
 
 
 class PackageManagers(TypedDict):
@@ -112,3 +120,56 @@ def get_package_manager_files(repo_path_map: dict[str, str]) -> PackageManagerFi
         pfiles_map[app] = get_package_manager_files_from_repo(app, repo_path)
 
     return pfiles_map
+
+
+def check_python_syntax(dirpath: str) -> str:
+    """
+    Script `compileall` will compile all the Python files
+    in the given directory.
+
+    If there are errors then return code will be non-zero.
+
+    Flags:
+    - -q: quiet, only print errors (stdout)
+    - -o: optimize level, 0 is no optimization
+    """
+    _python = get_python_path(dirpath)
+    command = f"{_python} -m compileall -q -o 0 {dirpath}"
+    proc = subprocess.run(
+        shlex.split(command),
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode == 0:
+        return ""
+
+    if not proc.stdout:
+        return proc.stderr
+
+    return proc.stdout
+
+
+def get_python_path(dirpath: str) -> str:
+    """Check for python version in the pyproject.toml file if present else return bench python path"""
+    pyproject_path = os.path.join(dirpath, "pyproject.toml")
+    if os.path.isfile(pyproject_path):
+        # To handle broken toml files or missing fields
+        with open(pyproject_path, "rb") as f, contextlib.suppress(Exception):
+            pyproject_data = tomli.load(f)
+            requires_python = pyproject_data.get("project", {}).get("requires-python")
+            if requires_python:
+                version_spec = sv.SimpleSpec(requires_python)
+                if version_spec.match(sv.Version("3.14.0")):
+                    # try to resolve python3.14 path
+                    python_path = shutil.which("python3.14")
+                    if python_path:
+                        return python_path
+                    # Temporary hardcoding until python 3.14 until we move to build server
+                    return "/usr/bin/python3.14"
+
+    return _get_server_python_path()
+
+
+def _get_server_python_path() -> str:
+    """Get the agents python path"""
+    return os.path.join(os.getcwd(), "env", "bin", "python")
