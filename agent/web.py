@@ -212,7 +212,7 @@ def upload_build_context_for_image_builder(dc_name: str):
 def build_image():
     data = request.json
     image_builder = ImageBuilder(
-        filename=data.get("filename"),
+        # filename=data.get("filename"),
         image_repository=data.get("image_repository"),
         image_tag=data.get("image_tag"),
         no_cache=data.get("no_cache"),
@@ -220,6 +220,11 @@ def build_image():
         registry=data.get("registry"),
         platform=data.get("platform", "linux/amd64"),
         build_token=data.get("build_token"),
+        dockerfile=b64decode(data.get("dockerfile")).decode(),
+        clone_instructions=data.get("clone_instructions"),
+        group=data.get("group"),
+        build_name=data.get("deploy_candidate_build"),
+        deploy_candidate_params=data.get("deploy_candidate_params"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}
