@@ -85,6 +85,8 @@ def save(wrapped, instance: Action, args, kwargs):
     wrapped(*args, **kwargs)
     instance.model.save()
 
+    update_job(instance.model)
+
 
 class Action:
     if TYPE_CHECKING:
@@ -95,14 +97,10 @@ class Action:
         self.model.data = json.dumps(data, default=str)
         self.end()
 
-        update_job(self.model)
-
     def failure(self, data):
         self.model.data = json.dumps(data, default=str)
         self.model.status = "Failure"
         self.end()
-
-        update_job(self.model)
 
     @save
     def end(self):
@@ -122,8 +120,6 @@ class Step(Action):
         self.model.start = datetime.datetime.now()
         self.model.status = "Running"
 
-        update_job(self.model)
-
 
 class Job(Action):
     if TYPE_CHECKING:
@@ -140,8 +136,6 @@ class Job(Action):
     def start(self):
         self.model.start = datetime.datetime.now()
         self.model.status = "Running"
-
-        update_job(self.model)
 
     @save
     def enqueue(self, name, function, args, kwargs, agent_job_id=None):
@@ -160,8 +154,6 @@ class Job(Action):
             indent=4,
         )
         self.model.agent_job_id = agent_job_id
-
-        update_job(self.model)
 
     @save
     def cancel(self):
