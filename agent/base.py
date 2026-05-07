@@ -38,14 +38,6 @@ class Base:
         # internal
         self._config_file_lock: filelock.FileLock | None = None
 
-    def _redact(self, text: str) -> str:
-        """Redact db_password from text."""
-        if not text or not self.password:
-            return text
-        if self.password in text:
-            return text.replace(self.password, "[REDACTED]")
-        return text
-
     def __repr__(self):
         return f"{self.__class__.__name__}({self.name})"
 
@@ -78,7 +70,7 @@ class Base:
             self.data.update(
                 {
                     "status": "Failure",
-                    "traceback": self._redact("".join(traceback.format_exc())),
+                    "traceback": "".join(traceback.format_exc()),
                 }
             )
             raise AgentException(self.data) from e
@@ -91,7 +83,7 @@ class Base:
                     "returncode": returncode,
                     "duration": end - start,
                     "end": end,
-                    "output": self._redact(output),
+                    "output": output,
                 }
             )
             self.log()
