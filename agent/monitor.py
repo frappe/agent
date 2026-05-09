@@ -6,7 +6,7 @@ import tempfile
 import requests
 
 from agent.server import Server
-from agent.utils import generate_agent_token
+from agent.utils import get_agent_token
 
 
 class Monitor(Server):
@@ -63,7 +63,7 @@ class Monitor(Server):
 
         path = "/api/method/press.api.monitoring.targets"
         data = {"server": self.config.get("name"), "token": press_token}
-        token = generate_agent_token(data, "POST", path)
+        token = get_agent_token(data, "POST", path)
 
         return requests.post(
             f"{press_url}{path}",

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import requests
 
-from agent.utils import generate_agent_token
+from agent.utils import get_agent_token
 
 
 @dataclass
@@ -51,7 +51,7 @@ class IdleMonitor:
         """Let the master know of idle benches"""
         data = {"server": self.config["name"]}
         path = "/api/method/press.api.server.benches_are_idle"
-        token = generate_agent_token(data, "POST", path)
+        token = get_agent_token(data, "POST", path)
 
         try:
             requests.post(

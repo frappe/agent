@@ -1,6 +1,6 @@
 import requests
 
-from agent.utils import generate_agent_token
+from agent.utils import get_agent_token
 
 
 def callback(job, connection, result, *args, **kwargs):
@@ -11,7 +11,7 @@ def callback(job, connection, result, *args, **kwargs):
 
     path = "/api/method/press.api.callbacks.callback"
     data = {"job_id": job.id}
-    token = generate_agent_token(data, "POST", path)
+    token = get_agent_token()
 
     requests.post(
         url=f"{press_url}{path}",
