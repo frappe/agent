@@ -4,7 +4,6 @@ import datetime
 import json
 import os
 import traceback
-from threading import Lock
 from typing import TYPE_CHECKING
 
 import wrapt
@@ -49,24 +48,25 @@ agent_database = SqliteDatabase(
     },
 )
 
-job_updates = {}  # Dictionary to hold the latest job updates
-job_updates_lock = Lock()
-
 
 def update_job(model: Model):
-    with job_updates_lock:
-        if isinstance(model, JobModel):
-            job_updates[model.id] = model
+    if isinstance(model, StepModel):
+        model = model.job
 
-        elif isinstance(model, StepModel):
-            job_updates[model.job.id] = model.job
+    connection().sadd("dirty_jobs", model.id)
 
 
 def get_updated_jobs():
-    with job_updates_lock:
-        jobs = list(job_updates.values())
-        job_updates.clear()
-    return jobs
+    redis = connection()
+
+    job_ids = [int(i) for i in redis.smembers("dirty_jobs")]
+
+    if not job_ids:
+        return []
+
+    redis.delete("dirty_jobs")
+
+    return list(JobModel.select().where(JobModel.id.in_(job_ids)))
 
 
 def connection():
