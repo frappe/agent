@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 import traceback
 from base64 import b64decode
@@ -200,7 +199,6 @@ def ping_job():
 def build_image():
     data = request.json
     image_builder = ImageBuilder(
-        # filename=data.get("filename"),
         image_repository=data.get("image_repository"),
         image_tag=data.get("image_tag"),
         no_cache=data.get("no_cache"),
