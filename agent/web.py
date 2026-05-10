@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 import traceback
 from base64 import b64decode
@@ -190,7 +189,10 @@ def ping_job():
 def build_image():
     data = request.json
     image_builder = ImageBuilder(
+<<<<<<< HEAD
         filename=data.get("filename"),
+=======
+>>>>>>> a4144de (chore(builder): Remove unused imports)
         image_repository=data.get("image_repository"),
         image_tag=data.get("image_tag"),
         no_cache=data.get("no_cache"),
