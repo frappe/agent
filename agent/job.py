@@ -57,16 +57,27 @@ def update_job(model: Model):
 
 
 def get_updated_jobs():
-    redis = connection()
+    from agent.web import to_dict
 
-    job_ids = [int(i) for i in redis.smembers("dirty_jobs")]
+    redis = connection()
+    res = []
+
+    with redis.pipeline() as pipe:
+        pipe.smembers("dirty_jobs")
+        pipe.delete("dirty_jobs")
+
+        result, _ = pipe.execute()
+
+    job_ids = [int(i) for i in result]
 
     if not job_ids:
         return []
 
-    redis.delete("dirty_jobs")
+    for jid in job_ids:
+        temp = to_dict(JobModel.get(JobModel.id == jid))
+        res.append(temp)
 
-    return list(JobModel.select().where(JobModel.id.in_(job_ids)))
+    return res
 
 
 def connection():
@@ -180,7 +191,7 @@ def step(name):
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
 
-        instance.step_record.start(name, instance.job_record.model.id)
+        instance.step_record.start(name, instance.job_record.model)
         try:
             result = wrapped(*args, **kwargs)
         except AgentException as e:
