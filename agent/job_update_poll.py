@@ -1,7 +1,7 @@
 import time
 
 from agent.callbacks import update_callback
-from agent.job import get_updated_jobs
+from agent.job import get_updated_jobs, update_job
 
 
 def run():
@@ -9,8 +9,11 @@ def run():
         try:
             jobs = get_updated_jobs()
 
-            for job in jobs:
-                update_callback(job)
+            for job_dict, job in jobs:
+                success = update_callback(job_dict)
+
+                if not success:
+                    update_job(job)
 
         except Exception as e:
             print(e)

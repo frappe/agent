@@ -39,8 +39,15 @@ def update_callback(job):
 
     token = get_agent_token()
 
-    requests.post(
-        url=f"{press_url}{path}",
-        data=data,
-        headers={"X-Agent-Token": token},
-    )
+    try:
+        response = requests.post(
+            url=f"{press_url}{path}",
+            data=data,
+            headers={"X-Agent-Token": token},
+            timeout=10,
+        )
+
+        return response.ok
+
+    except requests.RequestException:
+        return False

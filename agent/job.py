@@ -65,8 +65,9 @@ def get_updated_jobs():
     with redis.pipeline() as pipe:
         pipe.smembers("dirty_jobs")
         pipe.delete("dirty_jobs")
+        pipe.delete("retry_jobs")
 
-        result, _ = pipe.execute()
+        result, _, _ = pipe.execute()
 
     job_ids = [int(i) for i in result]
 
@@ -74,8 +75,9 @@ def get_updated_jobs():
         return []
 
     for jid in job_ids:
-        temp = to_dict(JobModel.get(JobModel.id == jid))
-        res.append(temp)
+        job = JobModel.get(JobModel.id == jid)
+        temp = to_dict(job)
+        res.append((temp, job))
 
     return res
 
