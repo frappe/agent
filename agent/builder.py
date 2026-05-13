@@ -23,7 +23,456 @@ if TYPE_CHECKING:
     Output = dict[OutputKey, list[str]]
 
 
+<<<<<<< HEAD
 class ImageBuilder(Base):
+=======
+class AppInfo(TypedDict):
+    app: str
+    url: str
+    release: str
+    source: str
+    hash: str
+    branch: str
+
+
+class CloneError(AgentException):
+    pass
+
+
+class ContextValidationError(AgentException):
+    def __init__(
+        self,
+        message: str,
+        app: str | None = None,
+        actual: str | None = None,
+        expected: str | None = None,
+        package: str | None = None,
+        invalid_releases: list[dict[str, str]] | None = None,
+    ):
+        super().__init__(
+            {
+                "message": message,
+                "app": app,
+                "actual": actual,
+                "expected": expected,
+                "package": package,
+                "invalid_releases": invalid_releases,
+            }
+        )
+
+
+class BuildWarning(Warning):
+    pass
+
+
+@dataclass
+class JobContext:
+    job: Job | None = None
+    step: Step | None = None
+
+
+class JobMixin:
+    _job_context: JobContext
+
+    @property
+    def job_record(self):
+        if self._job_context.job is None:
+            self._job_context.job = Job()
+        return self._job_context.job
+
+    @property
+    def step_record(self):
+        if self._job_context.step is None:
+            self._job_context.step = Step()
+        return self._job_context.step
+
+    @step_record.setter
+    def step_record(self, value):
+        self._job_context.step = value
+
+
+@dataclass
+class ContextManager(Base, JobMixin):
+    # We need to keep the job context same everywhere.
+    # Therefore pass this from the ImageBuilder
+    _job_context: JobContext
+    clone_instructions: list[AppInfo]
+    group: str
+    build_name: str
+    dockerfile: str
+    platform: Literal["arm64", "x86_64"]
+    build_config_path: str = field(
+        default_factory=lambda: os.path.join(os.getcwd(), "repo", "agent", "build_configs")
+    )
+    deploy_candidate_params: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        super().__init__()
+        self.output: dict[str, list[str]] = {"pre-build": []}
+        self.build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
+
+    def _run_git_command(self, command: str, cwd: str) -> str:
+        """Run a git command in a directory"""
+        process = Popen(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=cwd,
+            universal_newlines=True,
+        )
+        output, _ = process.communicate()
+        return_code = process.returncode
+
+        self.build_failed = return_code != 0
+
+        if return_code != 0:
+            raise CloneError(f"Git command failed: {command}\nOutput: {output}")
+
+        return output
+
+    def _copy_build_config_files(self):
+        """Copy generic build config files to the build context"""
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
+            shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
+
+        shutil.copytree(
+            os.path.join(self.build_config_path, "redis"),
+            os.path.join(self.build_directory, "redis"),
+        )
+
+    def _generate_build_config_files(self):
+        """Generate redis and supervisor config for build"""
+        configs_to_generate = ["redis-cache.conf", "redis-queue.conf", "supervisor.conf"]
+        template_folder = os.path.join(self.build_config_path, "config")
+        dest_folder = os.path.join(self.build_directory, "config")
+
+        if not os.path.exists(dest_folder):
+            os.makedirs(dest_folder, exist_ok=True)
+
+        for config in configs_to_generate:
+            template_config_file = os.path.join(template_folder, config)
+            with open(template_config_file, "r") as file:
+                template = jinja2.Template(file.read())
+
+            rendered_config = template.render(doc=self.deploy_candidate_params, platform=self.platform)
+            rendered_config_path = os.path.join(dest_folder, config)
+
+            with open(rendered_config_path, "w") as output_file:
+                output_file.write(rendered_config)
+
+    def _clone_repository(self, app_info: AppInfo, clone_dir: str):
+        """Clone the repository for the given app"""
+        source = app_info["source"]
+        commit_hash = app_info["hash"]
+        clone_path = os.path.join(clone_dir, source, commit_hash[:10])
+
+        if os.path.exists(clone_path):
+            return f"git clone {app_info['app']} CACHED\n"
+
+        os.makedirs(clone_path, exist_ok=True)
+
+        commands = [
+            "git init",
+            f"git remote add origin {app_info['url']}",
+            "git config credential.helper ''",
+            f"git fetch --depth 1 origin {commit_hash}",
+            f"git checkout -B {app_info['branch']}",
+            f"git checkout {commit_hash}",
+        ]
+
+        output = f"git clone {app_info['app']}\n"
+        try:
+            for command in commands:
+                result = self._run_git_command(command, cwd=clone_path)
+                output += result + "\n"
+        except CloneError as e:
+            cleanup_parital_clones(clone_path)
+            error_output = e.data.get("output", "") if isinstance(e.data, dict) else str(e.data)
+            raise CloneError(
+                {"traceback": f"Failed to clone repository for {app_info['app']} - {error_output}"}
+            ) from None
+
+        return output
+
+    @step("Clone Repositories")
+    def clone_repositories(self):
+        """Clone the apps passed from build instructions"""
+        clone_directory = get_clone_directory()
+        self.output["pre-build"] = []
+
+        for app_info in self.clone_instructions:
+            self.output["pre-build"].append(
+                self._clone_repository(app_info, clone_directory),
+            )
+            self.publish_data(self.output)
+
+        return self.output["pre-build"]
+
+    def _parse_additional_packages(self) -> list[str]:
+        """Parse pyproject to get the additional packages"""
+        repo_path_map = {}
+        for app_info in self.clone_instructions:
+            repo_path_map[app_info["app"]] = os.path.join(self.build_directory, "apps", app_info["app"])
+
+        pmf = get_package_manager_files(repo_path_map)
+        packages = []
+        for app in pmf:
+            pyproject = pmf[app]["pyproject"] or {}
+            deps = pyproject.get("deploy", {}).get("dependencies", {})
+            pkgs = deps.get("apt", {}).get("packages", [])
+
+            for p in pkgs:
+                p = p.strip()
+                packages.append(p)
+
+        return packages
+
+    def _inject_additional_packages(self, packages: list[str]):
+        """This hack simply injects the additional packages discovered post cloning"""
+        if not packages:
+            return
+
+        end_marker = "RUN test -f /usr/bin/mariadb-dump || ln -s /usr/bin/mysqldump /usr/bin/mariadb-dump"
+        dockerfile_path = os.path.join(self.build_directory, "Dockerfile")
+
+        lines = []
+        for package in packages:
+            lines.append(
+                f"RUN apt-get update \\\n"
+                f"  && apt-get install --yes --no-install-suggests --no-install-recommends {package} \\\n"
+                "  && rm -rf /var/lib/apt/lists/* \\\n"
+                f"  `#stage-pre-{package}`"
+            )
+
+        injection = "\n\n".join(lines)
+
+        with open(dockerfile_path, "r") as f:
+            content = f.read()
+
+        content = content.replace(end_marker, f"{injection}\n\n{end_marker}", 1)
+
+        with open(dockerfile_path, "w") as f:
+            f.write(content)
+
+    @step("Prepare Build Context")
+    def prepare_build_context(self):
+        """Clone the apps passed from build instructions and return the build context directory path"""
+        clone_directory = get_clone_directory()
+
+        if not os.path.exists(self.build_directory):
+            os.makedirs(self.build_directory, exist_ok=True)
+
+        for app_info in self.clone_instructions:
+            source_path = os.path.join(clone_directory, app_info["source"], app_info["hash"][:10])
+            dest_path = os.path.join(self.build_directory, "apps", app_info["app"])
+
+            if os.path.exists(dest_path):
+                shutil.rmtree(dest_path)
+
+            shutil.copytree(source_path, dest_path, symlinks=True)
+
+        self._copy_build_config_files()
+        self._generate_build_config_files()
+
+        with open(os.path.join(self.build_directory, "Dockerfile"), "w") as dockerfile:
+            dockerfile.write(self.dockerfile)
+
+        with open(os.path.join(self.build_directory, "apps.txt"), "w") as apps_file:
+            apps_file.write(
+                "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
+            )
+
+        additional_packages = self._parse_additional_packages()
+        self._inject_additional_packages(additional_packages)
+
+
+@dataclass
+class ValidationManager(Base, JobMixin):
+    _job_context: JobContext
+    dependencies: dict[str, str]
+    clone_instructions: list[AppInfo]
+
+    def get_dependency_version(self, dependency_name: str) -> str | None:
+        for dep, version in self.dependencies.items():
+            if dep.replace("_VERSION", "").casefold() == dependency_name.casefold():
+                return version
+
+        raise Exception(f"Dependency version not found for {dependency_name}")
+
+    @step("Run Validations")
+    def validate(self, apps: list[str], build_directory: str):
+        repo_path_map = {}
+        for app in apps:
+            repo_path_map[app] = os.path.join(build_directory, "apps", app)
+
+        self.pmf = get_package_manager_files(repo_path_map)
+        self._validate()
+
+    def _validate(self):
+        self._validate_repositories()
+        self._validate_python_dependency_files()
+        self._validate_python_requirement()
+        self._validate_node_requirement()
+        self._validate_frappe_dependencies()
+
+    @staticmethod
+    def check_version(actual: str, expected: str) -> bool:
+        # Python version mentions on press dont mention the patch version.
+        if actual.count(".") == 1:
+            actual += ".0"
+
+        sv_actual = sv.Version(actual)
+        sv_expected = sv.SimpleSpec(expected)
+
+        return sv_actual in sv_expected
+
+    def _validate_repositories(self):
+        invalid_releases = []
+        for app, pm in self.pmf.items():
+            invalidation_reason = check_python_syntax(pm["repo_path"])
+
+            if invalidation_reason:
+                app_info = next((info for info in self.clone_instructions if info["app"] == app), None)
+
+                if not app_info:
+                    continue
+
+                invalid_releases.append(
+                    {"app": app, "invalid_release": app_info["release"], "reason": invalidation_reason}
+                )
+
+        if invalid_releases:
+            # This needs to be addressed in the process_job_updates function
+            # To handle this structure of multiple invalid releases
+            # Ensuring next deploys with these releases don't run since they are invalid
+            raise ContextValidationError("Invalid release found", invalid_releases=invalid_releases)
+
+    def _validate_python_requirement(self):
+        actual = self.get_dependency_version("python")
+        for app, pm in self.pmf.items():
+            self._validate_python_version(app, actual, pm)
+
+    def _validate_python_version(self, app: str, actual: str, pm: PackageManagers):
+        expected = (pm["pyproject"] or {}).get("project", {}).get("requires-python")
+        if expected is None or self.check_version(actual, expected):
+            return
+
+        # Do not change args without updating deploy_notifications.py
+        raise ContextValidationError(
+            "Incompatible Python version found",
+            app,
+            actual,
+            expected,
+        )
+
+    def _validate_node_requirement(self):
+        actual = self.get_dependency_version("node")
+        for app, pm in self.pmf.items():
+            self._validate_node_version(app, actual, pm)
+
+    def _validate_node_version(self, app: str, actual: str, pm: PackageManagers):
+        for pckj in pm["packagejsons"]:
+            expected = pckj.get("engines", {}).get("node")
+            if expected is None or self.check_version(actual, expected):
+                continue
+
+            package_name = pckj.get("name")
+
+            # Do not change args without updating deploy_notifications.py
+            raise ContextValidationError(
+                "Incompatible Node version found",
+                app,
+                actual,
+                expected,
+                package_name,
+            )
+
+    def _validate_frappe_dependencies(self):
+        for app, pm in self.pmf.items():
+            if (pypr := pm["pyproject"]) is None:
+                continue
+
+            frappe_deps = pypr.get("tool", {}).get("bench", {}).get("frappe-dependencies")
+            if not frappe_deps:
+                continue
+
+            self._check_frappe_dependencies(app, frappe_deps)
+
+    def _check_frappe_dependencies(self, app: str, frappe_deps: dict[str, str]):
+        for dep_app, expected in frappe_deps.items():
+            actual = self._get_app_version(dep_app)
+            if not actual or sv.Version(actual) in sv.SimpleSpec(expected):
+                continue
+
+            # Do not change args without updating deploy_notifications.py
+            raise Exception(
+                "Incompatible app version found",
+                app,
+                dep_app,
+                actual,
+                expected,
+            )
+
+    def _get_app_version(self, app: str) -> str | None:
+        pm = self.pmf.get(app)
+        if not pm:
+            return None
+
+        pyproject = pm["pyproject"] or {}
+        version = pyproject.get("project", {}).get("version")
+
+        if isinstance(version, str):
+            return version
+
+        init_path = Path(pm["repo_path"]) / app / "__init__.py"
+        if not init_path.is_file():
+            return None
+
+        with init_path.open("r", encoding="utf-8") as init:
+            for line in init:
+                if not (line.startswith("__version__ =") or line.startswith("VERSION =")):
+                    continue
+
+                if version := line.split("=")[1].strip().strip("\"'"):
+                    return version
+
+                break
+
+        return None
+
+    def _validate_python_dependency_files(self) -> None:
+        """Check pyproject.toml and requirements.txt for each app."""
+        for app, pm in self.pmf.items():
+            repo_path = Path(pm["repo_path"])
+            has_pyproject = (repo_path / "pyproject.toml").exists()
+            has_requirements = (repo_path / "requirements.txt").exists()
+
+            if not has_pyproject and not has_requirements:
+                raise ContextValidationError(
+                    "No python dependency file found",
+                    app,
+                )
+
+            if has_pyproject and has_requirements:
+                warnings.warn(
+                    f"Both pyproject.toml and requirements.txt found for app '{app}'. "
+                    "pyproject.toml file will have precedence.",
+                    BuildWarning,
+                    stacklevel=2,
+                    source={"app": app},
+                )
+
+            elif has_requirements and not has_pyproject:
+                warnings.warn(
+                    f"App '{app}' uses only requirements.txt. Consider migrating to pyproject.toml.",
+                    BuildWarning,
+                    stacklevel=2,
+                    source={"app": app},
+                )
+
+
+class ImageBuilder(Base, JobMixin):
+>>>>>>> b17e98c (fix(additional-packages) Installed additional packages defined in the pyproject file)
     output: Output
 
     def __init__(
