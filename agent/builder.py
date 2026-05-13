@@ -215,6 +215,52 @@ class ContextManager(Base, JobMixin):
 
         return self.output["pre-build"]
 
+    def _parse_additional_packages(self) -> list[str]:
+        """Parse pyproject to get the additional packages"""
+        repo_path_map = {}
+        for app_info in self.clone_instructions:
+            repo_path_map[app_info["app"]] = os.path.join(self.build_directory, "apps", app_info["app"])
+
+        pmf = get_package_manager_files(repo_path_map)
+        packages = []
+        for app in pmf:
+            pyproject = pmf[app]["pyproject"] or {}
+            deps = pyproject.get("deploy", {}).get("dependencies", {})
+            pkgs = deps.get("apt", {}).get("packages", [])
+
+            for p in pkgs:
+                p = p.strip()
+                packages.append(p)
+
+        return packages
+
+    def _inject_additional_packages(self, packages: list[str]):
+        """This hack simply injects the additional packages discovered post cloning"""
+        if not packages:
+            return
+
+        end_marker = "RUN test -f /usr/bin/mariadb-dump || ln -s /usr/bin/mysqldump /usr/bin/mariadb-dump"
+        dockerfile_path = os.path.join(self.build_directory, "Dockerfile")
+
+        lines = []
+        for package in packages:
+            lines.append(
+                f"RUN apt-get update \\\n"
+                f"  && apt-get install --yes --no-install-suggests --no-install-recommends {package} \\\n"
+                "  && rm -rf /var/lib/apt/lists/* \\\n"
+                f"  `#stage-pre-{package}`"
+            )
+
+        injection = "\n\n".join(lines)
+
+        with open(dockerfile_path, "r") as f:
+            content = f.read()
+
+        content = content.replace(end_marker, f"{injection}\n\n{end_marker}", 1)
+
+        with open(dockerfile_path, "w") as f:
+            f.write(content)
+
     @step("Prepare Build Context")
     def prepare_build_context(self):
         """Clone the apps passed from build instructions and return the build context directory path"""
@@ -242,6 +288,9 @@ class ContextManager(Base, JobMixin):
             apps_file.write(
                 "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
             )
+
+        additional_packages = self._parse_additional_packages()
+        self._inject_additional_packages(additional_packages)
 
 
 @dataclass
