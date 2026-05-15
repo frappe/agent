@@ -18,6 +18,7 @@ from rq.job import Job as RQJob
 from rq.job import JobStatus
 
 from agent.base import AgentException
+from agent.bench_exporter import get_bench_metrics
 from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
@@ -54,6 +55,16 @@ if TYPE_CHECKING:
 
 
 application = Flask(__name__)
+
+SENSITIVE_CONFIG_KEYS = {
+    "access_token",
+    "redis_port",
+    "redis_password",
+    "db_password",
+    "db_user",
+    "db_host",
+    "db_port",
+}
 
 
 def validate_bench(fn):
@@ -332,6 +343,25 @@ def update_nginx_ip_access():
     return {"job": job}
 
 
+@application.route("/server/get-config", methods=["GET"])
+def get_server_config():
+    config = dict(Server().config or {})
+    return {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
+
+
+@application.route("/server/update-config", methods=["POST"])
+def update_server_config():
+    config = request.json
+    if not isinstance(config, dict):
+        return jsonify({"error": "Invalid config payload; expected a JSON object."}), 400
+    sanitized_config = {key: value for key, value in config.items() if key not in SENSITIVE_CONFIG_KEYS}
+    stripped_keys = set(config.keys()) - set(sanitized_config.keys())
+    if stripped_keys:
+        log.warning("Stripping sensitive config in updating: %s", (",").join(sorted(stripped_keys)))
+    Server().update_config(sanitized_config)
+    return {"update_config": True}
+
+
 @application.route("/nfs/add-to-acl", methods=["POST"])
 def add_to_acl():
     data = request.json
@@ -376,17 +406,14 @@ def get_metrics():
                 metrics = get_metrics(name, rq_port)
                 benches_metrics.append(metrics)
             except RedisConnectionError:
-                """
-                Ignore RedisConnectionError, don't log it
-
-                Two Reasons -
-                1. Bench is not running, so we miss the metrics
-                2. By mistake, we have pushed `rq_port` to many config while bench update, that means we
-                    don't have open port for this bench
-                """
                 pass
             except Exception as e:
                 log.error(f"Failed to get metrics for {name} on port {rq_port}: {e}")
+            try:
+                bench_metrics = get_bench_metrics(name, rq_port, bench.directory)
+                benches_metrics.append(bench_metrics)
+            except Exception as e:
+                log.error(f"Failed to get bench metrics for {name}: {e}")
 
     return Response(benches_metrics, mimetype="text/plain")
 
