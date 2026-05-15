@@ -198,10 +198,10 @@ class Site(Base):
         database,
         public,
         private,
-        config,
+        sanitized_config_content,
         skip_failing_patches,
     ):
-        files = self.bench.download_files(self.name, database, public, private, config)
+        files = self.bench.download_files(self.name, database, public, private)
         is_database_restoration_required = False
         try:
             if files["database"]:
@@ -213,14 +213,11 @@ class Site(Base):
                     files["public"],
                     files["private"],
                 )
-                
-                if not files.get("config"):
+
+                if not sanitized_config_content:
                     self.update_config()
                 else:
-                    sites_directory = self.bench.sites_directory
-                    site_config_path = files["config"].replace(sites_directory, "/home/frappe/frappe-bench/sites")
-                    with open(site_config_path) as f:
-                        self.update_config(f.read())
+                    self.update_config(sanitized_config_content)
             else:
                 self.restore_files(
                     public_file=files["public"],
