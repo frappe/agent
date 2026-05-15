@@ -447,7 +447,7 @@ class Bench(Base):
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
 
     @step("Download Backup Files")
-    def download_files(self, name, database_url, public_url, private_url):
+    def download_files(self, name, database_url, public_url, private_url, config_url):
         download_directory = os.path.join(self.sites_directory, "downloads")
         if not os.path.exists(download_directory):
             os.mkdir(download_directory)
@@ -455,11 +455,13 @@ class Bench(Base):
         database_file = download_file(database_url, prefix=directory) if database_url else ""
         private_file = download_file(private_url, prefix=directory) if private_url else ""
         public_file = download_file(public_url, prefix=directory) if public_url else ""
+        config_file = download_file(config_url, prefix=directory) if config_url else ""
         return {
             "directory": directory,
             "database": database_file,
             "private": private_file,
             "public": public_file,
+            "config": config_file,
         }
 
     @step("Delete Downloaded Backup Files")
