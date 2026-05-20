@@ -204,7 +204,7 @@ def build_image():
         no_cache=data.get("no_cache"),
         no_push=data.get("no_push"),
         registry=data.get("registry"),
-        platform=data.get("platform", "linux/amd64"),
+        platform=data.get("platform", "linux/x86_64"),
         build_token=data.get("build_token"),
         dockerfile=b64decode(data.get("dockerfile")).decode(),
         clone_instructions=data.get("clone_instructions"),
