@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 import traceback
 from base64 import b64decode
@@ -18,7 +17,7 @@ from rq.job import Job as RQJob
 from rq.job import JobStatus
 
 from agent.base import AgentException
-from agent.builder import ImageBuilder, get_image_build_context_directory
+from agent.builder import ImageBuilder
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
 from agent.database_physical_restore import DatabasePhysicalRestore
@@ -186,23 +185,10 @@ def ping_job():
     }
 
 
-@application.route("/builder/upload/<string:dc_name>", methods=["POST"])
-def upload_build_context_for_image_builder(dc_name: str):
-    filename = f"{dc_name}.tar.gz"
-    filepath = os.path.join(get_image_build_context_directory(), filename)
-    if os.path.exists(filepath):
-        os.unlink(filepath)
-
-    build_context_file = request.files["build_context_file"]
-    build_context_file.save(filepath)
-    return {"filename": filename}
-
-
 @application.route("/builder/build", methods=["POST"])
 def build_image():
     data = request.json
     image_builder = ImageBuilder(
-        # filename=data.get("filename"),
         image_repository=data.get("image_repository"),
         image_tag=data.get("image_tag"),
         no_cache=data.get("no_cache"),

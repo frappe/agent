@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import os
 import shlex
 import shutil
@@ -216,6 +215,52 @@ class ContextManager(Base, JobMixin):
 
         return self.output["pre-build"]
 
+    def _parse_additional_packages(self) -> list[str]:
+        """Parse pyproject to get the additional packages"""
+        repo_path_map = {}
+        for app_info in self.clone_instructions:
+            repo_path_map[app_info["app"]] = os.path.join(self.build_directory, "apps", app_info["app"])
+
+        pmf = get_package_manager_files(repo_path_map)
+        packages = []
+        for app in pmf:
+            pyproject = pmf[app]["pyproject"] or {}
+            deps = pyproject.get("deploy", {}).get("dependencies", {})
+            pkgs = deps.get("apt", {}).get("packages", [])
+
+            for p in pkgs:
+                p = p.strip()
+                packages.append(p)
+
+        return packages
+
+    def _inject_additional_packages(self, packages: list[str]):
+        """This hack simply injects the additional packages discovered post cloning"""
+        if not packages:
+            return
+
+        end_marker = "RUN test -f /usr/bin/mariadb-dump || ln -s /usr/bin/mysqldump /usr/bin/mariadb-dump"
+        dockerfile_path = os.path.join(self.build_directory, "Dockerfile")
+
+        lines = []
+        for package in packages:
+            lines.append(
+                f"RUN apt-get update \\\n"
+                f"  && apt-get install --yes --no-install-suggests --no-install-recommends {package} \\\n"
+                "  && rm -rf /var/lib/apt/lists/* \\\n"
+                f"  `#stage-pre-{package}`"
+            )
+
+        injection = "\n\n".join(lines)
+
+        with open(dockerfile_path, "r") as f:
+            content = f.read()
+
+        content = content.replace(end_marker, f"{injection}\n\n{end_marker}", 1)
+
+        with open(dockerfile_path, "w") as f:
+            f.write(content)
+
     @step("Prepare Build Context")
     def prepare_build_context(self):
         """Clone the apps passed from build instructions and return the build context directory path"""
@@ -243,6 +288,9 @@ class ContextManager(Base, JobMixin):
             apps_file.write(
                 "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
             )
+
+        additional_packages = self._parse_additional_packages()
+        self._inject_additional_packages(additional_packages)
 
 
 @dataclass
@@ -273,8 +321,6 @@ class ValidationManager(Base, JobMixin):
         self._validate_python_requirement()
         self._validate_node_requirement()
         self._validate_frappe_dependencies()
-        # This might or might not be requried since we force this on pyproject now
-        self._validate_required_apps()
 
     @staticmethod
     def check_version(actual: str, expected: str) -> bool:
@@ -400,58 +446,6 @@ class ValidationManager(Base, JobMixin):
                 break
 
         return None
-
-    def _validate_required_apps(self):
-        for app, pm in self.pmf.items():
-            hooks_path = os.path.join(pm["repo_path"], app, "hooks.py")
-
-            if not os.path.exists(hooks_path):
-                continue
-
-            try:
-                required_apps = self.get_required_apps_from_hookpy(hooks_path)
-            except Exception:
-                continue
-
-            self._check_required_apps(app, required_apps)
-
-    def _check_required_apps(self, app: str, required_apps: list[str]):
-        apps_present = set(self.pmf.keys())
-        for ra in required_apps:
-            if ra in apps_present:
-                continue
-
-            # Do not change args without updating deploy_notifications.py
-            raise Exception(
-                "Required app not found",
-                app,
-                ra,
-            )
-
-    def get_required_apps_from_hookpy(self, hooks_path: str) -> list[str]:
-        """
-        Returns required_apps from an app's hooks.py file.
-        """
-
-        with open(hooks_path) as f:
-            hooks = f.read()
-
-        for assign in ast.parse(hooks).body:
-            if not hasattr(assign, "targets") or not len(assign.targets):
-                continue
-
-            if not hasattr(assign.targets[0], "id"):
-                continue
-
-            if assign.targets[0].id != "required_apps":
-                continue
-
-            if not isinstance(assign.value, ast.List):
-                return []
-
-            return [v.value for v in assign.value.elts]
-
-        return []
 
     def _validate_python_dependency_files(self) -> None:
         """Check pyproject.toml and requirements.txt for each app."""
@@ -737,13 +731,6 @@ class ImageBuilder(Base, JobMixin):
             os.remove(context_tar_filepath)
 
         return {"cleanup": True}
-
-
-def get_image_build_context_directory():
-    path = os.path.join(os.getcwd(), "build_context")
-    if not os.path.exists(path):
-        os.makedirs(path)
-    return path
 
 
 def get_clone_directory():
