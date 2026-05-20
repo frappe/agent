@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 
 import requests
 
+from agent.utils import get_agent_token
+
 
 @dataclass
 class IdleMonitor:
@@ -47,10 +49,15 @@ class IdleMonitor:
 
     def inform_master(self) -> None:
         """Let the master know of idle benches"""
+        data = {"server": self.config["name"]}
+        path = "/api/method/press.api.server.benches_are_idle"
+        token = get_agent_token(data, "POST", path)
+
         try:
             requests.post(
-                f"{self.config['press_url']}/api/method/press.api.server.benches_are_idle",
-                data={"server": self.config["name"], "access_token": self.config["access_token"]},
+                f"{self.config['press_url']}{path}",
+                json=data,
+                headers={"X-Agent-Token": token},
                 timeout=10,
             )
             print(f"Informed master at {self.config['press_url']} that benches are idle")

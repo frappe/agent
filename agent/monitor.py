@@ -6,6 +6,7 @@ import tempfile
 import requests
 
 from agent.server import Server
+from agent.utils import get_agent_token
 
 
 class Monitor(Server):
@@ -59,9 +60,15 @@ class Monitor(Server):
     def fetch_targets(self):
         press_url = self.config.get("press_url")
         press_token = self.config.get("press_token")
+
+        path = "/api/method/press.api.monitoring.targets"
+        data = {"server": self.config.get("name"), "token": press_token}
+        token = get_agent_token(data, "POST", path)
+
         return requests.post(
-            f"{press_url}/api/method/press.api.monitoring.targets",
-            data={"token": press_token},
+            f"{press_url}{path}",
+            data=data,
+            headers={"X-Agent-Token": token},
         ).json()["message"]
 
     def generate_prometheus_sites_config(self, benches):

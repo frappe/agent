@@ -49,6 +49,38 @@ agent_database = SqliteDatabase(
 )
 
 
+def update_job(model: Model):
+    if isinstance(model, StepModel):
+        model = model.job
+
+    connection().sadd("dirty_jobs", model.id)
+
+
+def get_updated_jobs():
+    from agent.web import to_dict
+
+    redis = connection()
+    res = []
+
+    with redis.pipeline() as pipe:
+        pipe.smembers("dirty_jobs")
+        pipe.delete("dirty_jobs")
+
+        result, _ = pipe.execute()
+
+    job_ids = [int(i) for i in result]
+
+    if not job_ids:
+        return []
+
+    for jid in job_ids:
+        job = JobModel.get(JobModel.id == jid)
+        temp = to_dict(job)
+        res.append((temp, job))
+
+    return res
+
+
 def connection():
     from agent.server import Server
 
@@ -64,6 +96,8 @@ def queue(name):
 def save(wrapped, instance: Action, args, kwargs):
     wrapped(*args, **kwargs)
     instance.model.save()
+
+    update_job(instance.model)
 
 
 class Action:
@@ -158,7 +192,7 @@ def step(name):
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
 
-        instance.step_record.start(name, instance.job_record.model.id)
+        instance.step_record.start(name, instance.job_record.model)
         try:
             result = wrapped(*args, **kwargs)
         except AgentException as e:

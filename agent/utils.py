@@ -36,6 +36,30 @@ if TYPE_CHECKING:
         traceback: str | None
 
 
+_AGENT_TOKEN = None
+_LAST_MTIME = 0
+
+
+def get_agent_token():
+    KEY_PATH = "/home/frappe/agent/agent.token"
+
+    global _AGENT_TOKEN, _LAST_MTIME
+
+    try:
+        mtime = os.path.getmtime(KEY_PATH)
+    except FileNotFoundError as err:
+        raise RuntimeError("Agent token not found") from err
+
+    # reload if not loaded OR file changed
+    if _AGENT_TOKEN is None or mtime > _LAST_MTIME:
+        with open(KEY_PATH, "rb") as f:
+            _AGENT_TOKEN = f.read()
+
+        _LAST_MTIME = mtime
+
+    return _AGENT_TOKEN
+
+
 def format_size(bytes_val):
     thresholds = [(1024**3, "GB"), (1024**2, "MB"), (1024, "KB")]
 
