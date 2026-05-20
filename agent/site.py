@@ -198,6 +198,7 @@ class Site(Base):
         database,
         public,
         private,
+        sanitized_config_content,
         skip_failing_patches,
     ):
         files = self.bench.download_files(self.name, database, public, private)
@@ -212,6 +213,11 @@ class Site(Base):
                     files["public"],
                     files["private"],
                 )
+
+                if not sanitized_config_content:
+                    self.update_config()
+                else:
+                    self.update_config(sanitized_config_content)
             else:
                 self.restore_files(
                     public_file=files["public"],
