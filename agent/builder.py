@@ -2,30 +2,37 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
+import warnings
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from subprocess import Popen
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import docker
+import jinja2
+import semantic_version as sv
 
 from agent.base import Base
-from agent.exceptions import RegistryDownException
+from agent.build_utils.validations import check_python_syntax, get_package_manager_files
+from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.utils import is_registry_healthy
 
 if TYPE_CHECKING:
     from typing import Literal
 
+    from agent.build_utils.validations import PackageManagers
+
     OutputKey = Literal["build", "push"]
     Output = dict[OutputKey, list[str]]
 
 
-<<<<<<< HEAD
-class ImageBuilder(Base):
-=======
 class AppInfo(TypedDict):
     app: str
     url: str
@@ -472,12 +479,10 @@ class ValidationManager(Base, JobMixin):
 
 
 class ImageBuilder(Base, JobMixin):
->>>>>>> b17e98c (fix(additional-packages) Installed additional packages defined in the pyproject file)
     output: Output
 
     def __init__(
         self,
-        filename: str,
         image_repository: str,
         image_tag: str,
         no_cache: bool,
@@ -485,6 +490,11 @@ class ImageBuilder(Base, JobMixin):
         registry: dict,
         platform: str,
         build_token: str,
+        dockerfile: str,
+        clone_instructions: list[AppInfo],
+        group: str,
+        build_name: str,
+        deploy_candidate_params: dict,
     ) -> None:
         super().__init__()
 
@@ -494,12 +504,24 @@ class ImageBuilder(Base, JobMixin):
         self.registry = registry
         self.platform = platform
 
-        # Build context, params
-        self.filename = filename
-        self.filepath = os.path.join(
-            get_image_build_context_directory(),
-            self.filename,
+        self._job_context = JobContext()
+
+        self.context_manager = ContextManager(
+            clone_instructions=clone_instructions,
+            build_name=build_name,
+            group=group,
+            dockerfile=dockerfile,
+            deploy_candidate_params=deploy_candidate_params,
+            platform=platform,
+            _job_context=self._job_context,
         )
+        self.build_directory = self.context_manager.build_directory
+        self.validation_manager = ValidationManager(
+            _job_context=self._job_context,
+            dependencies=deploy_candidate_params.get("dependencies"),
+            clone_instructions=clone_instructions,
+        )
+
         self.no_cache = no_cache
         self.no_push = no_push
         self.last_published = datetime.now()
@@ -509,49 +531,44 @@ class ImageBuilder(Base, JobMixin):
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
+        self.build_config_path = os.path.join(os.getcwd(), "repo", "agent", "build_configs")
 
         # Lines from build and push are sent to press for processing
         # and updating the respective Deploy Candidate
-        self.output = {
-            "build": [],
-            "push": [],
-        }
+        self.output = {"build": [], "push": []}
         self.push_output_lines = []
 
-        self.job = None
-        self.step = None
+    def tar_build_context(self) -> str:
+        """Tar the build context to send to the build process"""
+        tmp_file_path = tempfile.mkstemp(suffix=".tar.gz")[1]
+        with tarfile.open(tmp_file_path, "w:gz", compresslevel=5) as tar:
+            tar.add(self.build_directory, arcname=".")
 
-    @property
-    def job_record(self):
-        if self.job is None:
-            self.job = Job()
-        return self.job
-
-    @property
-    def step_record(self):
-        if self.step is None:
-            self.step = Step()
-        return self.step
-
-    @step_record.setter
-    def step_record(self, value):
-        self.step = value
+        return tmp_file_path
 
     @job("Run Remote Builder")
     def run_remote_builder(self):
-        try:
-            return self._build_and_push()
-        finally:
-            self._cleanup_context()
+        self.context_manager.clone_repositories()
+        self.context_manager.prepare_build_context()
+        self.validation_manager.validate(
+            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+            build_directory=self.build_directory,
+        )
+        context_tar_filepath = self.tar_build_context()
 
-    def _build_and_push(self):
-        self._build_image()
+        try:
+            return self._build_and_push(context_tar_filepath)
+        finally:
+            self._cleanup_context(context_tar_filepath)
+
+    def _build_and_push(self, context_tar_filepath: str):
+        self._build_image(context_tar_filepath=context_tar_filepath)
         if not self.build_failed and not self.no_push:
             self._push_docker_image()
         return self.data
 
     @step("Build Image")
-    def _build_image(self):
+    def _build_image(self, context_tar_filepath: str):
         # Note: build command and environment are different from when
         # build runs on the press server.
         command = self._get_build_command()
@@ -559,7 +576,7 @@ class ImageBuilder(Base, JobMixin):
         result = self._run(
             command=command,
             environment=environment,
-            input_filepath=self.filepath,
+            input_filepath=context_tar_filepath,
         )
         self.output["build"] = []
         self._publish_docker_build_output(result)
@@ -706,16 +723,30 @@ class ImageBuilder(Base, JobMixin):
             os.remove(self.secret_path)
 
     @step("Cleanup Context")
-    def _cleanup_context(self):
-        if not os.path.exists(self.filepath):
-            return {"cleanup": False}
+    def _cleanup_context(self, context_tar_filepath: str):
+        if os.path.exists(self.build_directory):
+            shutil.rmtree(self.build_directory, ignore_errors=True)
 
-        os.remove(self.filepath)
+        if os.path.exists(context_tar_filepath):
+            os.remove(context_tar_filepath)
+
         return {"cleanup": True}
 
 
-def get_image_build_context_directory():
-    path = os.path.join(os.getcwd(), "build_context")
+def get_clone_directory():
+    path = os.path.join(os.getcwd(), ".clones")
     if not os.path.exists(path):
         os.makedirs(path)
     return path
+
+
+def get_builds_directory():
+    path = os.path.join(os.getcwd(), ".docker-builds")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    return path
+
+
+def cleanup_parital_clones(clone_path: str):
+    """Cleanup partially clone repositories which might behave as cache and cause build failures"""
+    shutil.rmtree(clone_path, ignore_errors=True)
