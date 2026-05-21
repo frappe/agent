@@ -112,6 +112,7 @@ class ContextManager(Base, JobMixin):
         default_factory=lambda: os.path.join(os.getcwd(), "repo", "agent", "build_configs")
     )
     deploy_candidate_params: dict = field(default_factory=dict)
+    ssh_keys: Optional[dict] = None
 
     def __post_init__(self):
         super().__init__()
@@ -166,6 +167,23 @@ class ContextManager(Base, JobMixin):
 
             with open(rendered_config_path, "w") as output_file:
                 output_file.write(rendered_config)
+
+        if self.ssh_keys:
+            self._write_ssh_key_files(dest_folder)
+
+    def _write_ssh_key_files(self, config_dir: str):
+        ssh_dir = os.path.join(config_dir, "ssh")
+        os.makedirs(ssh_dir, exist_ok=True)
+
+        host = self.ssh_keys["host"]
+        with open(os.path.join(ssh_dir, "ssh_host_rsa_key"), "w") as f:
+            f.write(host["private_key"])
+        with open(os.path.join(ssh_dir, "ssh_host_rsa_key-cert.pub"), "w") as f:
+            f.write(host["certificate"])
+        with open(os.path.join(ssh_dir, "ca.pub"), "w") as f:
+            f.write(host["ca_public_key"])
+        with open(os.path.join(ssh_dir, "principals"), "w") as f:
+            f.write(host["principals"])
 
     def _clone_repository(self, app_info: AppInfo, clone_dir: str):
         """Clone the repository for the given app"""
@@ -495,6 +513,7 @@ class ImageBuilder(Base, JobMixin):
         group: str,
         build_name: str,
         deploy_candidate_params: dict,
+        ssh_keys: dict | None = None,
     ) -> None:
         super().__init__()
 
@@ -513,6 +532,7 @@ class ImageBuilder(Base, JobMixin):
             dockerfile=dockerfile,
             deploy_candidate_params=deploy_candidate_params,
             platform=platform,
+            ssh_keys=ssh_keys,
             _job_context=self._job_context,
         )
         self.build_directory = self.context_manager.build_directory

@@ -211,6 +211,7 @@ def build_image():
         group=data.get("group"),
         build_name=data.get("deploy_candidate_build"),
         deploy_candidate_params=data.get("deploy_candidate_params"),
+        ssh_keys=data.get("ssh_keys"),
     )
     job = image_builder.run_remote_builder()
     return {"job": job}
