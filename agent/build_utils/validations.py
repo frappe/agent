@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, Union
 
 import semantic_version as sv
 import tomli
@@ -16,11 +16,12 @@ import tomli
 
 class PackageManagers(TypedDict):
     repo_path: str
-    pyproject: dict[str, Any] | None
-    packagejsons: list[dict[str, Any]]
+    pyproject: Optional[Dict[str, Any]]
+    packagejsons: List[Dict[str, Any]]
 
 
-PackageManagerFiles = dict[str, PackageManagers]
+# This is runtime resolutions therefore will have to use <3.9 python versions
+PackageManagerFiles = Dict[str, PackageManagers]
 
 
 def load_pyproject(app: str, pyproject_path: str):
@@ -46,7 +47,7 @@ def load_package_json(app: str, package_json_path: str):
             raise Exception("App has invalid package.json file", app, package_json_path) from None
 
 
-def get_error_key(error_substring: str | list[str]) -> str:
+def get_error_key(error_substring: Union[str, List[str]]) -> str:
     if isinstance(error_substring, list):
         error_substring = " ".join(error_substring)
     """
@@ -91,9 +92,9 @@ def get_package_manager_files_from_repo(app: str, repo_path: str):
 def _get_package_manager_files_from_repo(
     repo_path: str,
     recursive: bool,
-) -> tuple[Path | None, list[Path]]:
-    pyproject_toml: Path | None = None
-    package_jsons: list[Path] = []  # An app can have multiple
+) -> Tuple[Optional[Path], List[Path]]:
+    pyproject_toml: Optional[Path] = None
+    package_jsons: List[Path] = []  # An app can have multiple
 
     for p in Path(repo_path).iterdir():
         if p.name == "pyproject.toml":
@@ -113,7 +114,7 @@ def _get_package_manager_files_from_repo(
     return pyproject_toml, package_jsons
 
 
-def get_package_manager_files(repo_path_map: dict[str, str]) -> PackageManagerFiles:
+def get_package_manager_files(repo_path_map: Dict[str, str]) -> PackageManagerFiles:
     # Return pyproject.toml and package.json files
     pfiles_map = {}
     for app, repo_path in repo_path_map.items():
