@@ -175,9 +175,13 @@ class ContextManager(Base, JobMixin):
         ssh_dir = os.path.join(config_dir, "ssh")
         os.makedirs(ssh_dir, exist_ok=True)
 
+        shutil.copy(os.path.join(self.build_config_path, "config", "ssh", "sshd_config"), ssh_dir)
+
         host = self.ssh_keys["host"]
         with open(os.path.join(ssh_dir, "ssh_host_rsa_key"), "w") as f:
             f.write(host["private_key"])
+        with open(os.path.join(ssh_dir, "ssh_host_rsa_key.pub"), "w") as f:
+            f.write(host["public_key"])
         with open(os.path.join(ssh_dir, "ssh_host_rsa_key-cert.pub"), "w") as f:
             f.write(host["certificate"])
         with open(os.path.join(ssh_dir, "ca.pub"), "w") as f:
