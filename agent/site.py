@@ -481,10 +481,40 @@ class Site(Base):
         self.bench_execute(f"update-site-plan {plan}")
 
     @step("Backup Site")
-    def backup(self, with_files=False):
+    def backup(self, with_files=False, backup_path_db=None, backup_path_conf=None, backup_path_private_files=None, backup_path_files=None):
         with_files = "--with-files" if with_files else ""
-        self.bench_execute(f"backup {with_files} --verbose")
-        return self.fetch_latest_backup(with_files=with_files)
+        backup_path_db = f"--backup-path-db {backup_path_db}" if backup_path_db else ""
+        backup_path_conf = f"--backup-path-conf {backup_path_conf}" if backup_path_conf else ""
+        backup_path_files = f"--backup-path-files {backup_path_files}" if backup_path_files else ""
+        backup_path_private_files = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
+
+        self.bench_execute(f"backup {with_files} {backup_path_conf} {backup_path_files} {backup_path_private_files} {backup_path_db} --verbose")
+        return {
+            'database': {
+                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/database.sql.gz',
+                'file': '20260522_134200-test-s3-streaming-uploads_frappe_cloud-database.sql.gz',
+                'size': 10000,
+                'url':'https://test-s3-streaming-uploads.frappe.cloud/backups/database.sql.gz'
+            },
+            'site_config': {
+                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/site_config_backup.json',
+                'file': 'site_config_backup.json',
+                'size': 328,
+                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/site_config_backup.json'
+            },
+            'private': {
+                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/private-files.tar',
+                'file': 'private-files.tar',
+                'size': 10240,
+                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/private-files.tar'
+            },
+            'public': {
+                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/files.tar',
+                'file': 'files.tar',
+                'size': 10240,
+                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/files.tar'
+            }
+        }
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite, keep_files_locally_after_offsite_backup: bool):
@@ -830,12 +860,105 @@ print(">>>" + frappe.session.sid + "<<<")
         offsite=None,
         keep_files_locally_after_offsite_backup: bool = False,
     ):
-        backup_files = self.backup(with_files)
-        uploaded_files = (
-            self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
-            if (offsite and backup_files)
-            else {}
-        )
+        if offsite:
+            if keep_files_locally_after_offsite_backup:
+                backup_files = self.backup(with_files)
+                uploaded_files = (
+					self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
+					if (offsite and backup_files)
+					else {}
+				)
+            else:
+                # setup fifo
+                todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
+                public_file = todays_dt + '-files.tar'
+                db_file = todays_dt + '-database.sql.gz'
+                private_file = todays_dt + '-private-files.tar'
+                config_file = todays_dt + '-site_config_backup.json'
+
+                files_to_stream = [config_file, db_file]
+                if with_files:
+                    files_to_stream += [private_file, public_file]
+
+                relative_path_to_backup_directory = f"sites/{self.name}/private/backups"
+                backup_directory_from_root = os.path.join(self.bench.directory, relative_path_to_backup_directory)
+
+                for file in files_to_stream:
+                    self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
+                
+				# get s3 config
+                bucket, auth, prefix = (
+					offsite["bucket"],
+					offsite["auth"],
+					offsite["path"],
+				)
+
+				# make rclone rcat start listening
+                import subprocess
+                import threading
+
+                subprocs = []
+                threads = []
+                for file in files_to_stream:
+                    fifo_path = os.path.join(backup_directory_from_root, file)
+                    
+                    def start_rclone(fifo_path=fifo_path, file=file):
+                        print(f"{file}: opening reading thread... waiting for writer")
+                        fd = open(fifo_path, "rb")
+                        print(f"{file}: fifo has been opened in reader_thread: writer detected")
+
+                        provider_endpoint = {
+                            "AWS": f"s3.{auth['REGION']}.amazonaws.com"
+                        }
+
+                        subproc = subprocess.Popen(
+                            [
+                                "rclone", "rcat",
+                                "--s3-provider", auth["PROVIDER"],
+                                "--s3-access-key-id", auth["ACCESS_KEY"],
+                                "--s3-secret-access-key", auth["SECRET_KEY"],
+                                "--s3-region", auth["REGION"],
+                                "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
+                                f":s3:{bucket}/{prefix}/{file}",
+                            ],
+                            stderr=subprocess.PIPE,
+                            stdin=fd,
+                            close_fds=True,
+                        )
+                        fd.close()
+                        subprocs.append(subproc)
+                        ret = subproc.wait()
+                        err = subproc.stderr.read().decode()
+                        print(f"rclone exit: {ret}, error: {err}")
+
+                    t = threading.Thread(target=start_rclone)
+                    threads.append(t)
+                    t.start()
+
+                import time
+                time.sleep(3)
+                print("Attempting to open files for writing in main_thread...")
+                # start writing to fifos
+                backup_files = self.backup(
+                    with_files,
+                    backup_path_db=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, db_file),
+                    backup_path_conf=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, config_file),
+                    backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file),
+                    backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file),
+                )
+                print("Backup files created ✅")
+
+                # wait for all rclone threads to finish
+                for t in threads:
+                    t.join()
+                print("rclone threads finished executing")
+                print("Backup uploaded ✅")
+
+                uploaded_files = {
+                    file: f"{bucket}/{prefix}/{file}"
+                    for file in files_to_stream
+                }
+                
         return {"backups": backup_files, "offsite": uploaded_files}
 
     @job("Optimize Tables")

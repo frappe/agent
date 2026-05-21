@@ -178,8 +178,11 @@ class ContextManager(Base, JobMixin):
         shutil.copy(os.path.join(self.build_config_path, "config", "ssh", "sshd_config"), ssh_dir)
 
         host = self.ssh_keys["host"]
-        with open(os.path.join(ssh_dir, "ssh_host_rsa_key"), "w") as f:
+        host_key_path = os.path.join(ssh_dir, "ssh_host_rsa_key")
+        with open(host_key_path, "w") as f:
             f.write(host["private_key"])
+        # Corrent permissions of this file to ensure ssh doesn't complain
+        os.chmod(host_key_path, 0o600)
         with open(os.path.join(ssh_dir, "ssh_host_rsa_key.pub"), "w") as f:
             f.write(host["public_key"])
         with open(os.path.join(ssh_dir, "ssh_host_rsa_key-cert.pub"), "w") as f:
