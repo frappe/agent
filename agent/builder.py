@@ -43,6 +43,12 @@ class AppInfo(TypedDict):
     branch: str
 
 
+class InstantBuildAppInfo(TypedDict):
+    app: str
+    url: str
+    hash: str
+
+
 class CloneError(AgentException):
     pass
 
@@ -769,7 +775,7 @@ class InstantImageBuilder(Base, JobMixin):
         image_tag: str,
         no_push: bool,
         registry: dict,
-        clone_instructions: List[AppInfo],
+        instant_build_app_instructions: List[InstantBuildAppInfo],
         build_name: str,
     ) -> None:
         super().__init__()
@@ -779,7 +785,7 @@ class InstantImageBuilder(Base, JobMixin):
         self.image_tag = image_tag
         self.no_push = no_push
         self.registry = registry
-        self.clone_instructions = clone_instructions
+        self.instant_build_app_instructions = instant_build_app_instructions
         self.container_name = f"instant-build-{build_name}"
         self.output: Output = {"build": [], "push": []}
 
@@ -805,21 +811,30 @@ class InstantImageBuilder(Base, JobMixin):
 
     @step("Pull App Updates")
     def _pull_app_updates(self):
-        for app_info in self.clone_instructions:
-            self._pull_app(app_info)
+        for instant_build_app_info in self.instant_build_app_instructions:
+            self._pull_app(instant_build_app_info)
 
-    def _pull_app(self, app_info: AppInfo):
-        app = app_info["app"]
-        url = app_info["url"]
-        new_hash = app_info["hash"]
+    def _pull_app(self, instant_build_app_info: InstantBuildAppInfo):
+        app = instant_build_app_info["app"]
+        url = instant_build_app_info["url"]
+        new_hash = instant_build_app_info["hash"]
         app_path = f"/home/frappe/frappe-bench/apps/{app}"
         old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD").strip()
-        if old_hash == new_hash:
-            return
         self._docker_exec(f"git -C {app_path} fetch --depth 1 {url} {new_hash}")
-        self._docker_exec(f"git -C {app_path} reset --hard {old_hash}")
+        self._docker_exec(f"git -C {app_path} reset --hard HEAD")
         self._docker_exec(f"git -C {app_path} clean -fd")
         self._docker_exec(f"git -C {app_path} checkout {new_hash}")
+        if self._has_ui_changes(app_path, old_hash, new_hash):
+            self._bench_build_app(app)
+
+    def _has_ui_changes(self, app_path, old_hash, new_hash) -> bool:
+        out = self._docker_exec(
+            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- '*.vue' '*.js' '*.jsx'"
+        )
+        return bool(out.strip())
+
+    def _bench_build_app(self, app):
+        self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hardlink")
 
     def _docker_exec(self, command: str) -> str:
         result = self.execute(f"docker exec {self.container_name} bash -c {shlex.quote(command)}")

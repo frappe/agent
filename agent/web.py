@@ -216,7 +216,7 @@ def instant_build_image():
         image_tag=data.get("image_tag"),
         no_push=data.get("no_push", False),
         registry=data.get("registry"),
-        clone_instructions=data.get("clone_instructions"),
+        instant_build_app_instructions=data.get("instant_build_app_instructions"),
         build_name=data.get("deploy_candidate_build"),
     )
     job = builder.run_instant_build()
