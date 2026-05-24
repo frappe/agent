@@ -1965,19 +1965,33 @@ def backup_db():
     return {"job": job}
 
 
-@application.route("/agent_token", methods=["POST"])
+@application.route("/server/feature/enable", methods=["POST"])
 def enable_feature_worker():
-    data = request.json
-    agent_token = data.agent_token
-
     server = Server()
 
     server.update_config(
         {
-            "agent_token": agent_token,
+            "enable_feature_worker": True,
         }
     )
 
     return {
-        "agent_auth": True,
+        "enabled": True,
+        "message": "Feature worker enabled",
+    }
+
+
+@application.route("/server/feature/disable", methods=["POST"])
+def disable_feature_worker():
+    server = Server()
+
+    server.update_config(
+        {
+            "enable_feature_worker": False,
+        }
+    )
+
+    return {
+        "enabled": False,
+        "message": "Feature worker disabled",
     }

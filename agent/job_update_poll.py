@@ -140,6 +140,9 @@ def run():
     token_check_counter = 0
 
     while True:
+        if not server.config.get("enable_feature_worker", False):
+            continue
+
         try:
             retry_counter = handle_retry(retry_counter)
 
