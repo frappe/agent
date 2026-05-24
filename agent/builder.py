@@ -801,9 +801,7 @@ class InstantImageBuilder(Base, JobMixin):
     @step("Start Base Container")
     def _start_base_container(self):
         self.execute(f"docker pull {self.base_image}")
-        self.execute(
-            f"docker run -d --name {self.container_name} {self.base_image} tail -f /dev/null"
-        )
+        self.execute(f"docker run -d --name {self.container_name} {self.base_image} tail -f /dev/null")
 
     @step("Pull App Updates")
     def _pull_app_updates(self):
