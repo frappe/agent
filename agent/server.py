@@ -1253,7 +1253,6 @@ class Server(Base):
 
     @job("Ping Job")
     def ping_job(self):
-        time.sleep(10)
         return self.ping_step()
 
     @step("Ping Step")
