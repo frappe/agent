@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import shutil
@@ -758,6 +759,99 @@ class ImageBuilder(Base, JobMixin):
             os.remove(context_tar_filepath)
 
         return {"cleanup": True}
+
+
+class InstantImageBuilder(Base, JobMixin):
+    def __init__(
+        self,
+        base_image: str,
+        image_repository: str,
+        image_tag: str,
+        no_push: bool,
+        registry: dict,
+        clone_instructions: List[AppInfo],
+        build_name: str,
+    ) -> None:
+        super().__init__()
+        self._job_context = JobContext()
+        self.base_image = base_image
+        self.image_repository = image_repository
+        self.image_tag = image_tag
+        self.no_push = no_push
+        self.registry = registry
+        self.clone_instructions = clone_instructions
+        self.container_name = f"instant-build-{build_name}"
+        self.output: Output = {"build": [], "push": []}
+
+    def _get_image_name(self) -> str:
+        return f"{self.image_repository}:{self.image_tag}"
+
+    @job("Run Instant Build")
+    def run_instant_build(self):
+        try:
+            self._start_base_container()
+            self._pull_app_updates()
+            self._commit_instant_image()
+            if not self.no_push:
+                self._push_instant_image()
+        finally:
+            self._cleanup_container()
+        return self.data
+
+    @step("Start Base Container")
+    def _start_base_container(self):
+        self.execute(f"docker pull {self.base_image}")
+        self.execute(
+            f"docker run -d --name {self.container_name} {self.base_image} tail -f /dev/null"
+        )
+
+    @step("Pull App Updates")
+    def _pull_app_updates(self):
+        for app_info in self.clone_instructions:
+            self._pull_app(app_info)
+
+    def _pull_app(self, app_info: AppInfo):
+        app = app_info["app"]
+        url = app_info["url"]
+        new_hash = app_info["hash"]
+        app_path = f"/home/frappe/frappe-bench/apps/{app}"
+        old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD").strip()
+        if old_hash == new_hash:
+            return
+        self._docker_exec(f"git -C {app_path} fetch --depth 1 {url} {new_hash}")
+        self._docker_exec(f"git -C {app_path} reset --hard {old_hash}")
+        self._docker_exec(f"git -C {app_path} clean -fd")
+        self._docker_exec(f"git -C {app_path} checkout {new_hash}")
+
+    def _docker_exec(self, command: str) -> str:
+        result = self.execute(f"docker exec {self.container_name} bash -c {shlex.quote(command)}")
+        return result.get("output", "") if isinstance(result, dict) else ""
+
+    @step("Commit Image")
+    def _commit_instant_image(self):
+        self.execute(f"docker commit {self.container_name} {self._get_image_name()}")
+
+    @step("Push Docker Image")
+    def _push_instant_image(self):
+        environment = os.environ.copy()
+        client = docker.from_env(environment=environment, timeout=5 * 60)
+        auth_config = {
+            "username": self.registry["username"],
+            "password": self.registry["password"],
+            "serveraddress": self.registry["url"],
+        }
+        for line in client.images.push(
+            self.image_repository,
+            self.image_tag,
+            stream=True,
+            decode=True,
+            auth_config=auth_config,
+        ):
+            self.output["push"].append(line)
+
+    def _cleanup_container(self):
+        with contextlib.suppress(Exception):
+            self.execute(f"docker rm -f {self.container_name}")
 
 
 def get_clone_directory():
