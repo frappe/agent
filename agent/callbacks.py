@@ -2,8 +2,6 @@ import json
 
 import requests
 
-from agent.utils import get_agent_token
-
 
 def callback(job, connection, result, *args, **kwargs):
     from agent.server import Server
@@ -13,7 +11,7 @@ def callback(job, connection, result, *args, **kwargs):
 
     path = "/api/method/press.api.callbacks.callback"
     data = {"job_id": job.id}
-    token = get_agent_token()
+    token = server.config["agent_token"]
 
     requests.post(
         url=f"{press_url}{path}",
@@ -37,7 +35,7 @@ def update_callback(job):
         "server": server.name,
     }
 
-    token = get_agent_token()
+    token = server.config["agent_token"]
 
     try:
         response = requests.post(
@@ -47,10 +45,7 @@ def update_callback(job):
             timeout=10,
         )
 
-        return response.status_code not in (502, 503, 504)
+        return response.ok
 
-    except (
-        requests.ConnectionError,
-        requests.Timeout,
-    ):
+    except requests.RequestException:
         return False

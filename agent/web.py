@@ -1963,3 +1963,21 @@ def backup_db():
     offsite = data.get("offsite")
     job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}
+
+
+@application.route("/agent_token", methods=["POST"])
+def enable_feature_worker():
+    data = request.json
+    agent_token = data.agent_token
+
+    server = Server()
+
+    server.update_config(
+        {
+            "agent_token": agent_token,
+        }
+    )
+
+    return {
+        "agent_auth": True,
+    }

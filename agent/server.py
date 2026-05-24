@@ -1191,6 +1191,7 @@ class Server(Base):
             "directory": self.directory,
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
+            "enable_feature_worker": self.config.get("enable_feature_worker", False),  # Default for now
             "is_standalone": self.config.get("standalone", False),
         }
         if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):
@@ -1252,6 +1253,7 @@ class Server(Base):
 
     @job("Ping Job")
     def ping_job(self):
+        time.sleep(10)
         return self.ping_step()
 
     @step("Ping Step")

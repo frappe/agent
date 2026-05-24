@@ -76,7 +76,18 @@ def ping_server(password: str):
 @click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 @click.option("--press-url", required=False, type=str)
-def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, press_url=None, db_port=3306):
+@click.option("--agent-token", required=False, type=str)
+def config(
+    name,
+    user,
+    workers,
+    job_timeout,
+    proxy_ip=None,
+    sentry_dsn=None,
+    press_url=None,
+    db_port=3306,
+    agent_token=None,
+):
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
@@ -91,6 +102,8 @@ def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, pre
         "db_port": db_port,
         "job_timeout": job_timeout,
     }
+    if agent_token:
+        config["agent_token"] = agent_token
     if press_url:
         config["press_url"] = press_url
     if proxy_ip:
@@ -100,6 +113,15 @@ def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, pre
 
     with open("config.json", "w") as f:
         json.dump(config, f, sort_keys=True, indent=4)
+
+
+@setup.command()
+@click.option("--agent-token", required=True)
+def agent_token(agent_token):
+    server = Server()
+    config = server.get_config(for_update=True)
+    config["agent_token"] = agent_token
+    server.set_config(config, indent=4)
 
 
 @setup.command()
