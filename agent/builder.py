@@ -827,19 +827,34 @@ class PatchImageBuilder(Base, JobMixin):
         self._docker_exec(f"git -C {app_path} reset --hard HEAD")
         self._docker_exec(f"git -C {app_path} clean -fd")
         self._docker_exec(f"git -C {app_path} checkout {new_hash}")
+
+        if self._has_dependency_changes(app_path, old_hash, new_hash):
+            self._reinstall_app_deps(app)
+
         if self._has_ui_changes(app_path, old_hash, new_hash):
             self._bench_build_app(app)
 
     def _has_ui_changes(self, app_path, old_hash, new_hash) -> bool:
-        """Check if ui files have changed between the two commits."""
+        """If the two commits have UI changes"""
         out = self._docker_exec(
             f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- '*.vue' '*.js' '*.jsx'",
             publish=False,
         )
         return bool(out.strip())
 
+    def _has_dependency_changes(self, app_path, old_hash, new_hash) -> bool:
+        """If the two commits have python dependency changes"""
+        out = self._docker_exec(
+            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- requirements.txt pyproject.toml",
+            publish=False,
+        )
+        return bool(out.strip())
+
+    def _reinstall_app_deps(self, app):
+        pip = "/home/frappe/frappe-bench/env/bin/python -m pip"
+        self._docker_exec(f"{pip} install -e /home/frappe/frappe-bench/apps/{app}")
+
     def _bench_build_app(self, app):
-        """Bench build with hardlink to avoid symlinks"""
         self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hard-link")
 
     def _docker_exec(self, command: str, publish: bool = True) -> str:
