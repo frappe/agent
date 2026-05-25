@@ -838,7 +838,7 @@ class InstantImageBuilder(Base, JobMixin):
 
     def _bench_build_app(self, app):
         """Bench build with hardlink to avoid symlinks"""
-        self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hardlink")
+        self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hard-link")
 
     def _docker_exec(self, command: str, publish: bool = True) -> str:
         """Execute a command inside the running container and return the output"""
