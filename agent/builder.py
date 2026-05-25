@@ -788,6 +788,7 @@ class InstantImageBuilder(Base, JobMixin):
         self.instant_build_app_instructions = instant_build_app_instructions
         self.container_name = f"instant-build-{build_name}"
         self.output: Output = {"build": [], "push": []}
+        self.last_published = datetime.now()
 
     def _get_image_name(self) -> str:
         return f"{self.image_repository}:{self.image_tag}"
@@ -819,7 +820,7 @@ class InstantImageBuilder(Base, JobMixin):
         url = instant_build_app_info["url"]
         new_hash = instant_build_app_info["hash"]
         app_path = f"/home/frappe/frappe-bench/apps/{app}"
-        old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD").strip()
+        old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD", publish=False).strip()
         self._docker_exec(f"git -C {app_path} fetch --depth 1 {url} {new_hash}")
         self._docker_exec(f"git -C {app_path} reset --hard HEAD")
         self._docker_exec(f"git -C {app_path} clean -fd")
@@ -828,17 +829,37 @@ class InstantImageBuilder(Base, JobMixin):
             self._bench_build_app(app)
 
     def _has_ui_changes(self, app_path, old_hash, new_hash) -> bool:
+        """Check if ui files have changed between the two commits."""
         out = self._docker_exec(
-            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- '*.vue' '*.js' '*.jsx'"
+            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- '*.vue' '*.js' '*.jsx'",
+            publish=False,
         )
         return bool(out.strip())
 
     def _bench_build_app(self, app):
+        """Bench build with hardlink to avoid symlinks"""
         self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hardlink")
 
-    def _docker_exec(self, command: str) -> str:
+    def _docker_exec(self, command: str, publish: bool = True) -> str:
+        """Execute a command inside the running container and return the output"""
         result = self.execute(f"docker exec {self.container_name} bash -c {shlex.quote(command)}")
-        return result.get("output", "") if isinstance(result, dict) else ""
+        output = result.get("output", "") if isinstance(result, dict) else ""
+        if publish:
+            self.output["build"].append(output)
+            self._publish_throttled_output(False)
+        return output
+
+    def _publish_throttled_output(self, flush: bool) -> None:
+        if flush:
+            self.publish_data(self.output)
+            return
+
+        now = datetime.now()
+        if (now - self.last_published).total_seconds() <= 1:
+            return
+
+        self.last_published = now
+        self.publish_data(self.output)
 
     @step("Commit Image")
     def _commit_instant_image(self):
@@ -861,6 +882,9 @@ class InstantImageBuilder(Base, JobMixin):
             auth_config=auth_config,
         ):
             self.output["push"].append(line)
+            self._publish_throttled_output(False)
+
+        self._publish_throttled_output(True)
 
     def _cleanup_container(self):
         with contextlib.suppress(Exception):
