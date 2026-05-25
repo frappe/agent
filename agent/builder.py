@@ -43,7 +43,7 @@ class AppInfo(TypedDict):
     branch: str
 
 
-class InstantBuildAppInfo(TypedDict):
+class PatchBuildAppInfo(TypedDict):
     app: str
     url: str
     hash: str
@@ -767,7 +767,7 @@ class ImageBuilder(Base, JobMixin):
         return {"cleanup": True}
 
 
-class InstantImageBuilder(Base, JobMixin):
+class PatchImageBuilder(Base, JobMixin):
     def __init__(
         self,
         base_image: str,
@@ -775,7 +775,7 @@ class InstantImageBuilder(Base, JobMixin):
         image_tag: str,
         no_push: bool,
         registry: dict,
-        instant_build_app_instructions: List[InstantBuildAppInfo],
+        patch_build_app_instructions: List[PatchBuildAppInfo],
         build_name: str,
     ) -> None:
         super().__init__()
@@ -785,22 +785,22 @@ class InstantImageBuilder(Base, JobMixin):
         self.image_tag = image_tag
         self.no_push = no_push
         self.registry = registry
-        self.instant_build_app_instructions = instant_build_app_instructions
-        self.container_name = f"instant-build-{build_name}"
+        self.patch_build_app_instructions = patch_build_app_instructions
+        self.container_name = f"patch-build-{build_name}"
         self.output: Output = {"build": [], "push": []}
         self.last_published = datetime.now()
 
     def _get_image_name(self) -> str:
         return f"{self.image_repository}:{self.image_tag}"
 
-    @job("Run Instant Build")
-    def run_instant_build(self):
+    @job("Run Patch Build")
+    def run_patch_build(self):
         try:
             self._start_base_container()
             self._pull_app_updates()
-            self._commit_instant_image()
+            self._commit_patch_image()
             if not self.no_push:
-                self._push_instant_image()
+                self._push_patch_image()
         finally:
             self._cleanup_container()
         return self.data
@@ -812,15 +812,15 @@ class InstantImageBuilder(Base, JobMixin):
 
     @step("Pull App Updates")
     def _pull_app_updates(self):
-        for instant_build_app_info in self.instant_build_app_instructions:
-            self._pull_app(instant_build_app_info)
+        for patch_build_app_info in self.patch_build_app_instructions:
+            self._pull_app(patch_build_app_info)
         self._publish_throttled_output(True)
         return self.output["build"]
 
-    def _pull_app(self, instant_build_app_info: InstantBuildAppInfo):
-        app = instant_build_app_info["app"]
-        url = instant_build_app_info["url"]
-        new_hash = instant_build_app_info["hash"]
+    def _pull_app(self, patch_build_app_info: PatchBuildAppInfo):
+        app = patch_build_app_info["app"]
+        url = patch_build_app_info["url"]
+        new_hash = patch_build_app_info["hash"]
         app_path = f"/home/frappe/frappe-bench/apps/{app}"
         old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD", publish=False).strip()
         self._docker_exec(f"git -C {app_path} fetch --depth 1 {url} {new_hash}")
@@ -864,11 +864,11 @@ class InstantImageBuilder(Base, JobMixin):
         self.publish_data(self.output)
 
     @step("Commit Image")
-    def _commit_instant_image(self):
+    def _commit_patch_image(self):
         self.execute(f"docker commit {self.container_name} {self._get_image_name()}")
 
     @step("Push Docker Image")
-    def _push_instant_image(self):
+    def _push_patch_image(self):
         environment = os.environ.copy()
         client = docker.from_env(environment=environment, timeout=5 * 60)
         auth_config = {
