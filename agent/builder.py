@@ -814,6 +814,8 @@ class InstantImageBuilder(Base, JobMixin):
     def _pull_app_updates(self):
         for instant_build_app_info in self.instant_build_app_instructions:
             self._pull_app(instant_build_app_info)
+        self._publish_throttled_output(True)
+        return self.output["build"]
 
     def _pull_app(self, instant_build_app_info: InstantBuildAppInfo):
         app = instant_build_app_info["app"]
@@ -885,6 +887,7 @@ class InstantImageBuilder(Base, JobMixin):
             self._publish_throttled_output(False)
 
         self._publish_throttled_output(True)
+        return self.output["push"]
 
     def _cleanup_container(self):
         with contextlib.suppress(Exception):
