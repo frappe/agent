@@ -229,7 +229,7 @@ def patch_build_image():
         patch_build_app_instructions=data.get("patch_build_app_instructions"),
         build_name=data.get("deploy_candidate_build"),
     )
-    job = builder.run_instant_build()
+    job = builder.run_patch_build()
     return {"job": job}
 
 
