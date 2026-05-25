@@ -217,8 +217,8 @@ def build_image():
     return {"job": job}
 
 
-@application.route("/builder/instant_build", methods=["POST"])
-def instant_build_image():
+@application.route("/builder/patch_build", methods=["POST"])
+def patch_build_image():
     data = request.json
     builder = PatchImageBuilder(
         base_image=data.get("base_image"),
@@ -226,7 +226,7 @@ def instant_build_image():
         image_tag=data.get("image_tag"),
         no_push=data.get("no_push", False),
         registry=data.get("registry"),
-        instant_build_app_instructions=data.get("instant_build_app_instructions"),
+        patch_build_app_instructions=data.get("patch_build_app_instructions"),
         build_name=data.get("deploy_candidate_build"),
     )
     job = builder.run_instant_build()
