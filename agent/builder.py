@@ -887,7 +887,9 @@ class PatchImageBuilder(Base, JobMixin):
 
     @step("Commit Image")
     def _commit_patch_image(self):
-        self.execute(f"docker commit {self.container_name} {self._get_image_name()}")
+        self.execute(
+            f"docker commit --change='CMD [\"supervisord\"]' {self.container_name} {self._get_image_name()}"
+        )
 
     @step("Push Docker Image")
     def _push_patch_image(self):
