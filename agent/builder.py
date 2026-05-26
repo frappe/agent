@@ -807,6 +807,13 @@ class PatchImageBuilder(Base, JobMixin):
 
     @step("Start Base Container")
     def _start_base_container(self):
+        """Docker login and pull base image"""
+        self.execute(
+            f"docker login "
+            f"-u {self.registry['username']} "
+            f"-p {self.registry['password']} "
+            f"{self.registry['url']}"
+        )
         self.execute(f"docker pull {self.base_image}")
         self.execute(f"docker run -d --name {self.container_name} {self.base_image} tail -f /dev/null")
 
