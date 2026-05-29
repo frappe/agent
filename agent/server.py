@@ -829,6 +829,23 @@ class Server(Base):
         """Get the actual containers skipping the `Server.benches` property"""
         return self.execute("docker ps --format '{{.Names}}'")["output"].split("\n")
 
+    def setup_cleanup_jobs(self):
+        import sys
+
+        from crontab import CronTab
+
+        cron = CronTab(user=True)
+
+        command = f"cd {self.directory} && {sys.executable} -c 'from agent.job import cleanup; cleanup()'"
+
+        cron.remove_all(command=command)
+
+        job = cron.new(command=command)
+        job.hour.on(2)
+        job.minute.on(0)
+
+        cron.write()
+
     @property
     def job_record(self):
         if self.job is None:
@@ -868,6 +885,8 @@ class Server(Base):
 
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
+
+        self.setup_cleanup_jobs()
 
     def update_agent_cli(  # noqa: C901
         self,
@@ -937,6 +956,8 @@ class Server(Base):
 
         if not skip_patches:
             run_patches()
+
+        self.setup_cleanup_jobs()
 
     @staticmethod
     def run_ncdu_command(path: str, excludes: list | None = None) -> str | None:
