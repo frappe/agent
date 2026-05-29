@@ -222,18 +222,6 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
     return wrapper
 
 
-def cleanup():
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=30)  # 1 month old data
-
-    old_jobs = JobModel.select(JobModel.id).where(JobModel.enqueue < cutoff)
-
-    deleted_steps = StepModel.delete().where(StepModel.job.in_(old_jobs)).execute()
-
-    deleted_jobs = JobModel.delete().where(JobModel.id.in_(old_jobs)).execute()
-
-    print(f"Deleted {deleted_jobs} jobs and {deleted_steps} steps")
-
-
 def get_agent_job_id():
     from flask import request
 
