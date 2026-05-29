@@ -869,8 +869,6 @@ class Server(Base):
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
 
-        self.execute(f"{self.directory}/env/bin/agent setup agent-db-cleanup")
-
     def update_agent_cli(  # noqa: C901
         self,
         restart_redis=True,
@@ -939,8 +937,6 @@ class Server(Base):
 
         if not skip_patches:
             run_patches()
-
-        self.execute(f"{self.directory}/env/bin/agent setup agent-db-cleanup")
 
     @staticmethod
     def run_ncdu_command(path: str, excludes: list | None = None) -> str | None:
