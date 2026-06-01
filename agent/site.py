@@ -16,7 +16,7 @@ import requests
 from agent.base import AgentException, Base
 from agent.database import Database
 from agent.job import job, step
-from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get_size
+from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get_size, parse_json_output
 
 if TYPE_CHECKING:
     from agent.bench import Bench
@@ -125,7 +125,7 @@ class Site(Base):
         )
         try:
             return self.bench_execute(
-                "--force restore "
+                "--force restore --verbose "
                 f"--mariadb-root-username {temp_user} "
                 f"--mariadb-root-password {temp_password} "
                 f"--admin-password {admin_password} "
@@ -645,7 +645,9 @@ class Site(Base):
 
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
-        installed_apps = json.loads(self.bench_execute("execute frappe.get_installed_apps")["output"])
+        installed_apps = parse_json_output(
+            self.bench_execute("execute frappe.get_installed_apps")["output"]
+        )
         for app in installed_apps:
             if app not in apps_to_keep:
                 self.bench_execute(f"remove-from-installed-apps '{app}'")
@@ -928,7 +930,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
     def get_analytics(self):
         analytics = self.bench_execute("execute frappe.utils.get_site_info")["output"]
-        return json.loads(analytics)
+        return parse_json_output(analytics)
 
     def get_database_size(self):
         config = {}
@@ -974,7 +976,7 @@ print(">>>" + frappe.session.sid + "<<<")
             command += f"--column {column} "
         try:
             output = self.bench_execute(command)["output"]
-            return json.loads(output)
+            return parse_json_output(output)
         except Exception:
             return {}
 
@@ -984,7 +986,7 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def apps_as_json(self):
-        return json.loads(self.bench_execute("list-apps -f json")["output"])[self.name]
+        return parse_json_output(self.bench_execute("list-apps -f json")["output"])[self.name]
 
     @job("Add Database Index")
     def add_database_index(self, doctype, columns=None):

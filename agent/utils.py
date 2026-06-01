@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -162,6 +163,32 @@ def end_execution(
     res["status"] = status or "Success"
     res["output"] = output or res["output"]
     return res
+
+
+def parse_json_output(output: str):
+    """
+    Parse JSON from command output that may contain extra logs around the payload.
+    """
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        candidate = None
+
+        for match in re.finditer(r"[\[{]", output):
+            try:
+                value, end = decoder.raw_decode(output[match.start() :])
+            except json.JSONDecodeError:
+                continue
+
+            candidate = value
+            if not output[match.start() + end :].strip():
+                return value
+
+        if candidate is not None:
+            return candidate
+
+        raise
 
 
 def compute_file_hash(file_path, algorithm="sha256", raise_exception=True):
