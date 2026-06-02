@@ -302,8 +302,16 @@ class TestSite(unittest.TestCase):
             ["frappe", "erpnext"],
         )
 
+    def test_parse_json_output_prefers_clean_trailing_payload_over_prefix_json_logs(self):
+        output = '[200]\n["frappe", "erpnext"]'
+
+        self.assertEqual(
+            parse_json_output(output, validator=lambda value: isinstance(value, list)),
+            ["frappe", "erpnext"],
+        )
+
     def test_parse_json_output_raises_for_ambiguous_matching_json(self):
-        output = '{"status": "running"}\n{"status": "done"}'
+        output = '{"status": "running"}\nlog line\n{"status": "done"}\nmore logs'
 
         with self.assertRaises(ValueError):
             parse_json_output(
@@ -384,6 +392,34 @@ class TestSite(unittest.TestCase):
             },
         ):
             self.assertEqual(site.apps_as_json, [{"app": "frappe"}])
+
+    def test_get_analytics_ignores_prefix_and_trailing_json_logs(self):
+        site = self._get_test_site("analytics.local")
+
+        with patch.object(
+            Site,
+            "bench_execute",
+            return_value={
+                "output": (
+                    '[200]\n'
+                    '{"installed_apps": [], "users": [], "country": "IN", "language": "english", '
+                    '"time_zone": "UTC", "setup_complete": true, "scheduler_enabled": true}\n'
+                    '{"status": "done"}'
+                )
+            },
+        ):
+            self.assertEqual(
+                site.get_analytics(),
+                {
+                    "installed_apps": [],
+                    "users": [],
+                    "country": "IN",
+                    "language": "english",
+                    "time_zone": "UTC",
+                    "setup_complete": True,
+                    "scheduler_enabled": True,
+                },
+            )
 
     def test_get_cors_origins_with_quoted_allow_cors(self):
         sites = [

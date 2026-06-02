@@ -169,17 +169,22 @@ def parse_json_output(output: str, validator=None):
     """
     Parse JSON from command output that may contain extra logs around the payload.
 
-    If multiple matching JSON values are found, raise instead of guessing.
+    Prefer a clean-trailing payload when present. If multiple candidates remain
+    after that preference, raise instead of guessing.
     """
+    def is_valid(value):
+        return not validator or validator(value)
+
     try:
         value = json.loads(output)
-        if validator and not validator(value):
+        if not is_valid(value):
             raise ValueError("Parsed JSON did not match expected shape")
         return value
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         original_error = e
         decoder = json.JSONDecoder()
-        candidate = None
+        trailing_candidate = None
+        dirty_candidate = None
 
         for match in re.finditer(r"[\[{]", output):
             try:
@@ -187,21 +192,25 @@ def parse_json_output(output: str, validator=None):
             except json.JSONDecodeError:
                 continue
 
-            if validator and not validator(value):
+            if not is_valid(value):
                 continue
 
             if not output[match.start() + end :].strip():
-                if candidate is not None:
+                if trailing_candidate is not None:
                     raise ValueError("Ambiguous JSON output")
-                return value
+                trailing_candidate = value
+                continue
 
-            if candidate is not None:
+            if dirty_candidate is not None:
                 raise ValueError("Ambiguous JSON output")
 
-            candidate = value
+            dirty_candidate = value
 
-        if candidate is not None:
-            return candidate
+        if trailing_candidate is not None:
+            return trailing_candidate
+
+        if dirty_candidate is not None:
+            return dirty_candidate
 
         raise original_error
 

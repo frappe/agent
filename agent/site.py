@@ -931,7 +931,19 @@ print(">>>" + frappe.session.sid + "<<<")
 
     def get_analytics(self):
         analytics = self.bench_execute("execute frappe.utils.get_site_info")["output"]
-        return parse_json_output(analytics)
+        return parse_json_output(
+            analytics,
+            validator=lambda value: isinstance(value, dict)
+            and {
+                "installed_apps",
+                "users",
+                "country",
+                "language",
+                "time_zone",
+                "setup_complete",
+                "scheduler_enabled",
+            }.issubset(value),
+        )
 
     def get_database_size(self):
         config = {}
