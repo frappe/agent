@@ -647,7 +647,11 @@ class Site(Base):
     def uninstall_unavailable_apps(self, apps_to_keep):
         installed_apps = parse_json_output(
             self.bench_execute("execute frappe.get_installed_apps")["output"],
-            validator=lambda value: isinstance(value, list),
+            validator=lambda value: (
+                isinstance(value, list)
+                and all(isinstance(item, str) for item in value)
+                and "frappe" in value
+            ),
         )
         for app in installed_apps:
             if app not in apps_to_keep:

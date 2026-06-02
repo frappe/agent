@@ -348,6 +348,7 @@ class TestSite(unittest.TestCase):
                 side_effect=[
                     {
                         "output": (
+                            "[200]\n"
                             "Duckwalk override: custom app loaded\n"
                             '["frappe", "erpnext", "insights", "greendigit"]\n'
                             '{"status": "done"}'
