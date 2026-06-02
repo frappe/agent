@@ -165,13 +165,19 @@ def end_execution(
     return res
 
 
-def parse_json_output(output: str):
+def parse_json_output(output: str, validator=None):
     """
     Parse JSON from command output that may contain extra logs around the payload.
+
+    If multiple matching JSON values are found, raise instead of guessing.
     """
     try:
-        return json.loads(output)
-    except json.JSONDecodeError:
+        value = json.loads(output)
+        if validator and not validator(value):
+            raise ValueError("Parsed JSON did not match expected shape")
+        return value
+    except json.JSONDecodeError as e:
+        original_error = e
         decoder = json.JSONDecoder()
         candidate = None
 
@@ -181,14 +187,23 @@ def parse_json_output(output: str):
             except json.JSONDecodeError:
                 continue
 
-            candidate = value
+            if validator and not validator(value):
+                continue
+
             if not output[match.start() + end :].strip():
+                if candidate is not None:
+                    raise ValueError("Ambiguous JSON output")
                 return value
+
+            if candidate is not None:
+                raise ValueError("Ambiguous JSON output")
+
+            candidate = value
 
         if candidate is not None:
             return candidate
 
-        raise
+        raise original_error
 
 
 def compute_file_hash(file_path, algorithm="sha256", raise_exception=True):

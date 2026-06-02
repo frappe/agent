@@ -646,7 +646,8 @@ class Site(Base):
     @step("Uninstall Unavailable Apps")
     def uninstall_unavailable_apps(self, apps_to_keep):
         installed_apps = parse_json_output(
-            self.bench_execute("execute frappe.get_installed_apps")["output"]
+            self.bench_execute("execute frappe.get_installed_apps")["output"],
+            validator=lambda value: isinstance(value, list),
         )
         for app in installed_apps:
             if app not in apps_to_keep:
@@ -976,7 +977,11 @@ print(">>>" + frappe.session.sid + "<<<")
             command += f"--column {column} "
         try:
             output = self.bench_execute(command)["output"]
-            return parse_json_output(output)
+            return parse_json_output(
+                output,
+                validator=lambda value: isinstance(value, dict)
+                and {"table_name", "schema", "indexes"}.issubset(value),
+            )
         except Exception:
             return {}
 
@@ -986,7 +991,10 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def apps_as_json(self):
-        return parse_json_output(self.bench_execute("list-apps -f json")["output"])[self.name]
+        return parse_json_output(
+            self.bench_execute("list-apps -f json")["output"],
+            validator=lambda value: isinstance(value, dict) and self.name in value,
+        )[self.name]
 
     @job("Add Database Index")
     def add_database_index(self, doctype, columns=None):

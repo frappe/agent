@@ -294,6 +294,23 @@ class TestSite(unittest.TestCase):
 
         self.assertEqual(parse_json_output(output), ["frappe", "erpnext", "insights"])
 
+    def test_parse_json_output_uses_validator_to_ignore_trailing_json_logs(self):
+        output = '["frappe", "erpnext"]\n{"status": "done"}'
+
+        self.assertEqual(
+            parse_json_output(output, validator=lambda value: isinstance(value, list)),
+            ["frappe", "erpnext"],
+        )
+
+    def test_parse_json_output_raises_for_ambiguous_matching_json(self):
+        output = '{"status": "running"}\n{"status": "done"}'
+
+        with self.assertRaises(ValueError):
+            parse_json_output(
+                output,
+                validator=lambda value: isinstance(value, dict) and "status" in value,
+            )
+
     def test_restore_site_uses_verbose_flag(self):
         site = self._get_test_site("restore.local")
 
@@ -324,7 +341,8 @@ class TestSite(unittest.TestCase):
                     {
                         "output": (
                             "Duckwalk override: custom app loaded\n"
-                            '["frappe", "erpnext", "insights", "greendigit"]'
+                            '["frappe", "erpnext", "insights", "greendigit"]\n'
+                            '{"status": "done"}'
                         )
                     },
                     {"output": ""},
@@ -351,6 +369,21 @@ class TestSite(unittest.TestCase):
                 "clear-cache",
             ],
         )
+
+    def test_apps_as_json_ignores_trailing_json_logs(self):
+        site = self._get_test_site("apps-json.local")
+
+        with patch.object(
+            Site,
+            "bench_execute",
+            return_value={
+                "output": (
+                    '{"apps-json.local": [{"app": "frappe"}]}\n'
+                    '{"status": "done"}'
+                )
+            },
+        ):
+            self.assertEqual(site.apps_as_json, [{"app": "frappe"}])
 
     def test_get_cors_origins_with_quoted_allow_cors(self):
         sites = [
