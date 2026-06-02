@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
@@ -61,6 +62,14 @@ class Server(Base):
         username = registry["username"]
         password = registry["password"]
         return self.execute(f"docker login -u {username} -p {password} {url}")
+
+    def docker_inspect_manifest(self, image_tag: str):
+        try:
+            return self.execute(f"docker manifest inspect {image_tag}")
+        except AgentException as e:
+            if "no such manifest" in e.data.get("output", ""):
+                raise Exception(f"Image {image_tag} not found in registry") from e
+            raise
 
     def establish_connection_with_registry(self, max_retries: int, registry: dict[str, str]):
         """Given the attempt count try and establish connection with the registry else Raise"""
@@ -383,8 +392,11 @@ class Server(Base):
         bench_directory = os.path.join(self.benches_directory, name)
         if not os.path.exists(bench_directory):
             return
+
+        image_tag = None
         try:
             bench = Bench(name, self)
+            image_tag = bench.docker_image
         except json.JSONDecodeError:
             self.disable_production_on_bench(name)
         except FileNotFoundError as e:
@@ -397,6 +409,16 @@ class Server(Base):
 
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
+        if image_tag:
+            self.remove_docker_image(image_tag)
+
+    def remove_docker_image(self, image_tag: str):
+        # Check if the image is present in registry before trying to remove locally
+        with contextlib.suppress(Exception):
+            manifest = self.docker_inspect_manifest(image_tag)
+            if not manifest:
+                return
+            self.execute(f"docker rmi {image_tag} --force")
 
     @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self, force: bool = False):
