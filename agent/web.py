@@ -18,6 +18,8 @@ from rq.job import JobStatus
 
 from agent.base import AgentException
 from agent.builder import ImageBuilder
+from agent.bench_exporter import get_bench_metrics
+from agent.builder import ImageBuilder, get_image_build_context_directory
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
 from agent.database_physical_restore import DatabasePhysicalRestore
@@ -397,17 +399,14 @@ def get_metrics():
                 metrics = get_metrics(name, rq_port)
                 benches_metrics.append(metrics)
             except RedisConnectionError:
-                """
-                Ignore RedisConnectionError, don't log it
-
-                Two Reasons -
-                1. Bench is not running, so we miss the metrics
-                2. By mistake, we have pushed `rq_port` to many config while bench update, that means we
-                    don't have open port for this bench
-                """
                 pass
             except Exception as e:
                 log.error(f"Failed to get metrics for {name} on port {rq_port}: {e}")
+            try:
+                bench_metrics = get_bench_metrics(name, rq_port, bench.directory)
+                benches_metrics.append(bench_metrics)
+            except Exception as e:
+                log.error(f"Failed to get bench metrics for {name}: {e}")
 
     return Response(benches_metrics, mimetype="text/plain")
 
