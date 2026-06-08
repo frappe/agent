@@ -66,7 +66,7 @@ class Server(Base):
 
     def docker_inspect_manifest(self, image_tag: str):
         try:
-            return self.execute(f"docker manifest inspect {image_tag}")
+            return self.execute(f"docker manifest inspect {shlex.quote(image_tag)}")
         except AgentException as e:
             if "no such manifest" in e.data.get("output", ""):
                 raise Exception(f"Image {image_tag} not found in registry") from e
@@ -150,7 +150,7 @@ class Server(Base):
         """
         for attempt in range(max_retries):
             try:
-                self.execute(f"docker inspect {name}")
+                self.execute(f"docker inspect {shlex.quote(name)}")
             except AgentException:
                 break  # container does not exist
             else:
@@ -163,7 +163,7 @@ class Server(Base):
             return (
                 to_bytes(
                     self.execute(
-                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E "^{image_tag} "'
+                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {shlex.quote("^" + image_tag + " ")}'
                     )["output"].split()[-1]
                 )
                 / 1024**3
@@ -271,7 +271,7 @@ class Server(Base):
     def disable_production_on_bench(self, name: str):
         """In case of corrupted bench / site config don't stall archive"""
         self._check_site_on_bench(name)
-        self.execute(f"docker rm {name} --force")
+        self.execute(f"docker rm {shlex.quote(name)} --force")
 
     @job("Run Benches on Shared FS")
     def change_bench_directory(
@@ -419,7 +419,7 @@ class Server(Base):
             manifest = self.docker_inspect_manifest(image_tag)
             if not manifest:
                 return
-            self.execute(f"docker rmi {image_tag} --force")
+            self.execute(f"docker rmi {shlex.quote(image_tag)} --force")
 
     @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self, force: bool = False):
@@ -432,7 +432,7 @@ class Server(Base):
     def remove_benches_without_container(self, benches: list[str]):
         for bench in benches:
             try:
-                self.execute(f"docker ps -a | grep {bench}")
+                self.execute(f"docker ps -a | grep {shlex.quote(bench)}")
             except AgentException as e:
                 if e.data.returncode:
                     self.move_to_archived_directory(Bench(bench, self))
