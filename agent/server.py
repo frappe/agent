@@ -59,9 +59,9 @@ class Server(Base):
         return self.config.get("press_url", "https://frappecloud.com")
 
     def docker_login(self, registry):
-        url = registry["url"]
-        username = registry["username"]
-        password = registry["password"]
+        url = shlex.quote(registry["url"])
+        username = shlex.quote(registry["username"])
+        password = shlex.quote(registry["password"])
         return self.execute(f"docker login -u {username} -p {password} {url}")
 
     def docker_inspect_manifest(self, image_tag: str):
@@ -234,7 +234,7 @@ class Server(Base):
     def _push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
         self.docker_login(registry_settings)
         for image in images:
-            self.execute(f"docker push {image}")
+            self.execute(f"docker push {shlex.quote(image)}")
 
     @job("Remove Redis Localhost Bind")
     def remove_redis_localhost_bind(self):
@@ -721,7 +721,7 @@ class Server(Base):
         self.docker_login(registry)
 
         for image_tag in image_tags:
-            command = f"docker pull {image_tag}"
+            command = f"docker pull {shlex.quote(image_tag)}"
             self.execute(command, directory=self.directory)
 
     @job("Reload NGINX")
