@@ -155,9 +155,13 @@ class Site(Base):
                 if ".." in parts:
                     raise tarfile.ExtractError(f"Refusing parent traversal: {member.name}")
                 if strip:
-                    member.name = "/".join(parts[strip:])
+                    stripped = "/".join(parts[strip:])
+                    if not stripped:
+                        continue
+                    member.name = stripped
+                dest_real = os.path.realpath(dest)
                 target = os.path.realpath(os.path.join(dest, member.name))
-                if not target.startswith(os.path.realpath(dest)):
+                if not target.startswith(dest_real + os.sep):
                     raise tarfile.ExtractError(f"Refusing path outside destination: {member.name}")
             tar.extractall(path=dest, members=members)
 
