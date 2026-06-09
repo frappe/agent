@@ -146,6 +146,7 @@ class Site(Base):
         """
         with tarfile.open(path) as tar:
             members = tar.getmembers()
+            valid = []
             for member in members:
                 if member.issym() or member.islnk():
                     raise tarfile.ExtractError(f"Refusing to extract link: {member.name}")
@@ -163,7 +164,8 @@ class Site(Base):
                 target = os.path.realpath(os.path.join(dest, member.name))
                 if not target.startswith(dest_real + os.sep):
                     raise tarfile.ExtractError(f"Refusing path outside destination: {member.name}")
-            tar.extractall(path=dest, members=members)
+                valid.append(member)
+            tar.extractall(path=dest, members=valid)
 
     @step("Restore Files")
     def restore_files(
