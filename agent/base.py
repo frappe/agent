@@ -102,6 +102,11 @@ class Base:
             use_shell = True
         else:
             use_shell = False
+            if executable is not None:
+                raise TypeError(
+                    "executable is not supported with list-form commands; "
+                    "include the binary as the first element of the list"
+                )
 
         with subprocess.Popen(
             command,

@@ -60,7 +60,11 @@ def to_bytes(size_str: str) -> float:
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
     basename = os.path.basename(urlparse(url).path)
-    ext = basename[basename.index(".") :] if "." in basename else ""
+    ext = ""
+    for known in (".sql.gz", ".tar.gz", ".tgz", ".sql", ".gz", ".tar"):
+        if basename.endswith(known):
+            ext = known
+            break
     if ext and not all(c.isalnum() or c in "._-" for c in ext):
         ext = ""
     filename = secrets.token_urlsafe(16) + ext
