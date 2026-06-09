@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from math import ceil
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import requests
 
@@ -58,7 +59,11 @@ def to_bytes(size_str: str) -> float:
 
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
-    filename = secrets.token_urlsafe(16)
+    basename = os.path.basename(urlparse(url).path)
+    ext = basename[basename.index(".") :] if "." in basename else ""
+    if ext and not all(c.isalnum() or c in "._-" for c in ext):
+        ext = ""
+    filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
     with requests.get(url, stream=True) as r:
