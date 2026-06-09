@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import secrets
 import shutil
 import struct
 import subprocess
@@ -10,7 +11,6 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from math import ceil
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
 
 import requests
 
@@ -58,7 +58,7 @@ def to_bytes(size_str: str) -> float:
 
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
-    filename = urlparse(url).path.split("/")[-1]
+    filename = secrets.token_urlsafe(16)
     local_filename = os.path.join(prefix, filename)
 
     with requests.get(url, stream=True) as r:
