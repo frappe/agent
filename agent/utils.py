@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import secrets
 import shutil
 import struct
 import subprocess
@@ -58,7 +59,15 @@ def to_bytes(size_str: str) -> float:
 
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
-    filename = urlparse(url).path.split("/")[-1]
+    basename = os.path.basename(urlparse(url).path)
+    ext = ""
+    for known in (".sql.gz", ".tar.gz", ".tgz", ".sql", ".gz", ".tar"):
+        if basename.endswith(known):
+            ext = known
+            break
+    if ext and not all(c.isalnum() or c in "._-" for c in ext):
+        ext = ""
+    filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
     with requests.get(url, stream=True) as r:
