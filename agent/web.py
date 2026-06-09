@@ -1367,21 +1367,6 @@ def kill_database_processes():
     return jsonify(DatabaseServer().kill_processes(**data))
 
 
-@application.route("/database/binary/logs/<string:log>", methods=["POST"])
-def get_binary_log(log):
-    data = request.json
-    return jsonify(
-        DatabaseServer().search_binary_log(
-            log,
-            data["database"],
-            data["start_datetime"],
-            data["stop_datetime"],
-            data["search_pattern"],
-            data["max_lines"],
-        )
-    )
-
-
 @application.route("/database/stalks")
 def get_stalks():
     return jsonify(DatabaseServer().get_stalks())
