@@ -535,6 +535,8 @@ class ImageBuilder(Base, JobMixin):
         self.image_repository = image_repository
         self.image_tag = image_tag
         self.registry = registry
+        if platform not in ("arm64", "x86_64"):
+            raise ValueError(f"Invalid platform '{platform}'")
         self.platform = platform
 
         self._job_context = JobContext()
