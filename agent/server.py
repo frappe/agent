@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import tempfile
