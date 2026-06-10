@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import tarfile
 import time
 from datetime import datetime
 from shlex import quote
@@ -136,6 +137,36 @@ class Site(Base):
         finally:
             self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
 
+    @staticmethod
+    def _safe_extract_tar(path: str, dest: str, strip: int = 0):
+        """Extract a tar archive safely using Python tarfile.
+
+        Strips ``strip`` leading path components from each member.
+        Rejects symlinks, hardlinks, absolute paths, and parent-traversal.
+        """
+        with tarfile.open(path) as tar:
+            members = tar.getmembers()
+            valid = []
+            for member in members:
+                if member.issym() or member.islnk():
+                    raise tarfile.ExtractError(f"Refusing to extract link: {member.name}")
+                if os.path.isabs(member.name):
+                    raise tarfile.ExtractError(f"Refusing absolute path: {member.name}")
+                parts = member.name.split("/")
+                if ".." in parts:
+                    raise tarfile.ExtractError(f"Refusing parent traversal: {member.name}")
+                if strip:
+                    stripped = "/".join(parts[strip:])
+                    if not stripped:
+                        continue
+                    member.name = stripped
+                dest_real = os.path.realpath(dest)
+                target = os.path.realpath(os.path.join(dest, member.name))
+                if not target.startswith(dest_real + os.sep):
+                    raise tarfile.ExtractError(f"Refusing path outside destination: {member.name}")
+                valid.append(member)
+            tar.extractall(path=dest, members=valid)
+
     @step("Restore Files")
     def restore_files(
         self,
@@ -152,9 +183,10 @@ class Site(Base):
             finally:
                 os.makedirs(dir_path, exist_ok=True)
 
-            self.execute(
-                f"tar {'z' if public_file.endswith('.tgz') else ''}xvf {public_file} --strip 2",
-                directory=os.path.join(sites_directory, self.name),
+            self._safe_extract_tar(
+                public_file,
+                dest=os.path.join(sites_directory, self.name),
+                strip=2,
             )
 
         if private_file:
@@ -164,9 +196,10 @@ class Site(Base):
             finally:
                 os.makedirs(dir_path, exist_ok=True)
 
-            self.execute(
-                f"tar {'z' if private_file.endswith('.tgz') else ''}xvf {private_file} --strip 2",
-                directory=os.path.join(sites_directory, self.name),
+            self._safe_extract_tar(
+                private_file,
+                dest=os.path.join(sites_directory, self.name),
+                strip=2,
             )
 
     @step("Checksum of Downloaded Backup Files")
