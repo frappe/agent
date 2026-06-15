@@ -897,7 +897,12 @@ class Bench(Base):
             cmd += f" --memory-swap={memory_swap}M"
         if vcpu:
             cmd += f" --cpus={vcpu}"
-        return self.execute(cmd)
+        try:
+            return self.execute(cmd)
+        except Exception:
+            print(f"Failed to update runtime limits for {self.name}: {cmd}")
+            traceback.print_exc()
+            return None
 
     def _update_database_host(self, db_host: str):
         self._update_config({"db_host": db_host})
