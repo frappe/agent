@@ -42,6 +42,42 @@ if TYPE_CHECKING:
         migrate_sites: bool
 
 
+def render_command_guard(blocked_commands: list[str]) -> str:
+    """Build the `bench` wrapper that refuses destructive commands on production.
+
+    Blocking only kicks in when the bench's common_site_config marks it as Frappe
+    Cloud, so the wrapper is inert on benches where that key is absent. The blocked
+    list comes from Press, so it can change without rebuilding the image.
+    """
+    blocked = " ".join(command for command in blocked_commands if re.fullmatch(r"[a-z][a-z0-9-]*", command))
+    return f"""#!/bin/bash
+# Frappe Cloud bench command guard (installed by the agent).
+# Guardrail against accidental destructive commands run over SSH on production
+# benches; not a security boundary. The real bench stays at bench.real.
+config=/home/frappe/frappe-bench/sites/common_site_config.json
+real="$(dirname "$0")/bench.real"
+blocked="{blocked}"
+
+on_frappe_cloud() {{
+    [ -f "$config" ] && python3 -c "import json, sys; sys.exit(0 if json.load(open('$config')).get('environment') == 'Frappe Cloud' else 1)" 2>/dev/null
+}}
+
+if on_frappe_cloud; then
+    for arg in "$@"; do
+        for command in $blocked; do
+            if [ "$arg" = "$command" ]; then
+                echo "bench $command is disabled on Frappe Cloud production benches." >&2
+                echo "It would desync your site's state with Frappe Cloud — use the dashboard instead." >&2
+                exit 1
+            fi
+        done
+    done
+fi
+
+exec "$real" "$@"
+"""
+
+
 class Bench(Base):
     def __init__(self, name: str, server: Server, mounts=None):
         super().__init__()
@@ -682,6 +718,27 @@ class Bench(Base):
         else:
             self.generate_docker_compose_file()
             self.deploy()
+
+    @job("Setup Bench Command Guard")
+    def setup_command_guard_job(self, blocked_commands):
+        self.install_command_guard(blocked_commands)
+
+    @step("Setup Bench Command Guard")
+    def install_command_guard(self, blocked_commands):
+        wrapper = render_command_guard(blocked_commands)
+        # `bench` on $PATH is the pip console script. Move it aside to `bench.real`
+        # and put the guard wrapper in its place. Resolving via `command -v` wraps
+        # whichever bench the shell actually runs, regardless of where pip put it,
+        # and re-running is idempotent (the move is skipped once bench.real exists).
+        install = (
+            "set -e; "
+            'target="$(command -v bench)"; '
+            'real="$(dirname "$target")/bench.real"; '
+            '[ -e "$real" ] || mv "$target" "$real"; '
+            'cat > "$target"; '
+            'chmod 755 "$target"'
+        )
+        return self.docker_execute(f"bash -c '{install}'", input=wrapper, as_root=True)
 
     @step("Update Supervisor Configuration")
     def update_supervisor(self):

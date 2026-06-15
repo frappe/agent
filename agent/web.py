@@ -1145,6 +1145,14 @@ def bench_set_config(bench):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/command-guard", methods=["POST"])
+@validate_bench
+def bench_setup_command_guard(bench):
+    data = request.json
+    job = Server().benches[bench].setup_command_guard_job(data["blocked_commands"])
+    return {"job": job}
+
+
 @application.route("/proxy/hosts", methods=["POST"])
 def proxy_add_host():
     data = request.json
