@@ -53,7 +53,10 @@ def get_regenerate_token():
 
     path = "/api/method/press.api.agent_auth.regenerate_token"
 
-    token = server.config["agent_token"]
+    token = server.config.get("agent_token")
+
+    if not token:
+        return False
 
     try:
         response = requests.post(
@@ -62,10 +65,13 @@ def get_regenerate_token():
             timeout=30,
         )
 
+        response.raise_for_status()
+
         data = response.json()
 
-        return data["message"]
-    except requests.RequestException:
+        return data.get("message")
+
+    except (requests.RequestException, ValueError):
         return False
 
 
