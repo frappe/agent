@@ -91,13 +91,30 @@ class Base:
 
     def run_subprocess(self, command, directory, input, executable, non_zero_throw=True):
         # Start a child process and start reading output immediately
+        if isinstance(command, str):
+            import warnings
+
+            warnings.warn(
+                "String commands are deprecated; use list form for safety",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            use_shell = True
+        else:
+            use_shell = False
+            if executable is not None:
+                raise TypeError(
+                    "executable is not supported with list-form commands; "
+                    "include the binary as the first element of the list"
+                )
+
         with subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE if input else None,
             cwd=directory,
-            shell=True,
+            shell=use_shell,
             executable=executable,
         ) as process:
             if input:

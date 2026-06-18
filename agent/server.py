@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -57,10 +59,18 @@ class Server(Base):
         return self.config.get("press_url", "https://frappecloud.com")
 
     def docker_login(self, registry):
-        url = registry["url"]
-        username = registry["username"]
-        password = registry["password"]
+        url = shlex.quote(registry["url"])
+        username = shlex.quote(registry["username"])
+        password = shlex.quote(registry["password"])
         return self.execute(f"docker login -u {username} -p {password} {url}")
+
+    def docker_inspect_manifest(self, image_tag: str):
+        try:
+            return self.execute(f"docker manifest inspect {shlex.quote(image_tag)}")
+        except AgentException as e:
+            if "no such manifest" in e.data.get("output", ""):
+                raise Exception(f"Image {image_tag} not found in registry") from e
+            raise
 
     def establish_connection_with_registry(self, max_retries: int, registry: dict[str, str]):
         """Given the attempt count try and establish connection with the registry else Raise"""
@@ -140,7 +150,7 @@ class Server(Base):
         """
         for attempt in range(max_retries):
             try:
-                self.execute(f"docker inspect {name}")
+                self.execute(f"docker inspect {shlex.quote(name)}")
             except AgentException:
                 break  # container does not exist
             else:
@@ -153,7 +163,7 @@ class Server(Base):
             return (
                 to_bytes(
                     self.execute(
-                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E "^{image_tag} "'
+                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {shlex.quote("^" + image_tag + " ")}'
                     )["output"].split()[-1]
                 )
                 / 1024**3
@@ -224,7 +234,7 @@ class Server(Base):
     def _push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
         self.docker_login(registry_settings)
         for image in images:
-            self.execute(f"docker push {image}")
+            self.execute(f"docker push {shlex.quote(image)}")
 
     @job("Remove Redis Localhost Bind")
     def remove_redis_localhost_bind(self):
@@ -261,7 +271,7 @@ class Server(Base):
     def disable_production_on_bench(self, name: str):
         """In case of corrupted bench / site config don't stall archive"""
         self._check_site_on_bench(name)
-        self.execute(f"docker rm {name} --force")
+        self.execute(f"docker rm {shlex.quote(name)} --force")
 
     @job("Run Benches on Shared FS")
     def change_bench_directory(
@@ -383,8 +393,11 @@ class Server(Base):
         bench_directory = os.path.join(self.benches_directory, name)
         if not os.path.exists(bench_directory):
             return
+
+        image_tag = None
         try:
             bench = Bench(name, self)
+            image_tag = bench.docker_image
         except json.JSONDecodeError:
             self.disable_production_on_bench(name)
         except FileNotFoundError as e:
@@ -397,6 +410,16 @@ class Server(Base):
 
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
+        if image_tag:
+            self.remove_docker_image(image_tag)
+
+    def remove_docker_image(self, image_tag: str):
+        # Check if the image is present in registry before trying to remove locally
+        with contextlib.suppress(Exception):
+            manifest = self.docker_inspect_manifest(image_tag)
+            if not manifest:
+                return
+            self.execute(f"docker rmi {shlex.quote(image_tag)} --force")
 
     @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self, force: bool = False):
@@ -409,7 +432,7 @@ class Server(Base):
     def remove_benches_without_container(self, benches: list[str]):
         for bench in benches:
             try:
-                self.execute(f"docker ps -a | grep {bench}")
+                self.execute(f"docker ps -a | grep {shlex.quote(bench)}")
             except AgentException as e:
                 if e.data.returncode:
                     self.move_to_archived_directory(Bench(bench, self))
@@ -698,7 +721,7 @@ class Server(Base):
         self.docker_login(registry)
 
         for image_tag in image_tags:
-            command = f"docker pull {image_tag}"
+            command = f"docker pull {shlex.quote(image_tag)}"
             self.execute(command, directory=self.directory)
 
     @job("Reload NGINX")
@@ -846,14 +869,15 @@ class Server(Base):
         self.step = value
 
     def update_agent_web(self, url=None, branch="master"):
+        branch = branch or "master"
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         if url:
-            self.execute(f"git remote set-url upstream {url}", directory=directory)
+            self.execute(f"git remote set-url upstream {shlex.quote(url)}", directory=directory)
         self.execute("git fetch upstream", directory=directory)
-        self.execute(f"git checkout {branch}", directory=directory)
-        self.execute(f"git merge --ff-only upstream/{branch}", directory=directory)
+        self.execute(f"git checkout {shlex.quote(branch)}", directory=directory)
+        self.execute(f"git merge --ff-only upstream/{shlex.quote(branch)}", directory=directory)
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self._generate_redis_config()

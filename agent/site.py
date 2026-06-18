@@ -3,10 +3,12 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
 import threading
+import tarfile
 import time
 from datetime import datetime
 from shlex import quote
@@ -138,6 +140,36 @@ class Site(Base):
         finally:
             self.bench.drop_mariadb_user(self.name, mariadb_root_password, self.database)
 
+    @staticmethod
+    def _safe_extract_tar(path: str, dest: str, strip: int = 0):
+        """Extract a tar archive safely using Python tarfile.
+
+        Strips ``strip`` leading path components from each member.
+        Rejects symlinks, hardlinks, absolute paths, and parent-traversal.
+        """
+        with tarfile.open(path) as tar:
+            members = tar.getmembers()
+            valid = []
+            for member in members:
+                if member.issym() or member.islnk():
+                    raise tarfile.ExtractError(f"Refusing to extract link: {member.name}")
+                if os.path.isabs(member.name):
+                    raise tarfile.ExtractError(f"Refusing absolute path: {member.name}")
+                parts = member.name.split("/")
+                if ".." in parts:
+                    raise tarfile.ExtractError(f"Refusing parent traversal: {member.name}")
+                if strip:
+                    stripped = "/".join(parts[strip:])
+                    if not stripped:
+                        continue
+                    member.name = stripped
+                dest_real = os.path.realpath(dest)
+                target = os.path.realpath(os.path.join(dest, member.name))
+                if not target.startswith(dest_real + os.sep):
+                    raise tarfile.ExtractError(f"Refusing path outside destination: {member.name}")
+                valid.append(member)
+            tar.extractall(path=dest, members=valid)
+
     @step("Restore Files")
     def restore_files(
         self,
@@ -154,9 +186,10 @@ class Site(Base):
             finally:
                 os.makedirs(dir_path, exist_ok=True)
 
-            self.execute(
-                f"tar {'z' if public_file.endswith('.tgz') else ''}xvf {public_file} --strip 2",
-                directory=os.path.join(sites_directory, self.name),
+            self._safe_extract_tar(
+                public_file,
+                dest=os.path.join(sites_directory, self.name),
+                strip=2,
             )
 
         if private_file:
@@ -166,9 +199,10 @@ class Site(Base):
             finally:
                 os.makedirs(dir_path, exist_ok=True)
 
-            self.execute(
-                f"tar {'z' if private_file.endswith('.tgz') else ''}xvf {private_file} --strip 2",
-                directory=os.path.join(sites_directory, self.name),
+            self._safe_extract_tar(
+                private_file,
+                dest=os.path.join(sites_directory, self.name),
+                strip=2,
             )
 
     @step("Checksum of Downloaded Backup Files")
@@ -491,8 +525,21 @@ class Site(Base):
         private_files_arg = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
 
         if streaming:
+            # The shim is LD_PRELOAD-ed into the in-container bench process, so
+            # it must match the architecture. Pick the prebuilt binary for the
+            # host arch (== container arch); fail clearly on anything unbuilt.
+            arch_so = {
+                "x86_64": "bypass_unlink_x86_64.so",
+                "aarch64": "bypass_unlink_arm64.so",
+                "arm64": "bypass_unlink_arm64.so",
+            }
+            arch = platform.machine()
+            if arch not in arch_so:
+                raise AgentException(
+                    {"traceback": f"No bypass_unlink shim built for architecture: {arch}"}
+                )
             repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            so_src = os.path.join(repo_root, "lib", "bin", "bypass_unlink.so")
+            so_src = os.path.join(repo_root, "lib", "bin", arch_so[arch])
             so_filename = os.path.basename(so_src)
             docker_backup_dir = os.path.dirname(backup_path_db)
             host_backup_dir = os.path.join(
@@ -893,14 +940,22 @@ print(">>>" + frappe.session.sid + "<<<")
                 file_types[private_file] = "private"
                 file_types[public_file] = "public"
 
-            provider_endpoint = {"AWS": f"s3.{auth['REGION']}.amazonaws.com"}
-            s3_flags = [
-                "--s3-provider", auth["PROVIDER"],
-                "--s3-access-key-id", auth["ACCESS_KEY"],
-                "--s3-secret-access-key", auth["SECRET_KEY"],
-                "--s3-region", auth["REGION"],
-                "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
-            ]
+            # Fail the job with a clear message if the offsite auth is missing a
+            # required key (or carries an unsupported provider) instead of
+            # letting a raw KeyError abort it with an opaque traceback.
+            try:
+                provider_endpoint = {"AWS": f"s3.{auth['REGION']}.amazonaws.com"}
+                s3_flags = [
+                    "--s3-provider", auth["PROVIDER"],
+                    "--s3-access-key-id", auth["ACCESS_KEY"],
+                    "--s3-secret-access-key", auth["SECRET_KEY"],
+                    "--s3-region", auth["REGION"],
+                    "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
+                ]
+            except KeyError as e:
+                raise AgentException(
+                    {"traceback": f"Offsite backup auth missing/unsupported key: {e}"}
+                )
 
             # The local FIFO names must keep the "%stream%" marker so the
             # bypass_unlink.so LD_PRELOAD shim blocks the framework from deleting

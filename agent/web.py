@@ -17,7 +17,7 @@ from rq.job import Job as RQJob
 from rq.job import JobStatus
 
 from agent.base import AgentException
-from agent.builder import ImageBuilder
+from agent.builder import ImageBuilder, PatchImageBuilder
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
 from agent.database_physical_restore import DatabasePhysicalRestore
@@ -214,6 +214,22 @@ def build_image():
         ssh_keys=data.get("ssh_keys"),
     )
     job = image_builder.run_remote_builder()
+    return {"job": job}
+
+
+@application.route("/builder/patch_build", methods=["POST"])
+def patch_build_image():
+    data = request.json
+    builder = PatchImageBuilder(
+        base_image=data.get("base_image"),
+        image_repository=data.get("image_repository"),
+        image_tag=data.get("image_tag"),
+        no_push=data.get("no_push", False),
+        registry=data.get("registry"),
+        patch_build_app_instructions=data.get("patch_build_app_instructions"),
+        build_name=data.get("deploy_candidate_build"),
+    )
+    job = builder.run_patch_build()
     return {"job": job}
 
 
@@ -1365,21 +1381,6 @@ def get_database_locks():
 def kill_database_processes():
     data = request.json
     return jsonify(DatabaseServer().kill_processes(**data))
-
-
-@application.route("/database/binary/logs/<string:log>", methods=["POST"])
-def get_binary_log(log):
-    data = request.json
-    return jsonify(
-        DatabaseServer().search_binary_log(
-            log,
-            data["database"],
-            data["start_datetime"],
-            data["stop_datetime"],
-            data["search_pattern"],
-            data["max_lines"],
-        )
-    )
 
 
 @application.route("/database/stalks")
