@@ -83,7 +83,9 @@ def retry_undelivered():
 
     path = "/api/method/press.api.callbacks.retry_undelivered"
 
-    token = server.config["agent_token"]
+    token = server.config.get("agent_token")
+    if not token:
+        return False
 
     try:
         response = requests.get(url=f"{press_url}{path}", headers={"X-Agent-Token": token}, timeout=10)
@@ -105,7 +107,9 @@ def handle_retry(counter: int) -> int:
 def handle_token_refresh(server, counter: int) -> int:
     """Check and refresh token every 5 minutes."""
     if counter >= 60:
-        token = server.config["agent_token"]
+        token = server.config.get("agent_token")
+        if not token:
+            return 0
 
         if verify_token_expiry(token):
             new_token = get_regenerate_token()
