@@ -5,6 +5,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import threading
 import time
 from datetime import datetime
 from shlex import quote
@@ -481,40 +483,40 @@ class Site(Base):
         self.bench_execute(f"update-site-plan {plan}")
 
     @step("Backup Site")
-    def backup(self, with_files=False, backup_path_db=None, backup_path_conf=None, backup_path_private_files=None, backup_path_files=None):
-        with_files = "--with-files" if with_files else ""
-        backup_path_db = f"--backup-path-db {backup_path_db}" if backup_path_db else ""
-        backup_path_conf = f"--backup-path-conf {backup_path_conf}" if backup_path_conf else ""
-        backup_path_files = f"--backup-path-files {backup_path_files}" if backup_path_files else ""
-        backup_path_private_files = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
+    def backup(self, with_files=False, backup_path_db=None, backup_path_conf=None, backup_path_private_files=None, backup_path_files=None, streaming=False):
+        with_files_flag = "--with-files" if with_files else ""
+        db_arg = f"--backup-path-db {backup_path_db}" if backup_path_db else ""
+        conf_arg = f"--backup-path-conf {backup_path_conf}" if backup_path_conf else ""
+        files_arg = f"--backup-path-files {backup_path_files}" if backup_path_files else ""
+        private_files_arg = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
 
-        self.bench_execute(f"backup {with_files} {backup_path_conf} {backup_path_files} {backup_path_private_files} {backup_path_db} --verbose")
-        return {
-            'database': {
-                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/database.sql.gz',
-                'file': '20260522_134200-test-s3-streaming-uploads_frappe_cloud-database.sql.gz',
-                'size': 10000,
-                'url':'https://test-s3-streaming-uploads.frappe.cloud/backups/database.sql.gz'
-            },
-            'site_config': {
-                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/site_config_backup.json',
-                'file': 'site_config_backup.json',
-                'size': 328,
-                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/site_config_backup.json'
-            },
-            'private': {
-                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/private-files.tar',
-                'file': 'private-files.tar',
-                'size': 10240,
-                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/private-files.tar'
-            },
-            'public': {
-                'path': '/home/frappe/benches/bench-40545-000001-u10-ksa/sites/test-s3-streaming-uploads.frappe.cloud/private/backups/files.tar',
-                'file': 'files.tar',
-                'size': 10240,
-                'url': 'https://test-s3-streaming-uploads.frappe.cloud/backups/files.tar'
-            }
-        }
+        if streaming:
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            so_src = os.path.join(repo_root, "lib", "bin", "bypass_unlink.so")
+            so_filename = os.path.basename(so_src)
+            docker_backup_dir = os.path.dirname(backup_path_db)
+            host_backup_dir = os.path.join(
+                self.bench.directory,
+                os.path.relpath(docker_backup_dir, "/home/frappe/frappe-bench"),
+            )
+            docker_so_path = os.path.join(docker_backup_dir, so_filename)
+            host_so_path = os.path.join(host_backup_dir, so_filename)
+            shutil.copy(so_src, host_so_path)
+            try:
+                self.bench.docker_execute(
+                    f"env LD_PRELOAD={docker_so_path} bench --site {self.name} backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose"
+                )
+            finally:
+                # Always remove the shim, even if the backup command fails,
+                # so it doesn't leak into the site's backups directory.
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(host_so_path)
+        else:
+            self.bench_execute(f"backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose")
+
+        if streaming:
+            return None
+        return self.fetch_latest_backup(with_files=bool(with_files))
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite, keep_files_locally_after_offsite_backup: bool):
@@ -860,105 +862,195 @@ print(">>>" + frappe.session.sid + "<<<")
         offsite=None,
         keep_files_locally_after_offsite_backup: bool = False,
     ):
-        if offsite:
-            if keep_files_locally_after_offsite_backup:
-                backup_files = self.backup(with_files)
-                uploaded_files = (
-					self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
-					if (offsite and backup_files)
-					else {}
-				)
-            else:
-                # setup fifo
-                todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-                public_file = todays_dt + '-files.tar'
-                db_file = todays_dt + '-database.sql.gz'
-                private_file = todays_dt + '-private-files.tar'
-                config_file = todays_dt + '-site_config_backup.json'
+        if not offsite:
+            backup_files = self.backup(with_files)
+            uploaded_files = {}
+        elif keep_files_locally_after_offsite_backup:
+            backup_files = self.backup(with_files)
+            uploaded_files = self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup) if backup_files else {}
+        else:
+            todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
+            public_file = todays_dt + '-%stream%-files.tar'
+            db_file = todays_dt + '-%stream%-database.sql.gz'
+            private_file = todays_dt + '-%stream%-private-files.tar'
+            config_file = todays_dt + '-%stream%-site_config_backup.json'
 
-                files_to_stream = [config_file, db_file]
-                if with_files:
-                    files_to_stream += [private_file, public_file]
+            files_to_stream = [config_file, db_file]
+            if with_files:
+                files_to_stream += [private_file, public_file]
 
-                relative_path_to_backup_directory = f"sites/{self.name}/private/backups"
-                backup_directory_from_root = os.path.join(self.bench.directory, relative_path_to_backup_directory)
+            relative_path_to_backup_directory = f"sites/{self.name}/private/backups"
+            backup_directory_from_root = os.path.join(self.bench.directory, relative_path_to_backup_directory)
+            fifo_paths = {file: os.path.join(backup_directory_from_root, file) for file in files_to_stream}
 
+            bucket, auth, prefix = offsite["bucket"], offsite["auth"], offsite["path"]
+
+            # Maps the streamed filename to the backup "type" press expects
+            # (database/site_config/public/private). Press keys off these types
+            # to populate the Site Backup and Remote File records.
+            file_types = {db_file: "database", config_file: "site_config"}
+            if with_files:
+                file_types[private_file] = "private"
+                file_types[public_file] = "public"
+
+            provider_endpoint = {"AWS": f"s3.{auth['REGION']}.amazonaws.com"}
+            s3_flags = [
+                "--s3-provider", auth["PROVIDER"],
+                "--s3-access-key-id", auth["ACCESS_KEY"],
+                "--s3-secret-access-key", auth["SECRET_KEY"],
+                "--s3-region", auth["REGION"],
+                "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
+            ]
+
+            # The local FIFO names must keep the "%stream%" marker so the
+            # bypass_unlink.so LD_PRELOAD shim blocks the framework from deleting
+            # them mid-stream. Strip the marker only for the S3 object key.
+            s3_names = {file: file.replace("%stream%-", "") for file in files_to_stream}
+
+            # A reader thread blocks in open() until the backup command opens the
+            # FIFO for writing. If the backup fails before that happens, the
+            # thread would block forever - so threads are daemonized (they can
+            # never keep the worker alive) and abort_event + the finally block
+            # release them and remove the FIFOs no matter how we exit.
+            abort_event = threading.Event()
+            rclone_results = {}
+            threads = []
+            try:
                 for file in files_to_stream:
                     self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
-                
-				# get s3 config
-                bucket, auth, prefix = (
-					offsite["bucket"],
-					offsite["auth"],
-					offsite["path"],
-				)
 
-				# make rclone rcat start listening
-                import subprocess
-                import threading
-
-                subprocs = []
-                threads = []
                 for file in files_to_stream:
-                    fifo_path = os.path.join(backup_directory_from_root, file)
-                    
-                    def start_rclone(fifo_path=fifo_path, file=file):
+                    def start_rclone(fifo_path=fifo_paths[file], file=file):
                         print(f"{file}: opening reading thread... waiting for writer")
                         fd = open(fifo_path, "rb")
+                        if abort_event.is_set():
+                            # Released by the finally block after a failure; don't
+                            # start an upload that would only push partial data.
+                            fd.close()
+                            return
                         print(f"{file}: fifo has been opened in reader_thread: writer detected")
-
-                        provider_endpoint = {
-                            "AWS": f"s3.{auth['REGION']}.amazonaws.com"
-                        }
-
                         subproc = subprocess.Popen(
-                            [
-                                "rclone", "rcat",
-                                "--s3-provider", auth["PROVIDER"],
-                                "--s3-access-key-id", auth["ACCESS_KEY"],
-                                "--s3-secret-access-key", auth["SECRET_KEY"],
-                                "--s3-region", auth["REGION"],
-                                "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
-                                f":s3:{bucket}/{prefix}/{file}",
-                            ],
+                            ["rclone", "rcat", *s3_flags, f":s3:{bucket}/{prefix}/{s3_names[file]}"],
                             stderr=subprocess.PIPE,
                             stdin=fd,
                             close_fds=True,
                         )
                         fd.close()
-                        subprocs.append(subproc)
-                        ret = subproc.wait()
-                        err = subproc.stderr.read().decode()
+                        # communicate() drains stderr while waiting, so rclone
+                        # can't deadlock filling the stderr pipe buffer.
+                        err = subproc.communicate()[1].decode()
+                        ret = subproc.returncode
                         print(f"rclone exit: {ret}, error: {err}")
+                        rclone_results[file] = (ret, err)
 
-                    t = threading.Thread(target=start_rclone)
+                    t = threading.Thread(target=start_rclone, daemon=True)
                     threads.append(t)
                     t.start()
 
-                import time
                 time.sleep(3)
-                print("Attempting to open files for writing in main_thread...")
-                # start writing to fifos
-                backup_files = self.backup(
+                self.backup(
                     with_files,
                     backup_path_db=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, db_file),
                     backup_path_conf=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, config_file),
-                    backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file),
-                    backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file),
+                    backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file) if with_files else None,
+                    backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file) if with_files else None,
+                    streaming=True,
                 )
-                print("Backup files created ✅")
 
-                # wait for all rclone threads to finish
-                for t in threads:
-                    t.join()
-                print("rclone threads finished executing")
-                print("Backup uploaded ✅")
+                result = self.finalize_streamed_offsite_backup(
+                    threads=threads,
+                    rclone_results=rclone_results,
+                    files_to_stream=files_to_stream,
+                    s3_names=s3_names,
+                    file_types=file_types,
+                    s3_flags=s3_flags,
+                    bucket=bucket,
+                    prefix=prefix,
+                )
+                backup_files = result["backups"]
+                uploaded_files = result["offsite"]
+            finally:
+                # Release any reader still blocked in open() (opening the FIFO
+                # O_RDWR never blocks and presents a writer, so the reader
+                # unblocks and then sees abort_event), and always remove the
+                # FIFOs - even if the backup failed before they were written.
+                abort_event.set()
+                for path in fifo_paths.values():
+                    with contextlib.suppress(OSError):
+                        os.close(os.open(path, os.O_RDWR | os.O_NONBLOCK))
+                    with contextlib.suppress(FileNotFoundError):
+                        os.remove(path)
 
-                uploaded_files = {
-                    file: f"{bucket}/{prefix}/{file}"
-                    for file in files_to_stream
-                }
-                
+        return {"backups": backup_files, "offsite": uploaded_files}
+
+    @step("Upload Site Backup to S3")
+    def finalize_streamed_offsite_backup(
+        self,
+        threads,
+        rclone_results,
+        files_to_stream,
+        s3_names,
+        file_types,
+        s3_flags,
+        bucket,
+        prefix,
+    ):
+        # rclone has been streaming each FIFO to S3 while the backup was being
+        # written; wait for those uploads to finish. (The FIFOs themselves are
+        # always cleaned up by the caller's finally block.)
+        for t in threads:
+            t.join()
+
+        # Fail the step if any stream didn't upload cleanly, otherwise press
+        # would mark the backup successful for files that never reached S3.
+        failed_uploads = {
+            file: err
+            for file, (ret, err) in rclone_results.items()
+            if ret != 0
+        }
+        if failed_uploads or len(rclone_results) != len(files_to_stream):
+            raise AgentException(
+                {"traceback": f"Streaming backup upload to S3 failed: {failed_uploads}"}
+            )
+
+        # Rebuild the structured response press's backup callback expects:
+        # `backups` keyed by type with file/size/url, and `offsite` mapping
+        # each uploaded filename to its path inside the bucket.
+        #
+        # Sizes are read back with rclone (not boto3) so we reuse the exact
+        # S3 flags the upload succeeded with - the offsite auth can omit
+        # REGION, which makes boto3 build an invalid endpoint but rclone
+        # tolerates it. The size is best-effort metadata: a lookup hiccup must
+        # never fail a backup that already uploaded successfully.
+        def get_uploaded_size(s3_name):
+            try:
+                listing = subprocess.run(
+                    ["rclone", "lsjson", *s3_flags, f":s3:{bucket}/{prefix}/{s3_name}"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                if listing.returncode != 0:
+                    print(f"rclone lsjson failed for {s3_name}: {listing.stderr.decode()}")
+                    return 0
+                entries = json.loads(listing.stdout.decode() or "[]")
+                return entries[0]["Size"] if entries else 0
+            except (ValueError, KeyError, IndexError, OSError) as e:
+                print(f"Could not determine uploaded size for {s3_name}: {e}")
+                return 0
+
+        backup_files = {}
+        uploaded_files = {}
+        for file in files_to_stream:
+            s3_name = s3_names[file]
+            offsite_path = os.path.join(prefix, s3_name)
+            backup_files[file_types[file]] = {
+                "file": s3_name,
+                "size": get_uploaded_size(s3_name),
+                "url": f"https://{self.name}/backups/{s3_name}",
+                "path": offsite_path,
+            }
+            uploaded_files[s3_name] = offsite_path
+
         return {"backups": backup_files, "offsite": uploaded_files}
 
     @job("Optimize Tables")
