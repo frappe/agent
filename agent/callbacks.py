@@ -3,23 +3,6 @@ import json
 import requests
 
 
-def callback(job, connection, result, *args, **kwargs):
-    from agent.server import Server
-
-    server = Server()
-    press_url = server.press_url
-
-    path = "/api/method/press.api.callbacks.callback"
-    data = {"job_id": job.id}
-    token = server.config["agent_token"]
-
-    requests.post(
-        url=f"{press_url}{path}",
-        data=data,
-        headers={"X-Agent-Token": token},
-    )
-
-
 def update_callback(job):
     from agent.server import Server
 

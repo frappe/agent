@@ -22,8 +22,6 @@ from rq import Queue, get_current_job
 from rq.command import send_stop_job_command
 from rq.job import Job as RQJob
 
-from agent.callbacks import callback
-
 if TYPE_CHECKING:
     from agent.base import Base
 
@@ -68,7 +66,12 @@ def get_updated_jobs():
         return []
 
     for jid in job_ids:
-        job = JobModel.get(JobModel.id == jid)
+        job = JobModel.get_or_none(JobModel.id == jid)
+
+        if not job:
+            redis.srem("dirty_jobs", jid)
+            continue
+
         temp = to_dict(job)
         res.append((temp, job))
 
@@ -242,8 +245,6 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
             timeout=final_timeout,
             result_ttl=24 * 3600,
             job_id=str(instance.job_record.model.id),
-            on_success=on_success or callback,
-            on_failure=on_failure or callback,
         )
         return instance.job_record.model.id
 
