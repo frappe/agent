@@ -211,7 +211,7 @@ def step(name):
     return wrapper
 
 
-def job(name: str, priority="default", timeout=None, on_success=None, on_failure=None):
+def job(name: str, priority="default", timeout=None):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from flask import has_request_context, request
