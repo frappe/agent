@@ -130,6 +130,18 @@ def handle_token_refresh(server, counter: int) -> int:
     return counter
 
 
+def recover_processing_jobs():
+    redis = connection()
+
+    redis.sunionstore(
+        "dirty_jobs",
+        "dirty_jobs",
+        "processing_jobs",
+    )
+
+    redis.delete("processing_jobs")
+
+
 def process_jobs():
     redis = connection()
 
@@ -147,13 +159,15 @@ def process_jobs():
 def run():
     from agent.server import Server
 
+    recover_processing_jobs()
+
     retry_counter = 0
     token_check_counter = 0
 
     while True:
         server = Server()
 
-        if not server.config.get("enable_agent_job_update", False):
+        if not server.config.get("enable_feature_worker", False):
             time.sleep(5)
             continue
 
