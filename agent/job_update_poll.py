@@ -135,12 +135,12 @@ def process_jobs():
 def run():
     from agent.server import Server
 
-    server = Server()
-
     retry_counter = 0
     token_check_counter = 0
 
     while True:
+        server = Server()
+
         if not server.config.get("enable_feature_worker", False):
             time.sleep(5)
             continue
