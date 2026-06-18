@@ -141,6 +141,7 @@ def run():
 
     while True:
         if not server.config.get("enable_feature_worker", False):
+            time.sleep(5)
             continue
 
         try:
