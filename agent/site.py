@@ -947,11 +947,22 @@ print(">>>" + frappe.session.sid + "<<<")
                 provider_endpoint = {"AWS": f"s3.{auth['REGION']}.amazonaws.com"}
                 s3_flags = [
                     "--s3-provider", auth["PROVIDER"],
-                    "--s3-access-key-id", auth["ACCESS_KEY"],
-                    "--s3-secret-access-key", auth["SECRET_KEY"],
                     "--s3-region", auth["REGION"],
                     "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
+                    "--s3-env-auth=true",
                 ]
+                # Credentials go via env (--s3-env-auth) instead of CLI flags so
+                # they don't leak into the process table. GOMEMLIMIT/GOGC cap
+                # rclone's Go heap so it stays a small earlyoom target. Built
+                # once and reused for every rclone invocation (uploads AND the
+                # lsjson size lookups in finalize_streamed_offsite_backup).
+                s3_env = {
+                    **os.environ,
+                    "GOMEMLIMIT": "400MiB",
+                    "GOGC": "20",
+                    "AWS_ACCESS_KEY_ID": auth["ACCESS_KEY"],
+                    "AWS_SECRET_ACCESS_KEY": auth["SECRET_KEY"],
+                }
             except KeyError as e:
                 raise AgentException(
                     {"traceback": f"Offsite backup auth missing/unsupported key: {e}"}
@@ -1000,11 +1011,13 @@ print(">>>" + frappe.session.sid + "<<<")
                                 "--s3-chunk-size", "5M",
                                 "--s3-upload-concurrency", "1",
                                 "--transfers", "1",
+                                "--use-mmap",
                                 f":s3:{bucket}/{prefix}/{s3_names[file]}",
                             ],
                             stderr=subprocess.PIPE,
                             stdin=fd,
                             close_fds=True,
+                            env=s3_env,
                         )
                         fd.close()
                         # communicate() drains stderr while waiting, so rclone
@@ -1056,6 +1069,7 @@ print(">>>" + frappe.session.sid + "<<<")
                     s3_names=s3_names,
                     file_types=file_types,
                     s3_flags=s3_flags,
+                    s3_env=s3_env,
                     bucket=bucket,
                     prefix=prefix,
                 )
@@ -1084,6 +1098,7 @@ print(">>>" + frappe.session.sid + "<<<")
         s3_names,
         file_types,
         s3_flags,
+        s3_env,
         bucket,
         prefix,
     ):
@@ -1120,6 +1135,7 @@ print(">>>" + frappe.session.sid + "<<<")
                     ["rclone", "lsjson", *s3_flags, f":s3:{bucket}/{prefix}/{s3_name}"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    env=s3_env,
                 )
                 if listing.returncode != 0:
                     print(f"rclone lsjson failed for {s3_name}: {listing.stderr.decode()}")
