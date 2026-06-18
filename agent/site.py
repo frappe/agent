@@ -872,14 +872,23 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @job("Backup Site", priority="low")
     def backup_job(
-        self, with_files=False, offsite=None, keep_files_locally_after_offsite_backup: bool = False
+        self,
+        with_files=False,
+        offsite=None,
+        keep_files_locally_after_offsite_backup: bool = False,
+        stream: bool = False,
     ):
-        if not offsite:
+        # Stream straight to S3 only when explicitly requested and a local copy
+        # isn't needed (streaming writes no files to disk). Every other case -
+        # local-only, offsite without streaming, or keep-locally - backs up to
+        # disk first and uploads offsite afterwards if required.
+        if not (offsite and stream) or keep_files_locally_after_offsite_backup:
             backup_files = self.backup(with_files)
-            uploaded_files = {}
-        elif keep_files_locally_after_offsite_backup:
-            backup_files = self.backup(with_files)
-            uploaded_files = self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup) if backup_files else {}
+            uploaded_files = (
+                self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
+                if (offsite and backup_files)
+                else {}
+            )
         else:
             todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
             public_file = todays_dt + '-%stream%-files.tar'

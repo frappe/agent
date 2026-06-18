@@ -714,12 +714,13 @@ def backup_site(bench, site):
     with_files = data.get("with_files")
     offsite = data.get("offsite")
     keep_files_locally_after_offsite_backup = data.get("keep_files_locally_after_offsite_backup", False)
+    stream = data.get("stream", False)
 
     job = (
         Server()
         .benches[bench]
         .sites[site]
-        .backup_job(with_files, offsite, keep_files_locally_after_offsite_backup)
+        .backup_job(with_files, offsite, keep_files_locally_after_offsite_backup, stream)
     )
     return {"job": job}
 
