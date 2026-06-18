@@ -139,7 +139,9 @@ def process_jobs():
         success = update_callback(job_dict)
 
         if success:
-            redis.srem("dirty_jobs", job.id)
+            redis.srem("processing_jobs", job.id)
+        else:
+            redis.smove("processing_jobs", "dirty_jobs", job.id)
 
 
 def run():

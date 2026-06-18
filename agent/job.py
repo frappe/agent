@@ -60,20 +60,24 @@ def get_updated_jobs():
     redis = connection()
     res = []
 
-    job_ids = [int(i) for i in redis.smembers("dirty_jobs")]
+    members = redis.smembers("dirty_jobs")
 
-    if not job_ids:
+    if not members:
         return []
 
-    for jid in job_ids:
+    with redis.pipeline() as pipe:
+        for member in members:
+            pipe.smove("dirty_jobs", "processing_jobs", member)
+        pipe.execute()
+
+    for jid in map(int, members):
         job = JobModel.get_or_none(JobModel.id == jid)
 
         if not job:
-            redis.srem("dirty_jobs", jid)
+            redis.srem("processing_jobs", jid)
             continue
 
-        temp = to_dict(job)
-        res.append((temp, job))
+        res.append((to_dict(job), job))
 
     return res
 
