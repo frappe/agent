@@ -1178,17 +1178,30 @@ print(">>>" + frappe.session.sid + "<<<")
         def get_uploaded_size(s3_name):
             try:
                 listing = subprocess.run(
-                    ["rclone", "lsjson", *s3_flags, f":s3:{bucket}/{prefix}/{s3_name}"],
+                    [
+                        "rclone", "lsjson", *s3_flags,
+                        # The uploads are already done; this is best-effort
+                        # metadata. Bound it like the rcat uploads so a transient
+                        # S3 outage after upload can't wedge the worker forever -
+                        # rclone's own timeouts plus a hard Python backstop ensure
+                        # we fall through to size 0 instead of hanging.
+                        "--contimeout", "60s",
+                        "--timeout", "60s",
+                        "--retries", "1",
+                        "--low-level-retries", "3",
+                        f":s3:{bucket}/{prefix}/{s3_name}",
+                    ],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     env=s3_env,
+                    timeout=120,
                 )
                 if listing.returncode != 0:
                     print(f"rclone lsjson failed for {s3_name}: {listing.stderr.decode()}")
                     return 0
                 entries = json.loads(listing.stdout.decode() or "[]")
                 return entries[0]["Size"] if entries else 0
-            except (ValueError, KeyError, IndexError, OSError) as e:
+            except (ValueError, KeyError, IndexError, OSError, subprocess.TimeoutExpired) as e:
                 print(f"Could not determine uploaded size for {s3_name}: {e}")
                 return 0
 
