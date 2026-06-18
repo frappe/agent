@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import requests
 
 from agent.callbacks import update_callback
-from agent.job import get_updated_jobs, update_job
+from agent.job import connection, get_updated_jobs
 
 
 def verify_token_expiry(token):
@@ -121,14 +121,15 @@ def handle_token_refresh(server, counter: int) -> int:
 
 
 def process_jobs():
-    """Process updated jobs."""
+    redis = connection()
+
     jobs = get_updated_jobs()
 
     for job_dict, job in jobs:
         success = update_callback(job_dict)
 
-        if not success:
-            update_job(job)
+        if success:
+            redis.srem("dirty_jobs", job.id)
 
 
 def run():
