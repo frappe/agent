@@ -1014,6 +1014,12 @@ print(">>>" + frappe.session.sid + "<<<")
             rclone_results = {}
             threads = []
             try:
+                # Frappe creates private/backups at site creation, but the
+                # streaming path is the only one that writes here before
+                # backup() runs - and docker_execute chdirs into the dir
+                # (-w), so a missing dir would fail mkfifo with an opaque
+                # "no such file or directory". Ensure it exists first.
+                self.bench.docker_execute(f"mkdir -p {relative_path_to_backup_directory}")
                 for file in files_to_stream:
                     self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
 
