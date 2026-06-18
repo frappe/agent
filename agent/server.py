@@ -1191,7 +1191,7 @@ class Server(Base):
             "directory": self.directory,
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
-            "enable_feature_worker": self.config.get("enable_feature_worker", False),  # Default for now
+            "enable_agent_job_update": self.config.get("enable_agent_job_update", False),  # Default for now
             "is_standalone": self.config.get("standalone", False),
         }
         if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):

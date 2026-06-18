@@ -1971,7 +1971,7 @@ def enable_feature_worker():
 
     server.update_config(
         {
-            "enable_feature_worker": True,
+            "enable_agent_job_update": True,
         }
     )
 
@@ -1987,7 +1987,7 @@ def disable_feature_worker():
 
     server.update_config(
         {
-            "enable_feature_worker": False,
+            "enable_agent_job_update": False,
         }
     )
 

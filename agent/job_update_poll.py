@@ -151,7 +151,7 @@ def run():
     while True:
         server = Server()
 
-        if not server.config.get("enable_feature_worker", False):
+        if not server.config.get("enable_agent_job_update", False):
             time.sleep(5)
             continue
 
