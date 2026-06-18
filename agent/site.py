@@ -985,7 +985,23 @@ print(">>>" + frappe.session.sid + "<<<")
                             return
                         print(f"{file}: fifo has been opened in reader_thread: writer detected")
                         subproc = subprocess.Popen(
-                            ["rclone", "rcat", *s3_flags, f":s3:{bucket}/{prefix}/{s3_names[file]}"],
+                            [
+                                "rclone", "rcat",
+                                *s3_flags,
+                                # Keep rclone's memory footprint small. earlyoom
+                                # (running on the hosts) kills the highest
+                                # OOM-score non-avoided process under memory
+                                # pressure; the DB is on its --avoid list, so a
+                                # fat rclone becomes the next victim mid-stream.
+                                # A leaner rclone is both a smaller target and
+                                # adds less pressure. (--progress dropped: it's a
+                                # non-TTY pipe, so it only spammed captured stderr.)
+                                "--buffer-size", "0",
+                                "--s3-chunk-size", "5M",
+                                "--s3-upload-concurrency", "1",
+                                "--transfers", "1",
+                                f":s3:{bucket}/{prefix}/{s3_names[file]}",
+                            ],
                             stderr=subprocess.PIPE,
                             stdin=fd,
                             close_fds=True,
@@ -1003,14 +1019,35 @@ print(">>>" + frappe.session.sid + "<<<")
                     t.start()
 
                 time.sleep(3)
-                self.backup(
-                    with_files,
-                    backup_path_db=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, db_file),
-                    backup_path_conf=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, config_file),
-                    backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file) if with_files else None,
-                    backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file) if with_files else None,
-                    streaming=True,
-                )
+                try:
+                    self.backup(
+                        with_files,
+                        backup_path_db=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, db_file),
+                        backup_path_conf=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, config_file),
+                        backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file) if with_files else None,
+                        backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file) if with_files else None,
+                        streaming=True,
+                    )
+                except AgentException:
+                    # If an rclone reader was killed mid-stream (commonly
+                    # earlyoom sending SIGTERM under memory pressure), the bench
+                    # backup fails with an opaque in-container SIGPIPE - tar/gzip
+                    # writing to a FIFO whose reader has gone. Give the reader
+                    # threads a moment to record their exit codes, then surface
+                    # the real cause instead of the misleading SIGPIPE traceback.
+                    for t in threads:
+                        t.join(timeout=5)
+                    killed = {file: ret for file, (ret, _) in rclone_results.items() if ret < 0}
+                    if killed:
+                        raise AgentException(
+                            {
+                                "traceback": (
+                                    "Streaming backup failed: rclone upload process(es) were "
+                                    f"killed by a signal mid-stream (likely OOM). Killed: {killed}"
+                                )
+                            }
+                        )
+                    raise
 
                 result = self.finalize_streamed_offsite_backup(
                     threads=threads,
