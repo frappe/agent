@@ -964,8 +964,12 @@ print(">>>" + frappe.session.sid + "<<<")
                     return get_size(private_files_dir) if os.path.isdir(private_files_dir) else 0
                 return 0  # config backup is a few KB; the chunk floor covers it
 
+            # Estimate each object's source size once (the DB query and dir walks
+            # aren't free) and reuse it for both the chunk size and the upload
+            # join backstop in finalize_streamed_offsite_backup.
+            source_sizes = {file: estimate_source_size(file) for file in files_to_stream}
             chunk_sizes = {
-                file: self.pick_stream_chunk_size(estimate_source_size(file), total_ram_bytes)
+                file: self.pick_stream_chunk_size(source_sizes[file], total_ram_bytes)
                 for file in files_to_stream
             }
 
@@ -1012,6 +1016,18 @@ print(">>>" + frappe.session.sid + "<<<")
                                 # the region-specific endpoint rejects with IllegalLocationConstraint.
                                 # The bucket already exists.
                                 "--s3-no-check-bucket",
+                                # Bound the upload so a stalled connection (S3
+                                # unreachable, half-open TCP) makes rclone exit on
+                                # its own instead of hanging the reader thread
+                                # forever. --timeout is the idle (no-bytes)
+                                # timeout; a healthy transfer never trips it.
+                                "--contimeout", "60s",
+                                "--timeout", "300s",
+                                # rcat can't replay stdin, so object-level retries
+                                # are pointless; keep per-chunk retries modest so a
+                                # persistent failure surfaces quickly.
+                                "--retries", "1",
+                                "--low-level-retries", "3",
                                 "--use-mmap",
                                 f":s3:{bucket}/{prefix}/{s3_names[file]}",
                             ],
@@ -1073,6 +1089,7 @@ print(">>>" + frappe.session.sid + "<<<")
                     s3_env=s3_env,
                     bucket=bucket,
                     prefix=prefix,
+                    total_source_bytes=sum(source_sizes.values()),
                 )
                 backup_files = result["backups"]
                 uploaded_files = result["offsite"]
@@ -1102,12 +1119,40 @@ print(">>>" + frappe.session.sid + "<<<")
         s3_env,
         bucket,
         prefix,
+        total_source_bytes=0,
     ):
         # rclone has been streaming each FIFO to S3 while the backup was being
         # written; wait for those uploads to finish. (The FIFOs themselves are
         # always cleaned up by the caller's finally block.)
+        #
+        # The joins are bounded, but generously. FIFO backpressure (buffer-size
+        # 0, upload-concurrency 1) throttles the writer to S3's speed, so the
+        # bulk of a multi-GB/multi-hour upload happens during backup() - only
+        # the final in-flight chunk is still draining here. rclone's own
+        # --contimeout/--timeout make a *stalled* upload error out on its own, so
+        # each thread terminates and we get a precise per-file failure below.
+        #
+        # JOIN_BACKSTOP is only a last resort for an rclone wedged despite its
+        # timeouts. It's sized from the total data at a pessimistic 1 MB/s floor
+        # (never below 30 min) so a genuinely slow-but-progressing link is never
+        # cut off - it fires only when rclone is truly stuck, freeing the worker
+        # slot instead of blocking it forever.
+        FLOOR_BYTES_PER_SEC = 1 * 1024**2
+        JOIN_BACKSTOP = max(30 * 60, (total_source_bytes or 0) // FLOOR_BYTES_PER_SEC)
+        deadline = time.monotonic() + JOIN_BACKSTOP
         for t in threads:
-            t.join()
+            t.join(timeout=max(0, deadline - time.monotonic()))
+        still_running = [t for t in threads if t.is_alive()]
+        if still_running:
+            raise AgentException(
+                {
+                    "traceback": (
+                        f"{len(still_running)} rclone upload thread(s) still running "
+                        f"after {JOIN_BACKSTOP}s; aborting so the worker isn't blocked "
+                        "indefinitely (rclone may be wedged despite its --timeout)."
+                    )
+                }
+            )
 
         # Fail the step if any stream didn't upload cleanly, otherwise press
         # would mark the backup successful for files that never reached S3.
