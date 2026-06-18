@@ -24,6 +24,12 @@ def update_callback(job):
     from agent.server import Server
 
     server = Server()
+    token = server.config.get("agent_token")
+
+    if not token:
+        print("Agent token not configured")
+        return False
+
     press_url = server.press_url
 
     job_string = json.dumps(job, default=str)
@@ -34,8 +40,6 @@ def update_callback(job):
         "job": job_string,
         "server": server.name,
     }
-
-    token = server.config["agent_token"]
 
     try:
         response = requests.post(
