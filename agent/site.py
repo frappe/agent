@@ -938,6 +938,28 @@ print(">>>" + frappe.session.sid + "<<<")
             # them mid-stream. Strip the marker only for the S3 object key.
             s3_names = {file: file.replace("%stream%-", "") for file in files_to_stream}
 
+            # Pick each object's S3 chunk size up front so a too-large artifact
+            # fails here - before any FIFO/backup work - with a clear message
+            # instead of OOMing mid-stream. On-disk source sizes are an upper
+            # bound for the gzipped DB dump and the tars, so they're safe inputs.
+            total_ram_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+
+            def estimate_source_size(file):
+                if file == db_file:
+                    return self.get_database_size()
+                if file == public_file:
+                    public_files_dir = os.path.join(self.directory, "public", "files")
+                    return get_size(public_files_dir) if os.path.isdir(public_files_dir) else 0
+                if file == private_file:
+                    private_files_dir = os.path.join(self.directory, "private", "files")
+                    return get_size(private_files_dir) if os.path.isdir(private_files_dir) else 0
+                return 0  # config backup is a few KB; the chunk floor covers it
+
+            chunk_sizes = {
+                file: self.pick_stream_chunk_size(estimate_source_size(file), total_ram_bytes)
+                for file in files_to_stream
+            }
+
             # A reader thread blocks in open() until the backup command opens the
             # FIFO for writing. If the backup fails before that happens, the
             # thread would block forever - so threads are daemonized (they can
@@ -951,7 +973,7 @@ print(">>>" + frappe.session.sid + "<<<")
                     self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
 
                 for file in files_to_stream:
-                    def start_rclone(fifo_path=fifo_paths[file], file=file):
+                    def start_rclone(fifo_path=fifo_paths[file], file=file, chunk_size=chunk_sizes[file]):
                         print(f"{file}: opening reading thread... waiting for writer")
                         fd = open(fifo_path, "rb")
                         if abort_event.is_set():
@@ -964,18 +986,23 @@ print(">>>" + frappe.session.sid + "<<<")
                             [
                                 "rclone", "rcat",
                                 *s3_flags,
-                                # Keep rclone's memory footprint small. earlyoom
-                                # (running on the hosts) kills the highest
-                                # OOM-score non-avoided process under memory
-                                # pressure; the DB is on its --avoid list, so a
-                                # fat rclone becomes the next victim mid-stream.
-                                # A leaner rclone is both a smaller target and
-                                # adds less pressure. (--progress dropped: it's a
-                                # non-TTY pipe, so it only spammed captured stderr.)
+                                # Keep rclone's memory footprint small. earlyoom (running on the
+                                # hosts) kills the highest OOM-score non-avoided process under
+                                # memory pressure; the DB is on its --avoid list, so a fat rclone
+                                # becomes the next victim mid-stream. A leaner rclone is both a
+                                # smaller target and adds less pressure. (--progress dropped: it's
+                                # a non-TTY pipe, so it only spammed captured stderr.)
                                 "--buffer-size", "0",
-                                "--s3-chunk-size", "5M",
+                                # Chunk size caps BOTH the in-memory buffer AND the max object size
+                                # (chunk x 10,000 parts), so it's picked per object by
+                                # pick_stream_chunk_size() from the estimated artifact size and total RAM.
+                                # Safe to hold in memory only because upload-concurrency stays 1.
+                                "--s3-chunk-size", chunk_size,
                                 "--s3-upload-concurrency", "1",
-                                "--transfers", "1",
+                                # Skip the bucket-exists pre-flight; it issues a CreateBucket that
+                                # the region-specific endpoint rejects with IllegalLocationConstraint.
+                                # The bucket already exists.
+                                "--s3-no-check-bucket",
                                 "--use-mmap",
                                 f":s3:{bucket}/{prefix}/{s3_names[file]}",
                             ],
@@ -1168,6 +1195,41 @@ print(">>>" + frappe.session.sid + "<<<")
             )
 
         return {"output": "\n\n".join(message_parts)}
+
+    @staticmethod
+    def pick_stream_chunk_size(file_size_bytes, total_ram_bytes):
+        """Pick an S3 multipart chunk size for an object streamed via `rclone rcat`.
+
+        Chunk size caps both rclone's per-chunk RAM use and the max object size
+        (chunk x rclone's 10,000-part limit), so it must scale with the artifact.
+        Raises AgentException when even the smallest viable chunk would use an
+        unsafe fraction of RAM - i.e. the box can't rcat-stream this object.
+        """
+        MAX_PARTS = 10_000
+        MIN_CHUNK = 5 * 1024**2        # rclone's S3 minimum
+        # Smallest chunk that fits this object in <10k parts, with ~2x headroom
+        # for growth during the backup window.
+        needed = (file_size_bytes * 2) // MAX_PARTS
+        chunk = max(MIN_CHUNK, needed)
+        # Round up to a tidy boundary (next multiple of 16 MiB)
+        step = 16 * 1024**2
+        chunk = ((chunk + step - 1) // step) * step
+        # Safety: one chunk shouldn't exceed a fraction of total RAM. If it
+        # does, the box is too small to stream this object via rcat - fail
+        # loudly rather than OOM.
+        ram_cap = total_ram_bytes // 16    # <= 1/16 of RAM per chunk
+        if chunk > ram_cap:
+            raise AgentException(
+                {
+                    "traceback": (
+                        f"Artifact ~{file_size_bytes / 1024**3:.0f} GiB needs a "
+                        f"{chunk / 1024**2:.0f} MiB chunk, exceeding the RAM-safe "
+                        f"limit of {ram_cap / 1024**2:.0f} MiB. Box too small to "
+                        f"rcat-stream this object; use temp-file + rclone copy."
+                    )
+                }
+            )
+        return f"{chunk // 1024**2}M"
 
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates, site_configs = [], [], [], []
