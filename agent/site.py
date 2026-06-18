@@ -993,14 +993,12 @@ print(">>>" + frappe.session.sid + "<<<")
 
                 for file in files_to_stream:
                     def start_rclone(fifo_path=fifo_paths[file], file=file, chunk_size=chunk_sizes[file]):
-                        print(f"{file}: opening reading thread... waiting for writer")
                         fd = open(fifo_path, "rb")
                         if abort_event.is_set():
                             # Released by the finally block after a failure; don't
                             # start an upload that would only push partial data.
                             fd.close()
                             return
-                        print(f"{file}: fifo has been opened in reader_thread: writer detected")
                         subproc = subprocess.Popen(
                             [
                                 "rclone", "rcat",
@@ -1047,7 +1045,6 @@ print(">>>" + frappe.session.sid + "<<<")
                         # can't deadlock filling the stderr pipe buffer.
                         err = subproc.communicate()[1].decode()
                         ret = subproc.returncode
-                        print(f"rclone exit: {ret}, error: {err}")
                         rclone_results[file] = (ret, err)
 
                     t = threading.Thread(target=start_rclone, daemon=True)
