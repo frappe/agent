@@ -1,51 +1,43 @@
-"""Supply-chain integrity tests for the prebuilt LD_PRELOAD shim binaries.
+"""Supply-chain integrity tests for the bypass_unlink LD_PRELOAD shim.
 
-`lib/bin/bypass_unlink_*.so` are committed binaries that get LD_PRELOAD-ed
-into the in-container bench process during a streaming backup (see
-``Site.backup``). Because they are injected into a production process, a silent
-swap of a committed ``.so`` could intercept *arbitrary* libc calls with no
-visible source diff. These tests are the guard against that:
+The shim is LD_PRELOAD-ed into the in-container bench process during a streaming
+backup (see ``Site.backup``). Because it is injected into a production process,
+it could intercept *arbitrary* libc calls. Rather than commit a prebuilt ``.so``
+- a binary artifact that could be silently swapped with no source diff - the
+shim is compiled from ``lib/bypass_unlink.c`` via ``lib/Makefile`` on every
+backup (see ``Site.build_bypass_unlink_shim``). The trust surface is therefore
+the small, reviewable C source. These tests are the guard against that source
+(or the build) growing reach it should not have:
 
 1. The shim must export ONLY the functions it is supposed to interpose
    (``unlink``/``unlinkat``) - nothing else.
 2. The shim must import ONLY the externals its source actually uses
-   (``strstr``/``dlsym``) - so a swapped binary that reaches for ``open``,
+   (``strstr``/``dlsym``) - so a source change that reaches for ``open``,
    ``execve``, ``socket``, ``system`` ... fails the test.
-3. The committed binaries must be byte-for-byte reproducible from
-   ``lib/bypass_unlink.c`` via the pinned toolchain (verified when ``zig`` +
-   ``make`` are present; always enforced in CI).
 
-The ELF parsing is intentionally dependency-free (stdlib only) so the symbol
-checks run unconditionally in CI, even where the build toolchain is absent.
+The ELF parsing is intentionally dependency-free (stdlib only). The build needs
+make + gcc, which CI installs; locally the binary-level checks skip when the
+toolchain is absent (the source-level check still runs unconditionally).
 """
 
 from __future__ import annotations
 
-import hashlib
 import os
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LIB_DIR = os.path.join(REPO_ROOT, "lib")
 SOURCE = os.path.join(LIB_DIR, "bypass_unlink.c")
-BIN_DIR = os.path.join(LIB_DIR, "bin")
 
-# ELF e_machine values for the architectures we ship.
-EM_X86_64 = 62
-EM_AARCH64 = 183
 ET_DYN = 3  # shared object
 
-BINARIES = {
-    "bypass_unlink_x86_64.so": EM_X86_64,
-    "bypass_unlink_arm64.so": EM_AARCH64,
-}
-
 # The shim must interpose EXACTLY these libc functions. Changing this set is a
-# deliberate, security-relevant act: update it here AND rebuild the binaries.
+# deliberate, security-relevant act: update it here AND in the C source.
 EXPECTED_EXPORTS = {"unlink", "unlinkat"}
 
 # The only externals the shim is allowed to import. strstr matches the marker;
@@ -105,7 +97,7 @@ def _iter_dynsym(data, sections):
 def _read_dynamic_symbols(path):
     """Parse an ELF64 LE shared object using only the stdlib (no pyelftools).
 
-    Returns (e_machine, e_type, exported_funcs, imported_syms).
+    Returns (e_type, exported_funcs, imported_syms).
     """
     with open(path, "rb") as f:
         data = f.read()
@@ -114,16 +106,52 @@ def _read_dynamic_symbols(path):
         raise ValueError(f"{path}: expected 64-bit little-endian ELF")
 
     e_type = struct.unpack_from("<H", data, 16)[0]
-    e_machine = struct.unpack_from("<H", data, 18)[0]
     sections = _elf_sections(data)
     if ".dynsym" not in sections or ".dynstr" not in sections:
         raise ValueError(f"{path}: missing .dynsym/.dynstr")
     exported, imported = _iter_dynsym(data, sections)
-    return e_machine, e_type, exported, imported
+    return e_type, exported, imported
 
 
 class TestBypassUnlinkShim(unittest.TestCase):
-    """Integrity of the committed LD_PRELOAD shim binaries."""
+    """Integrity of the bypass_unlink LD_PRELOAD shim built from source."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Build the shim once via the Makefile, exactly as Site does.
+
+        Gated on Linux: the shim is only ever built and LD_PRELOAD-ed on the
+        Linux agent host, and a native build elsewhere (e.g. a Mach-O on macOS)
+        is not the ELF these checks parse. CI runs on Linux, so the binary-level
+        guarantees are always enforced there.
+        """
+        cls._tmp = None
+        cls._built = None
+        if not sys.platform.startswith("linux"):
+            return
+        if not (shutil.which("make") and shutil.which("gcc")):
+            return
+        cls._tmp = tempfile.TemporaryDirectory()
+        built = os.path.join(cls._tmp.name, "bypass_unlink.so")
+        subprocess.run(
+            ["make", "-C", LIB_DIR, f"OUT={built}"],
+            check=True,
+            capture_output=True,
+        )
+        cls._built = built
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls._tmp is not None:
+            cls._tmp.cleanup()
+
+    def _require_build(self):
+        if self._built is None:
+            self.skipTest(
+                "shim not built (non-Linux or make/gcc absent); "
+                "source-level check still enforced"
+            )
+        return self._built
 
     def test_source_defines_exactly_the_expected_interposers(self):
         """The C source must define exactly the functions we expect to interpose."""
@@ -136,75 +164,39 @@ class TestBypassUnlinkShim(unittest.TestCase):
                 f"{name} is in EXPECTED_EXPORTS but not defined in bypass_unlink.c",
             )
 
-    def test_binaries_exist(self):
-        for name in BINARIES:
-            self.assertTrue(
-                os.path.isfile(os.path.join(BIN_DIR, name)),
-                f"committed shim missing: {name}",
-            )
-
-    def test_binaries_are_expected_shared_objects(self):
-        for name, machine in BINARIES.items():
-            e_machine, e_type, _, _ = _read_dynamic_symbols(os.path.join(BIN_DIR, name))
-            self.assertEqual(e_type, ET_DYN, f"{name}: not a shared object")
-            self.assertEqual(e_machine, machine, f"{name}: wrong architecture")
+    def test_builds_a_shared_object(self):
+        built = self._require_build()
+        e_type, _, _ = _read_dynamic_symbols(built)
+        self.assertEqual(e_type, ET_DYN, "build did not produce a shared object")
 
     def test_interposes_only_expected_functions(self):
-        """A swapped binary that interposes extra libc calls fails here."""
-        for name in BINARIES:
-            _, _, exported, _ = _read_dynamic_symbols(os.path.join(BIN_DIR, name))
-            self.assertEqual(
-                exported,
-                EXPECTED_EXPORTS,
-                f"{name} exports {sorted(exported)}, expected {sorted(EXPECTED_EXPORTS)}. "
-                "The shim must interpose ONLY these functions.",
-            )
+        """A source change that interposes extra libc calls fails here."""
+        built = self._require_build()
+        _, exported, _ = _read_dynamic_symbols(built)
+        self.assertEqual(
+            exported,
+            EXPECTED_EXPORTS,
+            f"shim exports {sorted(exported)}, expected {sorted(EXPECTED_EXPORTS)}. "
+            "The shim must interpose ONLY these functions.",
+        )
 
     def test_imports_only_expected_externals(self):
-        """A swapped binary reaching for open/execve/socket/system fails here."""
-        for name in BINARIES:
-            _, _, _, imported = _read_dynamic_symbols(os.path.join(BIN_DIR, name))
-            self.assertEqual(
-                imported,
-                EXPECTED_IMPORTS,
-                f"{name} imports {sorted(imported)}, expected {sorted(EXPECTED_IMPORTS)}. "
-                "The shim must not call into libc beyond what the source does.",
-            )
+        """A source change reaching for open/execve/socket/system fails here."""
+        built = self._require_build()
+        _, _, imported = _read_dynamic_symbols(built)
+        self.assertEqual(
+            imported,
+            EXPECTED_IMPORTS,
+            f"shim imports {sorted(imported)}, expected {sorted(EXPECTED_IMPORTS)}. "
+            "The shim must not call into libc beyond what the source does.",
+        )
 
     def test_no_debug_strings(self):
-        """Guard against the old debug printf creeping back into the binary."""
-        for name in BINARIES:
-            with open(os.path.join(BIN_DIR, name), "rb") as f:
-                blob = f.read()
-            self.assertNotIn(b"hi (blocked", blob, f"{name}: leftover debug string")
-
-    def test_committed_binaries_match_source_rebuild(self):
-        """Rebuild from source with the pinned toolchain; bytes must match.
-
-        This is the full source<->binary guarantee. It needs `zig` + `make`,
-        which CI installs; locally it skips when the toolchain is absent (the
-        symbol-level tests above still run unconditionally).
-        """
-        if not shutil.which("zig") or not shutil.which("make"):
-            self.skipTest("zig/make not available; symbol-level checks still enforced")
-
-        with tempfile.TemporaryDirectory() as out:
-            subprocess.run(
-                ["make", "-C", LIB_DIR, f"OUT={out}"],
-                check=True,
-                capture_output=True,
-            )
-            for name in BINARIES:
-                committed = os.path.join(BIN_DIR, name)
-                rebuilt = os.path.join(out, name)
-                self.assertTrue(os.path.isfile(rebuilt), f"rebuild produced no {name}")
-                with open(committed, "rb") as a, open(rebuilt, "rb") as b:
-                    self.assertEqual(
-                        hashlib.sha256(a.read()).hexdigest(),
-                        hashlib.sha256(b.read()).hexdigest(),
-                        f"{name} does not match a fresh build from bypass_unlink.c. "
-                        "The committed binary may have been replaced without a source change.",
-                    )
+        """Guard against a debug printf creeping back into the binary."""
+        built = self._require_build()
+        with open(built, "rb") as f:
+            blob = f.read()
+        self.assertNotIn(b"hi (blocked", blob, "leftover debug string in shim")
 
 
 if __name__ == "__main__":

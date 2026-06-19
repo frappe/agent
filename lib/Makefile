@@ -1,32 +1,32 @@
-# Reproducible build of the bypass_unlink LD_PRELOAD shim.
+# Native build of the bypass_unlink LD_PRELOAD shim.
 #
 # The shim is preloaded into the in-container bench process during a streaming
-# backup to stop the framework deleting the %stream% FIFOs mid-stream. It must
-# match the container architecture, so we ship a prebuilt .so per arch.
+# backup to stop the framework deleting the %stream% FIFOs mid-stream. It is
+# NOT committed as a prebuilt binary - shipping a .so would be a swappable
+# supply-chain artifact. Instead it is compiled from source on every backup by
+# Site.build_bypass_unlink_shim, which just calls:
 #
-# Built with `zig cc` so the binaries cross-compile identically from any host
-# (macOS/Linux, x86_64/arm64). We pin an old glibc (2.31) for broad container
-# compatibility; the shim only references GLIBC_2.2.5 symbols in practice.
+#     make -C lib OUT=<absolute path to the .so to produce>
 #
-# Usage: `make` (rebuild both), `make clean`.
+# A native build needs no arch juggling: Docker on Linux shares the host
+# architecture, and glibc is backward-compatible, so a shim built against the
+# host's (same-or-older) glibc loads inside the container. The shim only touches
+# strstr/dlsym, the most stable libc symbols.
+#
+# test_bypass_unlink.py rebuilds via this same target and asserts the result
+# interposes/imports only the allowed symbols.
 
-CC      := zig cc
-CFLAGS  := -shared -fPIC -O2
-SRC     := bypass_unlink.c
-OUT     := bin
+CC     ?= gcc
+CFLAGS := -shared -fPIC -O2 -s
+SRC    := bypass_unlink.c
 
-all: $(OUT)/bypass_unlink_x86_64.so $(OUT)/bypass_unlink_arm64.so
+ifndef OUT
+$(error OUT=<output .so path> is required, e.g. `make OUT=/tmp/bypass_unlink.so`)
+endif
 
-$(OUT)/bypass_unlink_x86_64.so: $(SRC) | $(OUT)
-	$(CC) -target x86_64-linux-gnu.2.31 $(CFLAGS) -o $@ $<
+all: $(OUT)
 
-$(OUT)/bypass_unlink_arm64.so: $(SRC) | $(OUT)
-	$(CC) -target aarch64-linux-gnu.2.31 $(CFLAGS) -o $@ $<
+$(OUT): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $<
 
-$(OUT):
-	mkdir -p $(OUT)
-
-clean:
-	rm -f $(OUT)/bypass_unlink_x86_64.so $(OUT)/bypass_unlink_arm64.so
-
-.PHONY: all clean
+.PHONY: all

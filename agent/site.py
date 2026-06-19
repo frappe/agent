@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -24,6 +23,8 @@ from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get
 
 if TYPE_CHECKING:
     from agent.bench import Bench
+
+LIB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib")
 
 
 class Site(Base):
@@ -516,6 +517,34 @@ class Site(Base):
     def update_plan(self, plan):
         self.bench_execute(f"update-site-plan {plan}")
 
+    def build_bypass_unlink_shim(self, out_path):
+        """Compile the bypass_unlink LD_PRELOAD shim from source into ``out_path``.
+
+        The shim is built fresh from ``lib/bypass_unlink.c`` via ``lib/Makefile``
+        on every streaming backup. Compiling from source (instead of committing a
+        prebuilt ``.so``) means there is no binary artifact that can be silently
+        swapped: the trust surface is the small, reviewable C source. A native
+        build also matches the container without arch juggling - Docker on Linux
+        shares the host architecture, and glibc's backward compatibility lets a
+        shim built against the host's glibc load inside the (same-or-newer-glibc)
+        container.
+        """
+        try:
+            subprocess.run(
+                ["make", "-C", LIB_DIR, f"OUT={out_path}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise AgentException(
+                {"traceback": "make/gcc are required to build the bypass_unlink shim for streaming backups"}
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            raise AgentException(
+                {"traceback": f"Failed to build bypass_unlink shim: {exc.stderr}"}
+            ) from exc
+
     @step("Backup Site")
     def backup(self, with_files=False, backup_path_db=None, backup_path_conf=None, backup_path_private_files=None, backup_path_files=None, streaming=False):
         with_files_flag = "--with-files" if with_files else ""
@@ -525,22 +554,13 @@ class Site(Base):
         private_files_arg = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
 
         if streaming:
-            # The shim is LD_PRELOAD-ed into the in-container bench process, so
-            # it must match the architecture. Pick the prebuilt binary for the
-            # host arch (== container arch); fail clearly on anything unbuilt.
-            arch_so = {
-                "x86_64": "bypass_unlink_x86_64.so",
-                "aarch64": "bypass_unlink_arm64.so",
-                "arm64": "bypass_unlink_arm64.so",
-            }
-            arch = platform.machine()
-            if arch not in arch_so:
-                raise AgentException(
-                    {"traceback": f"No bypass_unlink shim built for architecture: {arch}"}
-                )
-            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            so_src = os.path.join(repo_root, "lib", "bin", arch_so[arch])
-            so_filename = os.path.basename(so_src)
+            # The shim is LD_PRELOAD-ed into the in-container bench process. Rather
+            # than ship a prebuilt binary (a swappable supply-chain artifact), we
+            # compile it from source at backup time via lib/Makefile. A native
+            # build matches the container automatically: Docker on Linux shares the
+            # host architecture, and glibc is backward-compatible so a shim built
+            # against the host's (older-or-equal) glibc loads inside the container.
+            so_filename = "bypass_unlink.so"
             docker_backup_dir = os.path.dirname(backup_path_db)
             host_backup_dir = os.path.join(
                 self.bench.directory,
@@ -548,7 +568,7 @@ class Site(Base):
             )
             docker_so_path = os.path.join(docker_backup_dir, so_filename)
             host_so_path = os.path.join(host_backup_dir, so_filename)
-            shutil.copy(so_src, host_so_path)
+            self.build_bypass_unlink_shim(host_so_path)
             try:
                 self.bench.docker_execute(
                     f"env LD_PRELOAD={docker_so_path} bench --site {self.name} backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose"
