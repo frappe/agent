@@ -68,3 +68,30 @@ jobs:
           source env/bin/activate
           python --version
           python -m unittest discover
+
+  shim-integrity:
+    name: "LD_PRELOAD Shim Integrity"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      # Pinned to the toolchain that produced the committed binaries. The build
+      # is byte-for-byte reproducible, so a fresh build must match the committed
+      # lib/bin/*.so exactly - otherwise a binary was changed without a matching
+      # source change. Bump this version only alongside a deliberate rebuild.
+      - name: Install zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      # stdlib-only test; no agent install needed. Runs the symbol-surface
+      # checks AND (because zig is present here) the rebuild-and-compare.
+      - name: Verify committed shim binaries match source
+        run: python agent/tests/test_bypass_unlink.py -v
