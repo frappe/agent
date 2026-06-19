@@ -950,11 +950,18 @@ print(">>>" + frappe.session.sid + "<<<")
             # required key (or carries an unsupported provider) instead of
             # letting a raw KeyError abort it with an opaque traceback.
             try:
-                provider_endpoint = {"AWS": f"s3.{auth['REGION']}.amazonaws.com"}
+                # press stores PROVIDER as a human label (e.g. "AWS S3"), not
+                # rclone's provider name. Map the label to (rclone --s3-provider
+                # value, endpoint). The boto3 (non-streaming) path ignores
+                # PROVIDER entirely, so this mapping lives only here.
+                providers = {
+                    "AWS S3": ("AWS", f"s3.{auth['REGION']}.amazonaws.com"),
+                }
+                rclone_provider, endpoint = providers[auth["PROVIDER"]]
                 s3_flags = [
-                    "--s3-provider", auth["PROVIDER"],
+                    "--s3-provider", rclone_provider,
                     "--s3-region", auth["REGION"],
-                    "--s3-endpoint", provider_endpoint[auth["PROVIDER"]],
+                    "--s3-endpoint", endpoint,
                     "--s3-env-auth=true",
                 ]
                 # Credentials go via env (--s3-env-auth) instead of CLI flags so
