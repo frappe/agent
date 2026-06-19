@@ -5,6 +5,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import threading
 import tarfile
 import time
 from datetime import datetime
@@ -21,6 +23,8 @@ from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get
 
 if TYPE_CHECKING:
     from agent.bench import Bench
+
+LIB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib")
 
 
 class Site(Base):
@@ -513,11 +517,73 @@ class Site(Base):
     def update_plan(self, plan):
         self.bench_execute(f"update-site-plan {plan}")
 
+    def build_bypass_unlink_shim(self, out_path):
+        """Compile the bypass_unlink LD_PRELOAD shim from source into ``out_path``.
+
+        The shim is built fresh from ``lib/bypass_unlink.c`` via ``lib/Makefile``
+        on every streaming backup. Compiling from source (instead of committing a
+        prebuilt ``.so``) means there is no binary artifact that can be silently
+        swapped: the trust surface is the small, reviewable C source. A native
+        build also matches the container without arch juggling - Docker on Linux
+        shares the host architecture, and glibc's backward compatibility lets a
+        shim built against the host's glibc load inside the (same-or-newer-glibc)
+        container.
+        """
+        try:
+            subprocess.run(
+                ["make", "-C", LIB_DIR, f"OUT={out_path}"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise AgentException(
+                {"traceback": "make/gcc are required to build the bypass_unlink shim for streaming backups"}
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            raise AgentException(
+                {"traceback": f"Failed to build bypass_unlink shim: {exc.stderr}"}
+            ) from exc
+
     @step("Backup Site")
-    def backup(self, with_files=False):
-        with_files = "--with-files" if with_files else ""
-        self.bench_execute(f"backup {with_files} --verbose")
-        return self.fetch_latest_backup(with_files=with_files)
+    def backup(self, with_files=False, backup_path_db=None, backup_path_conf=None, backup_path_private_files=None, backup_path_files=None, streaming=False):
+        with_files_flag = "--with-files" if with_files else ""
+        db_arg = f"--backup-path-db {backup_path_db}" if backup_path_db else ""
+        conf_arg = f"--backup-path-conf {backup_path_conf}" if backup_path_conf else ""
+        files_arg = f"--backup-path-files {backup_path_files}" if backup_path_files else ""
+        private_files_arg = f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
+
+        if streaming:
+            # The shim is LD_PRELOAD-ed into the in-container bench process. Rather
+            # than ship a prebuilt binary (a swappable supply-chain artifact), we
+            # compile it from source at backup time via lib/Makefile. A native
+            # build matches the container automatically: Docker on Linux shares the
+            # host architecture, and glibc is backward-compatible so a shim built
+            # against the host's (older-or-equal) glibc loads inside the container.
+            so_filename = "bypass_unlink.so"
+            docker_backup_dir = os.path.dirname(backup_path_db)
+            host_backup_dir = os.path.join(
+                self.bench.directory,
+                os.path.relpath(docker_backup_dir, "/home/frappe/frappe-bench"),
+            )
+            docker_so_path = os.path.join(docker_backup_dir, so_filename)
+            host_so_path = os.path.join(host_backup_dir, so_filename)
+            self.build_bypass_unlink_shim(host_so_path)
+            try:
+                self.bench.docker_execute(
+                    f"env LD_PRELOAD={docker_so_path} bench --site {self.name} backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose"
+                )
+            finally:
+                # Always remove the shim, even if the backup command fails,
+                # so it doesn't leak into the site's backups directory.
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(host_so_path)
+        else:
+            self.bench_execute(f"backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose")
+
+        if streaming:
+            return None
+        return self.fetch_latest_backup(with_files=bool(with_files))
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite, keep_files_locally_after_offsite_backup: bool):
@@ -840,14 +906,366 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @job("Backup Site", priority="low")
     def backup_job(
-        self, with_files=False, offsite=None, keep_files_locally_after_offsite_backup: bool = False
+        self,
+        with_files=False,
+        offsite=None,
+        keep_files_locally_after_offsite_backup: bool = False,
+        stream: bool = False,
     ):
-        backup_files = self.backup(with_files)
-        uploaded_files = (
-            self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
-            if (offsite and backup_files)
-            else {}
-        )
+        # Stream straight to S3 only when explicitly requested and a local copy
+        # isn't needed (streaming writes no files to disk). Every other case -
+        # local-only, offsite without streaming, or keep-locally - backs up to
+        # disk first and uploads offsite afterwards if required.
+        if not (offsite and stream) or keep_files_locally_after_offsite_backup:
+            backup_files = self.backup(with_files)
+            uploaded_files = (
+                self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
+                if (offsite and backup_files)
+                else {}
+            )
+        else:
+            todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
+            public_file = todays_dt + '-%stream%-files.tar'
+            db_file = todays_dt + '-%stream%-database.sql.gz'
+            private_file = todays_dt + '-%stream%-private-files.tar'
+            config_file = todays_dt + '-%stream%-site_config_backup.json'
+
+            files_to_stream = [config_file, db_file]
+            if with_files:
+                files_to_stream += [private_file, public_file]
+
+            relative_path_to_backup_directory = f"sites/{self.name}/private/backups"
+            backup_directory_from_root = os.path.join(self.bench.directory, relative_path_to_backup_directory)
+            fifo_paths = {file: os.path.join(backup_directory_from_root, file) for file in files_to_stream}
+
+            bucket, auth, prefix = offsite["bucket"], offsite["auth"], offsite["path"]
+
+            # Maps the streamed filename to the backup "type" press expects
+            # (database/site_config/public/private). Press keys off these types
+            # to populate the Site Backup and Remote File records.
+            file_types = {db_file: "database", config_file: "site_config"}
+            if with_files:
+                file_types[private_file] = "private"
+                file_types[public_file] = "public"
+
+            # Fail the job with a clear message if the offsite auth is missing a
+            # required key (or carries an unsupported provider) instead of
+            # letting a raw KeyError abort it with an opaque traceback.
+            try:
+                # press stores PROVIDER as a human label (e.g. "AWS S3"), not
+                # rclone's provider name. Map the label to (rclone --s3-provider
+                # value, endpoint). The boto3 (non-streaming) path ignores
+                # PROVIDER entirely, so this mapping lives only here.
+                providers = {
+                    "AWS S3": ("AWS", f"s3.{auth['REGION']}.amazonaws.com"),
+                }
+                rclone_provider, endpoint = providers[auth["PROVIDER"]]
+                s3_flags = [
+                    "--s3-provider", rclone_provider,
+                    "--s3-region", auth["REGION"],
+                    "--s3-endpoint", endpoint,
+                    "--s3-env-auth=true",
+                ]
+                # Credentials go via env (--s3-env-auth) instead of CLI flags so
+                # they don't leak into the process table. GOMEMLIMIT/GOGC cap
+                # rclone's Go heap so it stays a small earlyoom target. Built
+                # once and reused for every rclone invocation (uploads AND the
+                # lsjson size lookups in finalize_streamed_offsite_backup).
+                s3_env = {
+                    **os.environ,
+                    "GOMEMLIMIT": "400MiB",
+                    "GOGC": "20",
+                    "AWS_ACCESS_KEY_ID": auth["ACCESS_KEY"],
+                    "AWS_SECRET_ACCESS_KEY": auth["SECRET_KEY"],
+                }
+            except KeyError as e:
+                raise AgentException(
+                    {"traceback": f"Offsite backup auth missing/unsupported key: {e}"}
+                )
+
+            # The local FIFO names must keep the "%stream%" marker so the
+            # bypass_unlink.so LD_PRELOAD shim blocks the framework from deleting
+            # them mid-stream. Strip the marker only for the S3 object key.
+            s3_names = {file: file.replace("%stream%-", "") for file in files_to_stream}
+
+            # Pick each object's S3 chunk size up front so a too-large artifact
+            # fails here - before any FIFO/backup work - with a clear message
+            # instead of OOMing mid-stream. On-disk source sizes are an upper
+            # bound for the gzipped DB dump and the tars, so they're safe inputs.
+            total_ram_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+
+            def estimate_source_size(file):
+                if file == db_file:
+                    return self.get_database_size()
+                if file == public_file:
+                    public_files_dir = os.path.join(self.directory, "public", "files")
+                    return get_size(public_files_dir) if os.path.isdir(public_files_dir) else 0
+                if file == private_file:
+                    private_files_dir = os.path.join(self.directory, "private", "files")
+                    return get_size(private_files_dir) if os.path.isdir(private_files_dir) else 0
+                return 0  # config backup is a few KB; the chunk floor covers it
+
+            # Estimate each object's source size once (the DB query and dir walks
+            # aren't free) and reuse it for both the chunk size and the upload
+            # join backstop in finalize_streamed_offsite_backup.
+            source_sizes = {file: estimate_source_size(file) for file in files_to_stream}
+            chunk_sizes = {
+                file: self.pick_stream_chunk_size(source_sizes[file], total_ram_bytes)
+                for file in files_to_stream
+            }
+
+            # A reader thread blocks in open() until the backup command opens the
+            # FIFO for writing. If the backup fails before that happens, the
+            # thread would block forever - so threads are daemonized (they can
+            # never keep the worker alive) and abort_event + the finally block
+            # release them and remove the FIFOs no matter how we exit.
+            abort_event = threading.Event()
+            rclone_results = {}
+            threads = []
+            try:
+                # Frappe creates private/backups at site creation, but the
+                # streaming path is the only one that writes here before
+                # backup() runs - and docker_execute chdirs into the dir
+                # (-w), so a missing dir would fail mkfifo with an opaque
+                # "no such file or directory". Ensure it exists first.
+                self.bench.docker_execute(f"mkdir -p {relative_path_to_backup_directory}")
+                for file in files_to_stream:
+                    self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
+
+                for file in files_to_stream:
+                    def start_rclone(fifo_path=fifo_paths[file], file=file, chunk_size=chunk_sizes[file]):
+                        fd = open(fifo_path, "rb")
+                        if abort_event.is_set():
+                            # Released by the finally block after a failure; don't
+                            # start an upload that would only push partial data.
+                            fd.close()
+                            return
+                        subproc = subprocess.Popen(
+                            [
+                                "rclone", "rcat",
+                                *s3_flags,
+                                # Keep rclone's memory footprint small. earlyoom (running on the
+                                # hosts) kills the highest OOM-score non-avoided process under
+                                # memory pressure; the DB is on its --avoid list, so a fat rclone
+                                # becomes the next victim mid-stream. A leaner rclone is both a
+                                # smaller target and adds less pressure. (--progress dropped: it's
+                                # a non-TTY pipe, so it only spammed captured stderr.)
+                                "--buffer-size", "0",
+                                # Chunk size caps BOTH the in-memory buffer AND the max object size
+                                # (chunk x 10,000 parts), so it's picked per object by
+                                # pick_stream_chunk_size() from the estimated artifact size and total RAM.
+                                # Safe to hold in memory only because upload-concurrency stays 1.
+                                "--s3-chunk-size", chunk_size,
+                                "--s3-upload-concurrency", "1",
+                                # Skip the bucket-exists pre-flight; it issues a CreateBucket that
+                                # the region-specific endpoint rejects with IllegalLocationConstraint.
+                                # The bucket already exists.
+                                "--s3-no-check-bucket",
+                                # Bound the upload so a stalled connection (S3
+                                # unreachable, half-open TCP) makes rclone exit on
+                                # its own instead of hanging the reader thread
+                                # forever. --timeout is the idle (no-bytes)
+                                # timeout; a healthy transfer never trips it.
+                                "--contimeout", "60s",
+                                "--timeout", "300s",
+                                # rcat can't replay stdin, so object-level retries
+                                # are pointless; keep per-chunk retries modest so a
+                                # persistent failure surfaces quickly.
+                                "--retries", "1",
+                                "--low-level-retries", "3",
+                                "--use-mmap",
+                                f":s3:{bucket}/{prefix}/{s3_names[file]}",
+                            ],
+                            stderr=subprocess.PIPE,
+                            stdin=fd,
+                            close_fds=True,
+                            env=s3_env,
+                        )
+                        fd.close()
+                        # communicate() drains stderr while waiting, so rclone
+                        # can't deadlock filling the stderr pipe buffer.
+                        err = subproc.communicate()[1].decode()
+                        ret = subproc.returncode
+                        rclone_results[file] = (ret, err)
+
+                    t = threading.Thread(target=start_rclone, daemon=True)
+                    threads.append(t)
+                    t.start()
+
+                time.sleep(3)
+                try:
+                    self.backup(
+                        with_files,
+                        backup_path_db=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, db_file),
+                        backup_path_conf=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, config_file),
+                        backup_path_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, public_file) if with_files else None,
+                        backup_path_private_files=os.path.join("/home/frappe/frappe-bench/", relative_path_to_backup_directory, private_file) if with_files else None,
+                        streaming=True,
+                    )
+                except AgentException:
+                    # If an rclone reader was killed mid-stream (commonly
+                    # earlyoom sending SIGTERM under memory pressure), the bench
+                    # backup fails with an opaque in-container SIGPIPE - tar/gzip
+                    # writing to a FIFO whose reader has gone. Give the reader
+                    # threads a moment to record their exit codes, then surface
+                    # the real cause instead of the misleading SIGPIPE traceback.
+                    for t in threads:
+                        t.join(timeout=5)
+                    killed = {
+                        file: {"exit": ret, "error": err}
+                        for file, (ret, err) in rclone_results.items()
+                        if ret < 0
+                    }
+                    if killed:
+                        raise AgentException(
+                            {
+                                "traceback": (
+                                    "Streaming backup failed: rclone upload process(es) were "
+                                    f"killed by a signal mid-stream (likely OOM). Killed: {killed}"
+                                )
+                            }
+                        )
+                    raise
+
+                result = self.finalize_streamed_offsite_backup(
+                    threads=threads,
+                    rclone_results=rclone_results,
+                    files_to_stream=files_to_stream,
+                    s3_names=s3_names,
+                    file_types=file_types,
+                    s3_flags=s3_flags,
+                    s3_env=s3_env,
+                    bucket=bucket,
+                    prefix=prefix,
+                    total_source_bytes=sum(source_sizes.values()),
+                )
+                backup_files = result["backups"]
+                uploaded_files = result["offsite"]
+            finally:
+                # Release any reader still blocked in open() (opening the FIFO
+                # O_RDWR never blocks and presents a writer, so the reader
+                # unblocks and then sees abort_event), and always remove the
+                # FIFOs - even if the backup failed before they were written.
+                abort_event.set()
+                for path in fifo_paths.values():
+                    with contextlib.suppress(OSError):
+                        os.close(os.open(path, os.O_RDWR | os.O_NONBLOCK))
+                    with contextlib.suppress(FileNotFoundError):
+                        os.remove(path)
+
+        return {"backups": backup_files, "offsite": uploaded_files}
+
+    @step("Upload Site Backup to S3")
+    def finalize_streamed_offsite_backup(
+        self,
+        threads,
+        rclone_results,
+        files_to_stream,
+        s3_names,
+        file_types,
+        s3_flags,
+        s3_env,
+        bucket,
+        prefix,
+        total_source_bytes=0,
+    ):
+        # rclone has been streaming each FIFO to S3 while the backup was being
+        # written; wait for those uploads to finish. (The FIFOs themselves are
+        # always cleaned up by the caller's finally block.)
+        #
+        # The joins are bounded, but generously. FIFO backpressure (buffer-size
+        # 0, upload-concurrency 1) throttles the writer to S3's speed, so the
+        # bulk of a multi-GB/multi-hour upload happens during backup() - only
+        # the final in-flight chunk is still draining here. rclone's own
+        # --contimeout/--timeout make a *stalled* upload error out on its own, so
+        # each thread terminates and we get a precise per-file failure below.
+        #
+        # JOIN_BACKSTOP is only a last resort for an rclone wedged despite its
+        # timeouts. It's sized from the total data at a pessimistic 1 MB/s floor
+        # (never below 30 min) so a genuinely slow-but-progressing link is never
+        # cut off - it fires only when rclone is truly stuck, freeing the worker
+        # slot instead of blocking it forever.
+        FLOOR_BYTES_PER_SEC = 1 * 1024**2
+        JOIN_BACKSTOP = max(30 * 60, (total_source_bytes or 0) // FLOOR_BYTES_PER_SEC)
+        deadline = time.monotonic() + JOIN_BACKSTOP
+        for t in threads:
+            t.join(timeout=max(0, deadline - time.monotonic()))
+        still_running = [t for t in threads if t.is_alive()]
+        if still_running:
+            raise AgentException(
+                {
+                    "traceback": (
+                        f"{len(still_running)} rclone upload thread(s) still running "
+                        f"after {JOIN_BACKSTOP}s; aborting so the worker isn't blocked "
+                        "indefinitely (rclone may be wedged despite its --timeout)."
+                    )
+                }
+            )
+
+        # Fail the step if any stream didn't upload cleanly, otherwise press
+        # would mark the backup successful for files that never reached S3.
+        failed_uploads = {
+            file: {"exit": ret, "error": err}
+            for file, (ret, err) in rclone_results.items()
+            if ret != 0
+        }
+        if failed_uploads or len(rclone_results) != len(files_to_stream):
+            raise AgentException(
+                {"traceback": f"Streaming backup upload to S3 failed: {failed_uploads}"}
+            )
+
+        # Rebuild the structured response press's backup callback expects:
+        # `backups` keyed by type with file/size/url, and `offsite` mapping
+        # each uploaded filename to its path inside the bucket.
+        #
+        # Sizes are read back with rclone (not boto3) so we reuse the exact
+        # S3 flags the upload succeeded with - the offsite auth can omit
+        # REGION, which makes boto3 build an invalid endpoint but rclone
+        # tolerates it. The size is best-effort metadata: a lookup hiccup must
+        # never fail a backup that already uploaded successfully.
+        def get_uploaded_size(s3_name):
+            try:
+                listing = subprocess.run(
+                    [
+                        "rclone", "lsjson", *s3_flags,
+                        # The uploads are already done; this is best-effort
+                        # metadata. Bound it like the rcat uploads so a transient
+                        # S3 outage after upload can't wedge the worker forever -
+                        # rclone's own timeouts plus a hard Python backstop ensure
+                        # we fall through to size 0 instead of hanging.
+                        "--contimeout", "60s",
+                        "--timeout", "60s",
+                        "--retries", "1",
+                        "--low-level-retries", "3",
+                        f":s3:{bucket}/{prefix}/{s3_name}",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=s3_env,
+                    timeout=120,
+                )
+                if listing.returncode != 0:
+                    print(f"rclone lsjson failed for {s3_name}: {listing.stderr.decode()}")
+                    return 0
+                entries = json.loads(listing.stdout.decode() or "[]")
+                return entries[0]["Size"] if entries else 0
+            except (ValueError, KeyError, IndexError, OSError, subprocess.TimeoutExpired) as e:
+                print(f"Could not determine uploaded size for {s3_name}: {e}")
+                return 0
+
+        backup_files = {}
+        uploaded_files = {}
+        for file in files_to_stream:
+            s3_name = s3_names[file]
+            offsite_path = os.path.join(prefix, s3_name)
+            backup_files[file_types[file]] = {
+                "file": s3_name,
+                "size": get_uploaded_size(s3_name),
+                "url": f"https://{self.name}/backups/{s3_name}",
+                "path": offsite_path,
+            }
+            uploaded_files[s3_name] = offsite_path
+
         return {"backups": backup_files, "offsite": uploaded_files}
 
     @job("Optimize Tables")
@@ -892,6 +1310,41 @@ print(">>>" + frappe.session.sid + "<<<")
             )
 
         return {"output": "\n\n".join(message_parts)}
+
+    @staticmethod
+    def pick_stream_chunk_size(file_size_bytes, total_ram_bytes):
+        """Pick an S3 multipart chunk size for an object streamed via `rclone rcat`.
+
+        Chunk size caps both rclone's per-chunk RAM use and the max object size
+        (chunk x rclone's 10,000-part limit), so it must scale with the artifact.
+        Raises AgentException when even the smallest viable chunk would use an
+        unsafe fraction of RAM - i.e. the box can't rcat-stream this object.
+        """
+        MAX_PARTS = 10_000
+        MIN_CHUNK = 5 * 1024**2        # rclone's S3 minimum
+        # Smallest chunk that fits this object in <10k parts, with ~2x headroom
+        # for growth during the backup window.
+        needed = (file_size_bytes * 2) // MAX_PARTS
+        chunk = max(MIN_CHUNK, needed)
+        # Round up to a tidy boundary (next multiple of 16 MiB)
+        step = 16 * 1024**2
+        chunk = ((chunk + step - 1) // step) * step
+        # Safety: one chunk shouldn't exceed a fraction of total RAM. If it
+        # does, the box is too small to stream this object via rcat - fail
+        # loudly rather than OOM.
+        ram_cap = total_ram_bytes // 16    # <= 1/16 of RAM per chunk
+        if chunk > ram_cap:
+            raise AgentException(
+                {
+                    "traceback": (
+                        f"Artifact ~{file_size_bytes / 1024**3:.0f} GiB needs a "
+                        f"{chunk / 1024**2:.0f} MiB chunk, exceeding the RAM-safe "
+                        f"limit of {ram_cap / 1024**2:.0f} MiB. Box too small to "
+                        f"rcat-stream this object; use temp-file + rclone copy."
+                    )
+                }
+            )
+        return f"{chunk // 1024**2}M"
 
     def fetch_latest_backup(self, with_files=True):
         databases, publics, privates, site_configs = [], [], [], []

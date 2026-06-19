@@ -68,3 +68,24 @@ jobs:
           source env/bin/activate
           python --version
           python -m unittest discover
+
+  shim-integrity:
+    name: "LD_PRELOAD Shim Integrity"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      # The shim is built from source on every backup, not committed - so there
+      # is no binary to compare against. ubuntu-latest ships make + gcc, so this
+      # builds the shim from lib/bypass_unlink.c and asserts it interposes and
+      # imports only the allowed libc symbols (a stdlib-only test; no agent
+      # install needed).
+      - name: Verify bypass_unlink shim symbol surface
+        run: python agent/tests/test_bypass_unlink.py -v
