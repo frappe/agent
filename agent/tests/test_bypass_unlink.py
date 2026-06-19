@@ -85,11 +85,19 @@ def _iter_dynsym(data, sections):
         if not name:
             continue
         st_info = data[o + 4]
+        binding = st_info >> 4  # STB_LOCAL == 0, STB_GLOBAL == 1, STB_WEAK == 2
         if struct.unpack_from("<H", data, o + 6)[0] == 0:  # SHN_UNDEF -> imported
-            imported.add(name)
+            # Only GLOBAL undefined symbols are real external dependencies. gcc
+            # emits weak undefined boilerplate (__gmon_start__, __cxa_finalize,
+            # _ITM_*registerTMCloneTable) into every shared object as startup/ABI
+            # glue, not as calls the source makes - and a genuine call to
+            # system/execve/... always produces a GLOBAL reference, never a weak
+            # one, so the security check loses nothing by skipping weak symbols.
+            if binding == 1:  # STB_GLOBAL
+                imported.add(name)
             continue
         # STT_FUNC == 2; STB_GLOBAL == 1, STB_WEAK == 2
-        if (st_info & 0xF) == 2 and (st_info >> 4) in (1, 2):
+        if (st_info & 0xF) == 2 and binding in (1, 2):
             exported.add(name)
     return exported, imported
 
