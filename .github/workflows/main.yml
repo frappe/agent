@@ -82,16 +82,10 @@ jobs:
         with:
           python-version: "3.8"
 
-      # Pinned to the toolchain that produced the committed binaries. The build
-      # is byte-for-byte reproducible, so a fresh build must match the committed
-      # lib/bin/*.so exactly - otherwise a binary was changed without a matching
-      # source change. Bump this version only alongside a deliberate rebuild.
-      - name: Install zig 0.16.0
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.16.0
-
-      # stdlib-only test; no agent install needed. Runs the symbol-surface
-      # checks AND (because zig is present here) the rebuild-and-compare.
-      - name: Verify committed shim binaries match source
+      # The shim is built from source on every backup, not committed - so there
+      # is no binary to compare against. ubuntu-latest ships make + gcc, so this
+      # builds the shim from lib/bypass_unlink.c and asserts it interposes and
+      # imports only the allowed libc symbols (a stdlib-only test; no agent
+      # install needed).
+      - name: Verify bypass_unlink shim symbol surface
         run: python agent/tests/test_bypass_unlink.py -v
