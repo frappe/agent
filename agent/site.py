@@ -1070,7 +1070,11 @@ print(">>>" + frappe.session.sid + "<<<")
                     # the real cause instead of the misleading SIGPIPE traceback.
                     for t in threads:
                         t.join(timeout=5)
-                    killed = {file: ret for file, (ret, _) in rclone_results.items() if ret < 0}
+                    killed = {
+                        file: {"exit": ret, "error": err}
+                        for file, (ret, err) in rclone_results.items()
+                        if ret < 0
+                    }
                     if killed:
                         raise AgentException(
                             {
@@ -1160,7 +1164,7 @@ print(">>>" + frappe.session.sid + "<<<")
         # Fail the step if any stream didn't upload cleanly, otherwise press
         # would mark the backup successful for files that never reached S3.
         failed_uploads = {
-            file: err
+            file: {"exit": ret, "error": err}
             for file, (ret, err) in rclone_results.items()
             if ret != 0
         }
