@@ -1407,8 +1407,7 @@ print(">>>" + frappe.session.sid + "<<<")
     def get_usage(self, database_only=False):
         """Returns Usage in bytes"""
         if database_only:
-            # Skip the recursive file-size walk; callers refreshing only the
-            # database size don't need (and time out on) the file totals.
+            # Only the database size is needed; skip the file-size walk.
             return {"database": b2mb(self.get_database_size())}
 
         backup_directory = os.path.join(self.directory, "private", "backups")
