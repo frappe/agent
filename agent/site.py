@@ -243,6 +243,13 @@ class Site(Base):
         try:
             if files["database"]:
                 is_database_restoration_required = True
+
+                # Apply the backed up site config (e.g. backup_encryption_key)
+                # before restoring so `bench restore` can decrypt encrypted
+                # backups using the original site's encryption key.
+                if sanitized_config_content:
+                    self.update_config(sanitized_config_content)
+
                 self.restore_site(
                     mariadb_root_password,
                     admin_password,
@@ -250,11 +257,6 @@ class Site(Base):
                     files["public"],
                     files["private"],
                 )
-
-                if not sanitized_config_content:
-                    self.update_config()
-                else:
-                    self.update_config(sanitized_config_content)
             else:
                 self.restore_files(
                     public_file=files["public"],
