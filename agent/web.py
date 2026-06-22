@@ -583,6 +583,7 @@ def restore_site(bench, site):
             data["database"],
             data.get("public"),
             data.get("private"),
+            data.get("sanitized_config_content"),
             data.get("skip_failing_patches", False),
         )
     )
