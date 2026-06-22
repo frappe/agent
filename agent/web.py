@@ -744,7 +744,8 @@ def fetch_site_status(bench, site):
 @application.route("/benches/<string:bench>/sites/<string:site>/info", methods=["GET"])
 @validate_bench_and_site
 def fetch_site_info(bench, site):
-    return {"data": Server().benches[bench].sites[site].fetch_site_info()}
+    database_only = request.args.get("database_only") in ("1", "true", "True")
+    return {"data": Server().benches[bench].sites[site].fetch_site_info(database_only=database_only)}
 
 
 @application.route("/benches/<string:bench>/sites/<string:site>/analytics", methods=["GET"])
