@@ -82,12 +82,10 @@ def download_file(url, prefix):
 
 
 def get_size(folder, ignore_dirs=None):
-    """Returns the apparent size of the folder in bytes.
+    """Returns the apparent size of the folder in bytes, ignoring symlinks.
 
-    Shells out to `du` (C) instead of walking the tree in Python: a recursive
-    Python stat of every file was timing out gunicorn workers on sites with
-    large file trees. `du -b` reports apparent size (st_size), matching the
-    old behaviour. ignore_dirs is applied at the top level only, as before.
+    Uses `du -sb` (apparent size, matching the old walk). ignore_dirs is
+    applied at the top level only, as before.
     """
     command = ["du", "-sb"]
     for ignored in ignore_dirs or []:
