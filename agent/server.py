@@ -160,11 +160,13 @@ class Server(Base):
 
     def get_image_size(self, image_tag: str):
         try:
+            image_tag_pattern = shlex.quote(f"^{image_tag} ")
+            image_size_command = (
+                f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {image_tag_pattern}'
+            )
             return (
                 to_bytes(
-                    self.execute(
-                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {shlex.quote("^" + image_tag + " ")}'
-                    )["output"].split()[-1]
+                    self.execute(image_size_command)["output"].split()[-1]
                 )
                 / 1024**3
             )
