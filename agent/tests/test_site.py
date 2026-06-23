@@ -301,3 +301,35 @@ class TestSite(unittest.TestCase):
                 ('"cdn.site.test:https://portal.example.com"', "$http_origin"),
             ],
         )
+
+    def test_restore_site_includes_verbose_flag(self):
+        """Ensure restore_site passes --verbose to bench restore."""
+        bench = self._get_test_bench()
+        site_name = "test-site.frappe.cloud"
+        self._create_test_site(site_name)
+        self._make_site_config(site_name)
+
+        with patch.object(Site, "config"):
+            site = Site(site_name, bench)
+
+        executed_commands = []
+
+        def fake_bench_execute(cmd):
+            executed_commands.append(cmd)
+            return {"output": ""}
+
+        with patch.object(Site, "bench_execute", side_effect=fake_bench_execute), patch.object(
+            Bench, "create_mariadb_user", return_value=(None, "temp_user", "temp_pass")
+        ), patch.object(Bench, "drop_mariadb_user"):
+            Site.restore_site.__wrapped__(
+                site,
+                mariadb_root_password="root_pass",
+                admin_password="admin_pass",
+                database_file="/path/to/db.sql",
+                public_file="/path/to/public.tar",
+                private_file="/path/to/private.tar",
+            )
+
+        self.assertEqual(len(executed_commands), 1)
+        self.assertIn("--verbose", executed_commands[0])
+        self.assertIn("--force restore", executed_commands[0])
