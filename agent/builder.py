@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import shutil
@@ -40,6 +41,12 @@ class AppInfo(TypedDict):
     source: str
     hash: str
     branch: str
+
+
+class PatchBuildAppInfo(TypedDict):
+    app: str
+    url: str
+    hash: str
 
 
 class CloneError(AgentException):
@@ -760,6 +767,157 @@ class ImageBuilder(Base, JobMixin):
             os.remove(context_tar_filepath)
 
         return {"cleanup": True}
+
+
+class PatchImageBuilder(Base, JobMixin):
+    def __init__(
+        self,
+        base_image: str,
+        image_repository: str,
+        image_tag: str,
+        no_push: bool,
+        registry: dict,
+        patch_build_app_instructions: List[PatchBuildAppInfo],
+        build_name: str,
+    ) -> None:
+        super().__init__()
+        self._job_context = JobContext()
+        self.base_image = base_image
+        self.image_repository = image_repository
+        self.image_tag = image_tag
+        self.no_push = no_push
+        self.registry = registry
+        self.patch_build_app_instructions = patch_build_app_instructions
+        self.container_name = f"patch-build-{build_name}"
+        self.output: Output = {"build": [], "push": []}
+        self.last_published = datetime.now()
+
+    def _get_image_name(self) -> str:
+        return f"{self.image_repository}:{self.image_tag}"
+
+    @job("Run Patch Build")
+    def run_patch_build(self):
+        try:
+            self._start_base_container()
+            self._pull_app_updates()
+            self._commit_patch_image()
+            if not self.no_push:
+                self._push_patch_image()
+        finally:
+            self._cleanup_container()
+        return self.data
+
+    @step("Start Base Container")
+    def _start_base_container(self):
+        """Docker login and pull base image"""
+        self.execute(
+            f"docker login "
+            f"-u {self.registry['username']} "
+            f"-p {self.registry['password']} "
+            f"{self.registry['url']}"
+        )
+        self.execute(f"docker pull {self.base_image}")
+        self.execute(f"docker run -d --name {self.container_name} {self.base_image} tail -f /dev/null")
+
+    @step("Pull App Updates")
+    def _pull_app_updates(self):
+        for patch_build_app_info in self.patch_build_app_instructions:
+            self._pull_app(patch_build_app_info)
+        self._publish_throttled_output(True)
+        return self.output["build"]
+
+    def _pull_app(self, patch_build_app_info: PatchBuildAppInfo):
+        app = patch_build_app_info["app"]
+        url = patch_build_app_info["url"]
+        new_hash = patch_build_app_info["hash"]
+        app_path = f"/home/frappe/frappe-bench/apps/{app}"
+        old_hash = self._docker_exec(f"git -C {app_path} rev-parse HEAD", publish=False).strip()
+        self._docker_exec(f"git -C {app_path} fetch --depth 1 {url} {new_hash}")
+        self._docker_exec(f"git -C {app_path} reset --hard HEAD")
+        self._docker_exec(f"git -C {app_path} clean -fd")
+        self._docker_exec(f"git -C {app_path} checkout {new_hash}")
+
+        if self._has_dependency_changes(app_path, old_hash, new_hash):
+            self._reinstall_app_deps(app)
+
+        if self._has_ui_changes(app_path, old_hash, new_hash):
+            self._bench_build_app(app)
+
+    def _has_ui_changes(self, app_path, old_hash, new_hash) -> bool:
+        """If the two commits have UI changes"""
+        out = self._docker_exec(
+            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- '*.vue' '*.js' '*.jsx'",
+            publish=False,
+        )
+        return bool(out.strip())
+
+    def _has_dependency_changes(self, app_path, old_hash, new_hash) -> bool:
+        """If the two commits have python dependency changes"""
+        out = self._docker_exec(
+            f"git -C {app_path} diff --name-only {old_hash} {new_hash} -- requirements.txt pyproject.toml",
+            publish=False,
+        )
+        return bool(out.strip())
+
+    def _reinstall_app_deps(self, app):
+        pip = "/home/frappe/frappe-bench/env/bin/python -m pip"
+        self._docker_exec(f"{pip} install -e /home/frappe/frappe-bench/apps/{app}")
+
+    def _bench_build_app(self, app):
+        self._docker_exec(f"cd /home/frappe/frappe-bench && bench build --app {app} --hard-link")
+
+    def _docker_exec(self, command: str, publish: bool = True) -> str:
+        """Execute a command inside the running container and return the output"""
+        result = self.execute(f"docker exec {self.container_name} bash -c {shlex.quote(command)}")
+        output = result.get("output", "") if isinstance(result, dict) else ""
+        if publish:
+            self.output["build"].append(output)
+            self._publish_throttled_output(False)
+        return output
+
+    def _publish_throttled_output(self, flush: bool) -> None:
+        if flush:
+            self.publish_data(self.output)
+            return
+
+        now = datetime.now()
+        if (now - self.last_published).total_seconds() <= 1:
+            return
+
+        self.last_published = now
+        self.publish_data(self.output)
+
+    @step("Commit Image")
+    def _commit_patch_image(self):
+        self.execute(
+            f"docker commit --change='CMD [\"supervisord\"]' {self.container_name} {self._get_image_name()}"
+        )
+
+    @step("Push Docker Image")
+    def _push_patch_image(self):
+        environment = os.environ.copy()
+        client = docker.from_env(environment=environment, timeout=5 * 60)
+        auth_config = {
+            "username": self.registry["username"],
+            "password": self.registry["password"],
+            "serveraddress": self.registry["url"],
+        }
+        for line in client.images.push(
+            self.image_repository,
+            self.image_tag,
+            stream=True,
+            decode=True,
+            auth_config=auth_config,
+        ):
+            self.output["push"].append(line)
+            self._publish_throttled_output(False)
+
+        self._publish_throttled_output(True)
+        return self.output["push"]
+
+    def _cleanup_container(self):
+        with contextlib.suppress(Exception):
+            self.execute(f"docker rm -f {self.container_name}")
 
 
 def get_clone_directory():
