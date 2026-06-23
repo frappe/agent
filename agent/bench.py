@@ -174,7 +174,14 @@ class Bench(Base):
             non_zero_throw=non_zero_throw,
         )
 
-    def docker_execute(self, command, input=None, subdir=None, non_zero_throw=True, as_root: bool = False):
+    def docker_execute(
+        self,
+        command,
+        input=None,
+        subdir=None,
+        non_zero_throw=True,
+        as_root: bool = False,
+    ):
         interactive = "-i" if input else ""
         as_root = "-u root" if as_root else ""
         workdir = "/home/frappe/frappe-bench"
@@ -484,7 +491,9 @@ class Bench(Base):
                 backup_files = site.backup(with_files=True)
                 uploaded_files = (
                     site.upload_offsite_backup(
-                        backup_files, offsite, keep_files_locally_after_offsite_backup=False
+                        backup_files,
+                        offsite,
+                        keep_files_locally_after_offsite_backup=False,
                     )
                     if (backup_files)
                     else {}
@@ -1587,9 +1596,7 @@ def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
     return normalized
 
 
-def _get_cors_origins(
-    sites: list[Site], bench_cors: str | list[str] | None = None
-) -> list[tuple[str, str]]:
+def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
     """Return nginx map entries for site-aware CORS responses.
 
     Exact origins are matched against ``$host:$http_origin`` and echoed back
@@ -1604,11 +1611,7 @@ def _get_cors_origins(
 
     for site in sites:
         site_cors = site.config.get("allow_cors")
-        origins = (
-            _normalize_cors_origins(site_cors)
-            if site_cors is not None
-            else default_origins
-        )
+        origins = _normalize_cors_origins(site_cors) if site_cors is not None else default_origins
         if not origins:
             continue
 
@@ -1616,15 +1619,14 @@ def _get_cors_origins(
             site.name,
             *_cors_domain_values(site.config.get("domains", [])),
         ]
-        hostnames = [
-            hostname for hostname in map(_normalize_hostname, configured_hostnames) if hostname
-        ]
+        hostnames = [hostname for hostname in map(_normalize_hostname, configured_hostnames) if hostname]
         for hostname in hostnames:
+            cors_hostname = _format_cors_origin_host(hostname)
             for origin in origins:
                 if origin == "*":
-                    pairs.add((rf"~^{re.escape(hostname)}:.*$", '"*"'))
+                    pairs.add((rf"~^{re.escape(cors_hostname)}:.*$", '"*"'))
                 else:
-                    pairs.add((f'"{hostname}:{origin}"', "$http_origin"))
+                    pairs.add((f'"{cors_hostname}:{origin}"', "$http_origin"))
 
     return sorted(pairs)
 

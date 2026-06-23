@@ -381,7 +381,11 @@ class Site(Base):
         hosts = [row["Host"] for row in result[0]["output"]]
         if "%" in hosts:
             # User already has access from any host
-            return {"database": self.database, "user": self.user, "password": self.password}
+            return {
+                "database": self.database,
+                "user": self.user,
+                "password": self.password,
+            }
 
         for host in hosts:
             database.rename_user(old_user=self.user, old_host=host, new_user=self.user, new_host="%")
@@ -549,9 +553,7 @@ class Site(Base):
                 {"traceback": "make/gcc are required to build the bypass_unlink shim for streaming backups"}
             ) from exc
         except subprocess.CalledProcessError as exc:
-            raise AgentException(
-                {"traceback": f"Failed to build bypass_unlink shim: {exc.stderr}"}
-            ) from exc
+            raise AgentException({"traceback": f"Failed to build bypass_unlink shim: {exc.stderr}"}) from exc
 
     @step("Backup Site")
     def backup(
@@ -568,9 +570,7 @@ class Site(Base):
         conf_arg = f"--backup-path-conf {backup_path_conf}" if backup_path_conf else ""
         files_arg = f"--backup-path-files {backup_path_files}" if backup_path_files else ""
         private_files_arg = (
-            f"--backup-path-private-files {backup_path_private_files}"
-            if backup_path_private_files
-            else ""
+            f"--backup-path-private-files {backup_path_private_files}" if backup_path_private_files else ""
         )
 
         if streaming:
@@ -603,8 +603,7 @@ class Site(Base):
                     os.remove(host_so_path)
         else:
             backup_command = (
-                f"backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} "
-                f"{db_arg} --verbose"
+                f"backup {with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} --verbose"
             )
             self.bench_execute(backup_command)
 
@@ -952,10 +951,10 @@ print(">>>" + frappe.session.sid + "<<<")
             )
         else:
             todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-            public_file = todays_dt + '-%stream%-files.tar'
-            db_file = todays_dt + '-%stream%-database.sql.gz'
-            private_file = todays_dt + '-%stream%-private-files.tar'
-            config_file = todays_dt + '-%stream%-site_config_backup.json'
+            public_file = todays_dt + "-%stream%-files.tar"
+            db_file = todays_dt + "-%stream%-database.sql.gz"
+            private_file = todays_dt + "-%stream%-private-files.tar"
+            config_file = todays_dt + "-%stream%-site_config_backup.json"
 
             files_to_stream = [config_file, db_file]
             if with_files:
@@ -988,9 +987,12 @@ print(">>>" + frappe.session.sid + "<<<")
                 }
                 rclone_provider, endpoint = providers[auth["PROVIDER"]]
                 s3_flags = [
-                    "--s3-provider", rclone_provider,
-                    "--s3-region", auth["REGION"],
-                    "--s3-endpoint", endpoint,
+                    "--s3-provider",
+                    rclone_provider,
+                    "--s3-region",
+                    auth["REGION"],
+                    "--s3-endpoint",
+                    endpoint,
                     "--s3-env-auth=true",
                 ]
                 # Credentials go via env (--s3-env-auth) instead of CLI flags so
@@ -1060,7 +1062,12 @@ print(">>>" + frappe.session.sid + "<<<")
                     self.bench.docker_execute(f"mkfifo {file}", subdir=relative_path_to_backup_directory)
 
                 for file in files_to_stream:
-                    def start_rclone(fifo_path=fifo_paths[file], file=file, chunk_size=chunk_sizes[file]):
+
+                    def start_rclone(
+                        fifo_path=fifo_paths[file],
+                        file=file,
+                        chunk_size=chunk_sizes[file],
+                    ):
                         with open(fifo_path, "rb") as fd:
                             if abort_event.is_set():
                                 # Released by the finally block after a failure; don't
@@ -1068,7 +1075,8 @@ print(">>>" + frappe.session.sid + "<<<")
                                 return
                             subproc = subprocess.Popen(
                                 [
-                                    "rclone", "rcat",
+                                    "rclone",
+                                    "rcat",
                                     *s3_flags,
                                     # Keep rclone's memory footprint small. earlyoom (running on the
                                     # hosts) kills the highest OOM-score non-avoided process under
@@ -1076,13 +1084,16 @@ print(">>>" + frappe.session.sid + "<<<")
                                     # becomes the next victim mid-stream. A leaner rclone is both a
                                     # smaller target and adds less pressure. (--progress dropped: it's
                                     # a non-TTY pipe, so it only spammed captured stderr.)
-                                    "--buffer-size", "0",
+                                    "--buffer-size",
+                                    "0",
                                     # Chunk size caps BOTH the in-memory buffer AND the max object size
                                     # (chunk x 10,000 parts), so it's picked per object by
                                     # pick_stream_chunk_size() from the estimated artifact size and total RAM.
                                     # Safe to hold in memory only because upload-concurrency stays 1.
-                                    "--s3-chunk-size", chunk_size,
-                                    "--s3-upload-concurrency", "1",
+                                    "--s3-chunk-size",
+                                    chunk_size,
+                                    "--s3-upload-concurrency",
+                                    "1",
                                     # Skip the bucket-exists pre-flight; it issues a CreateBucket that
                                     # the region-specific endpoint rejects with IllegalLocationConstraint.
                                     # The bucket already exists.
@@ -1092,13 +1103,17 @@ print(">>>" + frappe.session.sid + "<<<")
                                     # its own instead of hanging the reader thread
                                     # forever. --timeout is the idle (no-bytes)
                                     # timeout; a healthy transfer never trips it.
-                                    "--contimeout", "60s",
-                                    "--timeout", "300s",
+                                    "--contimeout",
+                                    "60s",
+                                    "--timeout",
+                                    "300s",
                                     # rcat can't replay stdin, so object-level retries
                                     # are pointless; keep per-chunk retries modest so a
                                     # persistent failure surfaces quickly.
-                                    "--retries", "1",
-                                    "--low-level-retries", "3",
+                                    "--retries",
+                                    "1",
+                                    "--low-level-retries",
+                                    "3",
                                     "--use-mmap",
                                     f":s3:{bucket}/{prefix}/{s3_names[file]}",
                                 ],
@@ -1120,9 +1135,7 @@ print(">>>" + frappe.session.sid + "<<<")
                 time.sleep(3)
                 try:
                     backup_root = "/home/frappe/frappe-bench/"
-                    backup_path_db = os.path.join(
-                        backup_root, relative_path_to_backup_directory, db_file
-                    )
+                    backup_path_db = os.path.join(backup_root, relative_path_to_backup_directory, db_file)
                     backup_path_conf = os.path.join(
                         backup_root, relative_path_to_backup_directory, config_file
                     )
@@ -1247,14 +1260,10 @@ print(">>>" + frappe.session.sid + "<<<")
         # Fail the step if any stream didn't upload cleanly, otherwise press
         # would mark the backup successful for files that never reached S3.
         failed_uploads = {
-            file: {"exit": ret, "error": err}
-            for file, (ret, err) in rclone_results.items()
-            if ret != 0
+            file: {"exit": ret, "error": err} for file, (ret, err) in rclone_results.items() if ret != 0
         }
         if failed_uploads or len(rclone_results) != len(files_to_stream):
-            raise AgentException(
-                {"traceback": f"Streaming backup upload to S3 failed: {failed_uploads}"}
-            )
+            raise AgentException({"traceback": f"Streaming backup upload to S3 failed: {failed_uploads}"})
 
         # Rebuild the structured response press's backup callback expects:
         # `backups` keyed by type with file/size/url, and `offsite` mapping
@@ -1269,16 +1278,22 @@ print(">>>" + frappe.session.sid + "<<<")
             try:
                 listing = subprocess.run(
                     [
-                        "rclone", "lsjson", *s3_flags,
+                        "rclone",
+                        "lsjson",
+                        *s3_flags,
                         # The uploads are already done; this is best-effort
                         # metadata. Bound it like the rcat uploads so a transient
                         # S3 outage after upload can't wedge the worker forever -
                         # rclone's own timeouts plus a hard Python backstop ensure
                         # we fall through to size 0 instead of hanging.
-                        "--contimeout", "60s",
-                        "--timeout", "60s",
-                        "--retries", "1",
-                        "--low-level-retries", "3",
+                        "--contimeout",
+                        "60s",
+                        "--timeout",
+                        "60s",
+                        "--retries",
+                        "1",
+                        "--low-level-retries",
+                        "3",
                         f":s3:{bucket}/{prefix}/{s3_name}",
                     ],
                     capture_output=True,
@@ -1290,7 +1305,13 @@ print(">>>" + frappe.session.sid + "<<<")
                     return 0
                 entries = json.loads(listing.stdout.decode() or "[]")
                 return entries[0]["Size"] if entries else 0
-            except (ValueError, KeyError, IndexError, OSError, subprocess.TimeoutExpired) as e:
+            except (
+                ValueError,
+                KeyError,
+                IndexError,
+                OSError,
+                subprocess.TimeoutExpired,
+            ) as e:
                 print(f"Could not determine uploaded size for {s3_name}: {e}")
                 return 0
 
@@ -1362,7 +1383,7 @@ print(">>>" + frappe.session.sid + "<<<")
         unsafe fraction of RAM - i.e. the box can't rcat-stream this object.
         """
         MAX_PARTS = 10_000
-        MIN_CHUNK = 5 * 1024**2        # rclone's S3 minimum
+        MIN_CHUNK = 5 * 1024**2  # rclone's S3 minimum
         # Smallest chunk that fits this object in <10k parts, with ~2x headroom
         # for growth during the backup window.
         needed = (file_size_bytes * 2) // MAX_PARTS
@@ -1373,7 +1394,7 @@ print(">>>" + frappe.session.sid + "<<<")
         # Safety: one chunk shouldn't exceed a fraction of total RAM. If it
         # does, the box is too small to stream this object via rcat - fail
         # loudly rather than OOM.
-        ram_cap = total_ram_bytes // 16    # <= 1/16 of RAM per chunk
+        ram_cap = total_ram_bytes // 16  # <= 1/16 of RAM per chunk
         if chunk > ram_cap:
             raise AgentException(
                 {

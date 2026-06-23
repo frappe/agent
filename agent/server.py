@@ -164,12 +164,7 @@ class Server(Base):
             image_size_command = (
                 f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {image_tag_pattern}'
             )
-            return (
-                to_bytes(
-                    self.execute(image_size_command)["output"].split()[-1]
-                )
-                / 1024**3
-            )
+            return to_bytes(self.execute(image_size_command)["output"].split()[-1]) / 1024**3
         except AgentException:
             pass
 
@@ -298,7 +293,7 @@ class Server(Base):
             self.restart_benches(
                 is_primary=is_primary,
                 registry_settings=registry_settings,
-                secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
+                secondary_server_private_ip=(secondary_server_private_ip if not is_primary else None),
             )
 
     @step("Configure Site with Redis Private IP")
@@ -369,7 +364,10 @@ class Server(Base):
     def _stop_bench_workers(self):
         """Stop all workers except redis"""
         for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
+            bench.docker_execute(
+                "supervisorctl stop frappe-bench-web: frappe-bench-workers:",
+                as_root=True,
+            )
 
     @job("Start Bench Workers")
     def start_bench_workers(self):
@@ -379,7 +377,10 @@ class Server(Base):
     def _start_bench_workers(self):
         """Start all workers"""
         for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
+            bench.docker_execute(
+                "supervisorctl start frappe-bench-web: frappe-bench-workers:",
+                as_root=True,
+            )
 
     @job("Force Remove All Benches")
     def force_remove_all_benches(self):
@@ -711,7 +712,10 @@ class Server(Base):
 
     def execute(self, command, directory=None, skip_output_log=False, non_zero_throw=True):
         return super().execute(
-            command, directory=directory, skip_output_log=skip_output_log, non_zero_throw=non_zero_throw
+            command,
+            directory=directory,
+            skip_output_log=skip_output_log,
+            non_zero_throw=non_zero_throw,
         )
 
     @job("Pull Docker Images", priority="high")
@@ -916,7 +920,10 @@ class Server(Base):
         # Stop required services
         if restart_rq_workers:
             for worker_id in supervisor_status.get("worker", {}):
-                self.execute(f"sudo supervisorctl stop agent:worker-{worker_id}", non_zero_throw=False)
+                self.execute(
+                    f"sudo supervisorctl stop agent:worker-{worker_id}",
+                    non_zero_throw=False,
+                )
 
         # Stop NGINX Reload Manager if it's a proxy server
         is_proxy_server = (
@@ -925,7 +932,10 @@ class Server(Base):
             and not self.config.get("name").startswith("nat")
         )
         if is_proxy_server:
-            self.execute("sudo supervisorctl stop agent:nginx_reload_manager", non_zero_throw=False)
+            self.execute(
+                "sudo supervisorctl stop agent:nginx_reload_manager",
+                non_zero_throw=False,
+            )
 
         # Stop redis
         if restart_redis and supervisor_status.get("redis") == "RUNNING":
