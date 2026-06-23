@@ -290,7 +290,7 @@ class TestSite(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="__init__ is deprecated.*")
             container = NginxContainer("nginx:1.27-alpine")
-        container.with_command("sleep 60")
+        container.with_command("sleep 3600")
         container.with_volume_mapping(os.path.abspath(nginx_directory), "/etc/nginx", mode="ro")
         container.start()
         return container
