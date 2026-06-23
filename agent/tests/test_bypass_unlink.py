@@ -155,10 +155,7 @@ class TestBypassUnlinkShim(unittest.TestCase):
 
     def _require_build(self):
         if self._built is None:
-            self.skipTest(
-                "shim not built (non-Linux or make/gcc absent); "
-                "source-level check still enforced"
-            )
+            self.skipTest("shim not built (non-Linux or make/gcc absent); source-level check still enforced")
         return self._built
 
     def test_source_defines_exactly_the_expected_interposers(self):
