@@ -12,6 +12,7 @@ from contextlib import suppress
 from datetime import datetime, timedelta
 from functools import partial
 from glob import glob
+from ipaddress import IPv6Address, ip_address
 from pathlib import Path, PurePath
 from random import choices
 from textwrap import indent
@@ -1420,30 +1421,175 @@ def _get_domains(sites: list[Site]):
     return domains
 
 
-def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
+_HOSTNAME_PATTERN = re.compile(
+    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*"
+)
+_UNSAFE_NGINX_VALUE_PATTERN = re.compile(r"[\s\x00-\x1f\x7f\"';{}\\]")
+
+
+def _json_decoded_cors_origin(origin: str) -> object:
+    with suppress(json.JSONDecodeError):
+        return json.loads(origin)
+
+    return None
+
+
+def _strip_wrapping_quotes(value: str) -> str:
+    for _ in range(3):
+        if len(value) < 2 or value[0] != value[-1] or value[0] not in ("'", '"'):
+            break
+        value = value[1:-1].strip()
+
+    return value
+
+
+def _cors_origin_string_values(origin: str) -> list[str]:
+    origin = origin.strip()
+    if not origin:
+        return []
+
+    decoded = _json_decoded_cors_origin(origin)
+    if isinstance(decoded, str) and decoded != origin:
+        return _cors_origin_values(decoded)
+    if isinstance(decoded, list):
+        return _cors_origin_values(decoded)
+
+    origin = _strip_wrapping_quotes(origin)
+    if "," in origin:
+        return _cors_origin_values(origin.split(","))
+
+    return [origin]
+
+
+def _cors_origin_values(origins: object) -> list[str]:
     if origins is None:
         return []
 
     if isinstance(origins, str):
         origins = [origins]
 
-    normalized = []
+    if not isinstance(origins, (list, tuple, set)):
+        return []
+
+    values = []
     for origin in origins:
-        if not origin:
+        if isinstance(origin, str):
+            values.extend(_cors_origin_string_values(origin))
+
+    return values
+
+
+def _normalize_hostname(hostname: object) -> str | None:
+    if not isinstance(hostname, str):
+        return None
+
+    hostname = hostname.strip().strip('"').strip("'").strip().rstrip(".").lower()
+    if not hostname or _UNSAFE_NGINX_VALUE_PATTERN.search(hostname):
+        return None
+
+    if hostname.startswith("[") and hostname.endswith("]"):
+        hostname = hostname[1:-1]
+
+    with suppress(ValueError):
+        return str(ip_address(hostname))
+
+    if ":" in hostname:
+        return None
+
+    with suppress(UnicodeError):
+        hostname = hostname.encode("idna").decode("ascii")
+        if len(hostname) <= 253 and _HOSTNAME_PATTERN.fullmatch(hostname):
+            return hostname
+
+    return None
+
+
+def _format_cors_origin_host(hostname: str) -> str:
+    with suppress(ValueError):
+        if isinstance(ip_address(hostname), IPv6Address):
+            return f"[{hostname}]"
+
+    return hostname
+
+
+def _cors_domain_values(domains: object) -> list[object]:
+    if domains is None:
+        return []
+    if isinstance(domains, str):
+        return [domains]
+    if isinstance(domains, (list, tuple, set)):
+        return list(domains)
+    return []
+
+
+def _safe_urlparse(origin: str):
+    try:
+        return urlparse(origin)
+    except ValueError:
+        return None
+
+
+def _safe_parsed_hostname(parsed) -> str | None:
+    try:
+        return parsed.hostname
+    except ValueError:
+        return None
+
+
+def _safe_parsed_port(parsed) -> tuple[bool, int | None]:
+    try:
+        return True, parsed.port
+    except ValueError:
+        return False, None
+
+
+def _normalize_url_cors_origin(origin: str) -> str | None:
+    parsed = _safe_urlparse(origin)
+    if not parsed or parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    if parsed.username or parsed.password:
+        return None
+
+    hostname = _normalize_hostname(_safe_parsed_hostname(parsed))
+    port_is_valid, port = _safe_parsed_port(parsed)
+    if not hostname or not port_is_valid:
+        return None
+
+    netloc = _format_cors_origin_host(hostname)
+    if port is not None:
+        netloc = f"{netloc}:{port}"
+
+    return f"{parsed.scheme}://{netloc}"
+
+
+def _normalize_cors_origin(origin: str) -> str | None:
+    if not origin or _UNSAFE_NGINX_VALUE_PATTERN.search(origin):
+        return None
+    if origin == "*":
+        return origin
+
+    return _normalize_url_cors_origin(origin)
+
+
+def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
+    normalized = []
+    seen = set()
+
+    for origin in _cors_origin_values(origins):
+        normalized_origin = _normalize_cors_origin(origin)
+        if not normalized_origin:
             continue
-        origin = origin.strip().strip('"').strip("'").strip()
-        if not origin:
-            continue
-        if origin == "*":
-            normalized.append(origin)
-            continue
-        parsed = urlparse(origin)
-        if parsed.scheme in ("http", "https") and parsed.netloc:
-            normalized.append(f"{parsed.scheme}://{parsed.netloc}")
+        if normalized_origin not in seen:
+            normalized.append(normalized_origin)
+            seen.add(normalized_origin)
+
     return normalized
 
 
-def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
+def _get_cors_origins(
+    sites: list[Site], bench_cors: str | list[str] | None = None
+) -> list[tuple[str, str]]:
     """Return nginx map entries for site-aware CORS responses.
 
     Exact origins are matched against ``$host:$http_origin`` and echoed back
@@ -1458,11 +1604,21 @@ def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = No
 
     for site in sites:
         site_cors = site.config.get("allow_cors")
-        origins = _normalize_cors_origins(site_cors) if site_cors is not None else default_origins
+        origins = (
+            _normalize_cors_origins(site_cors)
+            if site_cors is not None
+            else default_origins
+        )
         if not origins:
             continue
 
-        hostnames = [site.name, *site.config.get("domains", [])]
+        configured_hostnames = [
+            site.name,
+            *_cors_domain_values(site.config.get("domains", [])),
+        ]
+        hostnames = [
+            hostname for hostname in map(_normalize_hostname, configured_hostnames) if hostname
+        ]
         for hostname in hostnames:
             for origin in origins:
                 if origin == "*":
