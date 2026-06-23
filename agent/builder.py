@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from subprocess import Popen
-from typing import TYPE_CHECKING, Dict, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Dict, List, TypedDict
 
 import docker
 import jinja2
@@ -57,11 +57,11 @@ class ContextValidationError(AgentException):
     def __init__(
         self,
         message: str,
-        app: Optional[str] = None,
-        actual: Optional[str] = None,
-        expected: Optional[str] = None,
-        package: Optional[str] = None,
-        invalid_releases: Optional[List[Dict[str, str]]] = None,
+        app: str | None = None,
+        actual: str | None = None,
+        expected: str | None = None,
+        package: str | None = None,
+        invalid_releases: list[dict[str, str]] | None = None,
     ):
         super().__init__(
             {
@@ -81,8 +81,8 @@ class BuildWarning(Warning):
 
 @dataclass
 class JobContext:
-    job: Optional[Job] = None
-    step: Optional[Step] = None
+    job: Job | None = None
+    step: Step | None = None
 
 
 class JobMixin:
@@ -110,7 +110,7 @@ class ContextManager(Base, JobMixin):
     # We need to keep the job context same everywhere.
     # Therefore pass this from the ImageBuilder
     _job_context: JobContext
-    clone_instructions: List[AppInfo]
+    clone_instructions: list[AppInfo]
     group: str
     build_name: str
     dockerfile: str
@@ -119,11 +119,11 @@ class ContextManager(Base, JobMixin):
         default_factory=lambda: os.path.join(os.getcwd(), "repo", "agent", "build_configs")
     )
     deploy_candidate_params: dict = field(default_factory=dict)
-    ssh_keys: Optional[dict] = None
+    ssh_keys: dict | None = None
 
     def __post_init__(self):
         super().__init__()
-        self.output: Dict[str, List[str]] = {"pre-build": []}
+        self.output: dict[str, list[str]] = {"pre-build": []}
         self.build_directory = os.path.join(get_builds_directory(), self.group, self.build_name)
 
     def _run_git_command(self, command: str, cwd: str) -> str:
@@ -247,7 +247,7 @@ class ContextManager(Base, JobMixin):
 
         return self.output["pre-build"]
 
-    def _parse_additional_packages(self) -> List[str]:
+    def _parse_additional_packages(self) -> list[str]:
         """Parse pyproject to get the additional packages"""
         repo_path_map = {}
         for app_info in self.clone_instructions:
@@ -266,7 +266,7 @@ class ContextManager(Base, JobMixin):
 
         return packages
 
-    def _inject_additional_packages(self, packages: List[str]):
+    def _inject_additional_packages(self, packages: list[str]):
         """This hack simply injects the additional packages discovered post cloning"""
         if not packages:
             return
@@ -328,10 +328,10 @@ class ContextManager(Base, JobMixin):
 @dataclass
 class ValidationManager(Base, JobMixin):
     _job_context: JobContext
-    dependencies: Dict[str, str]
-    clone_instructions: List[AppInfo]
+    dependencies: dict[str, str]
+    clone_instructions: list[AppInfo]
 
-    def get_dependency_version(self, dependency_name: str) -> Optional[str]:
+    def get_dependency_version(self, dependency_name: str) -> str | None:
         for dep, version in self.dependencies.items():
             if dep.replace("_VERSION", "").casefold() == dependency_name.casefold():
                 return version
@@ -339,7 +339,7 @@ class ValidationManager(Base, JobMixin):
         raise Exception(f"Dependency version not found for {dependency_name}")
 
     @step("Run Validations")
-    def validate(self, apps: List[str], build_directory: str):
+    def validate(self, apps: list[str], build_directory: str):
         repo_path_map = {}
         for app in apps:
             repo_path_map[app] = os.path.join(build_directory, "apps", app)
@@ -437,7 +437,7 @@ class ValidationManager(Base, JobMixin):
 
             self._check_frappe_dependencies(app, frappe_deps)
 
-    def _check_frappe_dependencies(self, app: str, frappe_deps: Dict[str, str]):
+    def _check_frappe_dependencies(self, app: str, frappe_deps: dict[str, str]):
         for dep_app, expected in frappe_deps.items():
             actual = self._get_app_version(dep_app)
             if not actual or sv.Version(actual) in sv.SimpleSpec(expected):
@@ -452,7 +452,7 @@ class ValidationManager(Base, JobMixin):
                 expected,
             )
 
-    def _get_app_version(self, app: str) -> Optional[str]:
+    def _get_app_version(self, app: str) -> str | None:
         pm = self.pmf.get(app)
         if not pm:
             return None
@@ -523,7 +523,7 @@ class ImageBuilder(Base, JobMixin):
         platform: str,
         build_token: str,
         dockerfile: str,
-        clone_instructions: List[AppInfo],
+        clone_instructions: list[AppInfo],
         group: str,
         build_name: str,
         deploy_candidate_params: dict,
@@ -777,7 +777,7 @@ class PatchImageBuilder(Base, JobMixin):
         image_tag: str,
         no_push: bool,
         registry: dict,
-        patch_build_app_instructions: List[PatchBuildAppInfo],
+        patch_build_app_instructions: list[PatchBuildAppInfo],
         build_name: str,
     ) -> None:
         super().__init__()
