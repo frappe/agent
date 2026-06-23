@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import contextlib
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -40,6 +41,12 @@ class AppInfo(TypedDict):
     source: str
     hash: str
     branch: str
+
+
+class PatchBuildAppInfo(TypedDict):
+    app: str
+    url: str
+    hash: str
 
 
 class CloneError(AgentException):
@@ -762,8 +769,6 @@ class ImageBuilder(Base, JobMixin):
         return {"cleanup": True}
 
 
-<<<<<<< HEAD
-=======
 class PatchImageBuilder(Base, JobMixin):
     def __init__(
         self,
@@ -913,9 +918,6 @@ class PatchImageBuilder(Base, JobMixin):
     def _cleanup_container(self):
         with contextlib.suppress(Exception):
             self.execute(f"docker rm -f {self.container_name}")
-
-
->>>>>>> 2f966d3 (fix(lint): satisfy ruff checks)
 def get_clone_directory():
     path = os.path.join(os.getcwd(), ".clones")
     if not os.path.exists(path):
