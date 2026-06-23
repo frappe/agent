@@ -1,5 +1,5 @@
 pre-commit
 black
 testcontainers[mysql]==3.7.1
-hypothesis
+hypothesis==6.155.7
 cryptography
