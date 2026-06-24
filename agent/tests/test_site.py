@@ -322,6 +322,7 @@ class TestSite(unittest.TestCase):
                 private_file="/path/to/private_files.tar",
             )
 
+        mock_execute.assert_called_once()
         command = mock_execute.call_args[0][0]
         self.assertIn("--force restore", command)
         self.assertIn("--verbose", command)
