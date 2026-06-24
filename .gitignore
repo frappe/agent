@@ -136,3 +136,5 @@ dmypy.json
 .vim/
 
 .DS_Store
+
+test_dir/

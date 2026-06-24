@@ -2,15 +2,172 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import shutil
+import string
 import unittest
+import warnings
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+from testcontainers.nginx import NginxContainer
 
 from agent.base import AgentException
 from agent.bench import Bench, _get_cors_origins, _normalize_cors_origins
 from agent.server import Server
 from agent.site import Site
+
+NGINX_FUZZ_ALPHABET = string.ascii_letters + string.digits + ":;/?.-_[]@{}\"'\\\n\r\t *,$"
+CORS_NGINX_HYPOTHESIS_CASES = 512
+VALID_CORS_FUZZ_ORIGINS = [
+    "*",
+    "https://example.com",
+    "http://example.test:8080/path?q=1",
+    "https://127.0.0.1:9000",
+    "https://[::1]:9443",
+]
+VALID_CORS_FUZZ_HOSTNAMES = [
+    "site.test",
+    "cdn.site.test",
+    "assets.example.com",
+    "127.0.0.1",
+    "[::1]",
+]
+KNOWN_BAD_CORS_PAYLOADS = [
+    'https://example.com"; add_header x y;',
+    "https://example.com\nadd_header x y",
+    r"https://example.com\foo",
+    "https://user:pass@example.com",
+    "https://[::1",
+    "https://example.com:bad",
+    '"*"',
+    '\\"*\\"',
+    "'https://example.com'",
+]
+
+
+def _random_nginx_payload(rng, max_length=48):
+    return "".join(rng.choice(NGINX_FUZZ_ALPHABET) for _ in range(rng.randint(0, max_length)))
+
+
+def _random_wrapped_cors_value(rng, value):
+    forms = [
+        value,
+        f'"{value}"',
+        f"'{value}'",
+        json.dumps(value),
+        json.dumps(json.dumps(value)),
+        value.replace('"', r"\""),
+        f"{value},{rng.choice(VALID_CORS_FUZZ_ORIGINS)}",
+    ]
+    return rng.choice(forms)
+
+
+def _random_cors_input(rng):
+    payloads = VALID_CORS_FUZZ_ORIGINS + KNOWN_BAD_CORS_PAYLOADS + [_random_nginx_payload(rng)]
+    value = _random_wrapped_cors_value(
+        rng,
+        rng.choice(payloads),
+    )
+    choices = [
+        value,
+        [
+            value,
+            _random_wrapped_cors_value(rng, rng.choice(VALID_CORS_FUZZ_ORIGINS)),
+            None,
+            1,
+            {},
+        ],
+        tuple([value, _random_nginx_payload(rng)]),
+        {value, _random_wrapped_cors_value(rng, rng.choice(KNOWN_BAD_CORS_PAYLOADS))},
+        json.dumps(
+            [
+                value,
+                _random_wrapped_cors_value(rng, rng.choice(VALID_CORS_FUZZ_ORIGINS)),
+            ]
+        ),
+        None,
+        1,
+        {"origin": value},
+    ]
+    return rng.choice(choices)
+
+
+def _random_cors_domains(rng):
+    value = rng.choice(
+        [
+            "site.test",
+            "cdn.site.test",
+            "127.0.0.1",
+            "[::1]",
+            _random_nginx_payload(rng, 32),
+            'bad.test"; add_header x y;',
+            "bad domain.test",
+            None,
+            1,
+        ]
+    )
+    choices = [
+        [value, "assets.site.test"],
+        value,
+        tuple([value, _random_nginx_payload(rng, 32)]),
+        {value} if isinstance(value, str) else {_random_nginx_payload(rng, 32)},
+        None,
+        1,
+        {"domain": value},
+    ]
+    return rng.choice(choices)
+
+
+def _cors_text_strategy(max_size=80):
+    return st.text(alphabet=NGINX_FUZZ_ALPHABET, max_size=max_size)
+
+
+def _cors_input_strategy():
+    scalar = st.one_of(
+        st.none(),
+        st.integers(),
+        st.dictionaries(_cors_text_strategy(8), _cors_text_strategy(16), max_size=2),
+        st.sampled_from(VALID_CORS_FUZZ_ORIGINS + KNOWN_BAD_CORS_PAYLOADS),
+        _cors_text_strategy(),
+    )
+    return st.one_of(
+        scalar,
+        st.lists(scalar, max_size=5),
+        st.tuples(scalar, scalar),
+        st.lists(_cors_text_strategy(), min_size=0, max_size=4).map(json.dumps),
+    )
+
+
+def _domain_input_strategy():
+    scalar = st.one_of(
+        st.none(),
+        st.integers(),
+        st.sampled_from(VALID_CORS_FUZZ_HOSTNAMES),
+        _cors_text_strategy(64),
+    )
+    return st.one_of(
+        scalar,
+        st.lists(scalar, max_size=5),
+        st.tuples(scalar, scalar),
+        st.dictionaries(_cors_text_strategy(8), scalar, max_size=2),
+    )
+
+
+def _cors_nginx_case_strategy():
+    return st.fixed_dictionaries(
+        {
+            "site_name": st.one_of(
+                st.sampled_from(VALID_CORS_FUZZ_HOSTNAMES),
+                _cors_text_strategy(64),
+            ),
+            "domains": _domain_input_strategy(),
+            "site_cors": _cors_input_strategy(),
+            "bench_cors": _cors_input_strategy(),
+        }
+    )
 
 
 class TestSite(unittest.TestCase):
@@ -38,12 +195,10 @@ class TestSite(unittest.TestCase):
     def setUp(self):
         self.test_dir = "test_dir"
         if os.path.exists(self.test_dir):
-            raise FileExistsError(
-                f"""
+            raise FileExistsError(f"""
                 Directory {self.test_dir} exists. This directory will be used
                 for running tests and will be deleted.
-                """
-            )
+                """)
 
         self.bench_name = "test-bench"
         self.benches_directory = os.path.join(self.test_dir, "benches")
@@ -100,6 +255,110 @@ class TestSite(unittest.TestCase):
 
         with open(output_file) as f:
             return f.read()
+
+    def _assert_safe_cors_nginx_entries(self, cors_origins, rendered):
+        self.assertNotIn('"; add_header', rendered)
+        self.assertNotIn("\nadd_header x y", rendered)
+        for matcher, header_value in cors_origins:
+            self.assertIn(header_value, ("$http_origin", '"*"'))
+            self.assertNotRegex(matcher, r"[\r\n\t ;{}]")
+
+            if header_value == "$http_origin":
+                self.assertTrue(matcher.startswith('"') and matcher.endswith('"'))
+                self.assertNotIn('"', matcher[1:-1])
+                self.assertNotIn("\\", matcher[1:-1])
+            else:
+                self.assertTrue(matcher.startswith("~^") and matcher.endswith(":.*$"))
+                self.assertNotIn('"', matcher)
+
+    def _write_nginx_wrapper_config(self, rendered):
+        nginx_directory = os.path.join(self.test_dir, "container-nginx")
+        self._write_nginx_config_files(nginx_directory, rendered)
+        return nginx_directory
+
+    def _write_nginx_config_files(self, nginx_directory, rendered):
+        conf_directory = os.path.join(nginx_directory, "conf.d")
+        os.makedirs(conf_directory, exist_ok=True)
+
+        with open(os.path.join(nginx_directory, "nginx.conf"), "w") as f:
+            f.write("events {}\nhttp {\n\tinclude /etc/nginx/conf.d/bench.conf;\n}\n")
+
+        with open(os.path.join(conf_directory, "bench.conf"), "w") as f:
+            f.write(rendered)
+
+    def _start_nginx_config_container(self, nginx_directory):
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="__init__ is deprecated.*")
+            container = NginxContainer("nginx:1.27-alpine")
+        container.with_command("sleep 3600")
+        container.with_volume_mapping(os.path.abspath(nginx_directory), "/etc/nginx", mode="ro")
+        container.start()
+        return container
+
+    def _nginx_cors_case_log(self, *, case_index, nginx_directory, cors_inputs, cors_origins, nginx_output):
+        return json.dumps(
+            {
+                "case_index": case_index,
+                "nginx_config_directory": nginx_directory,
+                "cors_inputs": cors_inputs,
+                "cors_origins": cors_origins,
+                "nginx_output": nginx_output,
+            },
+            default=str,
+            sort_keys=True,
+        )
+
+    def _assert_nginx_accepts_config_in_container(self, rendered, *, cors_inputs, cors_origins):
+        nginx_directory = self._write_nginx_wrapper_config(rendered)
+        container = self._start_nginx_config_container(nginx_directory)
+        try:
+            exit_code, output = container.exec("nginx -t -c /etc/nginx/nginx.conf")
+        finally:
+            container.stop(force=True)
+
+        if exit_code != 0:
+            failed_case_log = self._nginx_cors_case_log(
+                case_index=0,
+                nginx_directory=nginx_directory,
+                cors_inputs=cors_inputs,
+                cors_origins=cors_origins,
+                nginx_output=output.decode(),
+            )
+            print(failed_case_log)
+            self.fail(f"nginx rejected rendered CORS config: {failed_case_log}")
+
+    def _assert_nginx_accepts_cors_case(self, case):
+        if not hasattr(self, "_nginx_hypothesis_container"):
+            nginx_directory = os.path.join(self.test_dir, "container-nginx-hypothesis")
+            self._write_nginx_config_files(nginx_directory, "")
+            self._nginx_hypothesis_directory = nginx_directory
+            self._nginx_hypothesis_container = self._start_nginx_config_container(nginx_directory)
+            self._nginx_hypothesis_case_index = 0
+            self.addCleanup(self._nginx_hypothesis_container.stop, force=True)
+
+        site = SimpleNamespace(
+            name=case["site_name"],
+            config={
+                "allow_cors": case["site_cors"],
+                "domains": case["domains"],
+            },
+        )
+        cors_origins = _get_cors_origins([site], case["bench_cors"])
+        rendered = self._render_bench_nginx(cors_origins)
+        self._assert_safe_cors_nginx_entries(cors_origins, rendered)
+        self._write_nginx_config_files(self._nginx_hypothesis_directory, rendered)
+        exit_code, output = self._nginx_hypothesis_container.exec("nginx -t -c /etc/nginx/nginx.conf")
+        if exit_code != 0:
+            failed_case_log = self._nginx_cors_case_log(
+                case_index=self._nginx_hypothesis_case_index,
+                nginx_directory=self._nginx_hypothesis_directory,
+                cors_inputs=case,
+                cors_origins=cors_origins,
+                nginx_output=output.decode(),
+            )
+            print(failed_case_log)
+            self.fail(f"nginx rejected CORS case: {failed_case_log}")
+        self._nginx_hypothesis_case_index += 1
 
     def test_rename_site_works_for_existing_site(self):
         """Ensure rename_site renames site."""
@@ -188,6 +447,27 @@ class TestSite(unittest.TestCase):
             ],
         )
 
+    def test_get_cors_origins_formats_ipv6_hostnames_for_nginx_host_matching(self):
+        sites = [
+            SimpleNamespace(
+                name="site.test",
+                config={
+                    "domains": ["[::1]"],
+                    "allow_cors": ["https://portal.example.com", "*"],
+                },
+            )
+        ]
+
+        self.assertCountEqual(
+            _get_cors_origins(sites),
+            [
+                ('"site.test:https://portal.example.com"', "$http_origin"),
+                (r"~^site\.test:.*$", '"*"'),
+                ('"[::1]:https://portal.example.com"', "$http_origin"),
+                (r"~^\[::1\]:.*$", '"*"'),
+            ],
+        )
+
     def test_rendered_bench_nginx_adds_cors_headers_to_assets(self):
         rendered = self._render_bench_nginx(
             _get_cors_origins(
@@ -268,14 +548,40 @@ class TestSite(unittest.TestCase):
             ["https://a.com", "https://b.com"],
         )
 
+    def test_normalize_cors_origins_handles_escaped_values(self):
+        self.assertEqual(_normalize_cors_origins('"\\"*\\""'), ["*"])
+        self.assertEqual(
+            _normalize_cors_origins('"\\"https://example.com\\""'),
+            ["https://example.com"],
+        )
+        self.assertEqual(
+            _normalize_cors_origins('["https://a.com", "\\"https://b.com\\""]'),
+            ["https://a.com", "https://b.com"],
+        )
+
+    def test_normalize_cors_origins_handles_multiple_and_duplicate_values(self):
+        self.assertEqual(
+            _normalize_cors_origins("https://a.com, https://b.com, https://a.com"),
+            ["https://a.com", "https://b.com"],
+        )
+
     def test_normalize_cors_origins_rejects_invalid_urls(self):
         self.assertEqual(_normalize_cors_origins("not-a-url"), [])
         self.assertEqual(_normalize_cors_origins("javascript:alert(1)"), [])
         self.assertEqual(_normalize_cors_origins(["/relative/path", ""]), [])
+        self.assertEqual(_normalize_cors_origins([None, 1, {}]), [])
         self.assertEqual(
             _normalize_cors_origins(["https://valid.com", "garbage"]),
             ["https://valid.com"],
         )
+
+    def test_normalize_cors_origins_rejects_unsafe_nginx_values(self):
+        self.assertEqual(_normalize_cors_origins('https://example.com"; add_header x y;'), [])
+        self.assertEqual(_normalize_cors_origins("https://example.com\nadd_header x y"), [])
+        self.assertEqual(_normalize_cors_origins(r"https://example.com\foo"), [])
+        self.assertEqual(_normalize_cors_origins("https://user:pass@example.com"), [])
+        self.assertEqual(_normalize_cors_origins("https://[::1"), [])
+        self.assertEqual(_normalize_cors_origins("https://example.com:bad"), [])
 
     def test_normalize_cors_origins_strips_path_from_url(self):
         self.assertEqual(
@@ -326,3 +632,128 @@ class TestSite(unittest.TestCase):
         command = mock_execute.call_args[0][0]
         self.assertIn("--force restore", command)
         self.assertIn("--verbose", command)
+
+    def test_get_cors_origins_skips_unsafe_hostnames(self):
+        sites = [
+            SimpleNamespace(
+                name='site.test"; add_header x y;',
+                config={
+                    "domains": ["cdn.site.test", "bad domain.test"],
+                    "allow_cors": '"\\"*\\""',
+                },
+            )
+        ]
+
+        self.assertCountEqual(
+            _get_cors_origins(sites),
+            [(r"~^cdn\.site\.test:.*$", '"*"')],
+        )
+
+    def test_cors_origin_fuzzer_does_not_emit_unsafe_nginx_map_entries(self):
+        seed = 20260623
+        rng = random.Random(seed)
+
+        for index in range(500):
+            site = SimpleNamespace(
+                name=rng.choice(
+                    [
+                        "site.test",
+                        _random_nginx_payload(rng, 32),
+                        'site.test"; add_header x y;',
+                    ]
+                ),
+                config={
+                    "allow_cors": _random_cors_input(rng),
+                    "domains": _random_cors_domains(rng),
+                },
+            )
+
+            with self.subTest(seed=seed, index=index, site=site):
+                cors_origins = _get_cors_origins([site], _random_cors_input(rng))
+                rendered = self._render_bench_nginx(cors_origins)
+                self._assert_safe_cors_nginx_entries(cors_origins, rendered)
+
+    @settings(max_examples=200, deadline=None)
+    @given(
+        site_name=_cors_text_strategy(64),
+        domains=_domain_input_strategy(),
+        site_cors=_cors_input_strategy(),
+        bench_cors=_cors_input_strategy(),
+    )
+    def test_cors_origin_hypothesis_does_not_emit_unsafe_nginx_map_entries(
+        self,
+        site_name,
+        domains,
+        site_cors,
+        bench_cors,
+    ):
+        site = SimpleNamespace(
+            name=site_name,
+            config={
+                "allow_cors": site_cors,
+                "domains": domains,
+            },
+        )
+
+        cors_origins = _get_cors_origins([site], bench_cors)
+        rendered = self._render_bench_nginx(cors_origins)
+        self._assert_safe_cors_nginx_entries(cors_origins, rendered)
+
+    @settings(
+        max_examples=CORS_NGINX_HYPOTHESIS_CASES,
+        deadline=None,
+        suppress_health_check=[
+            HealthCheck.data_too_large,
+            HealthCheck.large_base_example,
+            HealthCheck.too_slow,
+        ],
+    )
+    @given(case=_cors_nginx_case_strategy())
+    def test_cors_origin_hypothesis_cases_are_valid_nginx_config(self, case):
+        self._assert_nginx_accepts_cors_case(case)
+
+    def test_rendered_fuzzed_cors_config_is_valid_nginx_config(self):
+        cors_values = [
+            "*",
+            '"\\""*\\""',
+            '"https://portal.example.com"',
+            '"\\""https://portal.example.com\\""',
+            '["https://a.example.com", "\\"https://b.example.com\\""]',
+            "https://example.com, https://cdn.example.com, https://example.com",
+            'https://example.com"; add_header x y;',
+            "https://example.com\nadd_header x y",
+            r"https://example.com\foo",
+            "https://user:pass@example.com",
+            "https://[::1",
+            "https://example.com:bad",
+            None,
+            1,
+            {"origin": "https://example.com"},
+        ]
+        sites = [
+            SimpleNamespace(
+                name=f"site-{index}.test",
+                config={
+                    "allow_cors": cors_value,
+                    "domains": [
+                        f"cdn-{index}.site.test",
+                        f'bad-{index}.site.test"; add_header x y;',
+                        "bad domain.test",
+                    ],
+                },
+            )
+            for index, cors_value in enumerate(cors_values)
+        ]
+
+        cors_origins = _get_cors_origins(sites, '"\\""https://bench.example.com\\""')
+        rendered = self._render_bench_nginx(cors_origins)
+
+        self._assert_safe_cors_nginx_entries(cors_origins, rendered)
+        self._assert_nginx_accepts_config_in_container(
+            rendered,
+            cors_inputs={
+                "bench_cors": '"\\""https://bench.example.com\\""',
+                "site_cors_values": cors_values,
+            },
+            cors_origins=cors_origins,
+        )
