@@ -82,25 +82,18 @@ def download_file(url, prefix):
 
 
 def get_size(folder, ignore_dirs=None):
-    """Returns the size of the folder in bytes. Ignores symlinks"""
-    total_size = os.path.getsize(folder)
+    """Returns the apparent size of the folder in bytes, ignoring symlinks.
 
-    if ignore_dirs is None:
-        ignore_dirs = []
+    Uses `du -sb` (apparent size, matching the old walk). ignore_dirs is
+    applied at the top level only, as before.
+    """
+    command = ["du", "-sb"]
+    for ignored in ignore_dirs or []:
+        command += ["--exclude", ignored]
+    command.append(folder)
 
-    for item in os.listdir(folder):
-        itempath = os.path.join(folder, item)
-
-        if item in ignore_dirs:
-            continue
-
-        if not os.path.islink(itempath):
-            if os.path.isfile(itempath):
-                total_size += os.path.getsize(itempath)
-            elif os.path.isdir(itempath):
-                total_size += get_size(itempath)
-
-    return total_size
+    output = subprocess.check_output(command, text=True)
+    return int(output.split(maxsplit=1)[0])
 
 
 def is_registry_healthy(url: str, username: str, password: str) -> bool:
