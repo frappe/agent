@@ -590,10 +590,37 @@ class Site(Base):
             host_so_path = os.path.join(host_backup_dir, so_filename)
             self.build_bypass_unlink_shim(host_so_path)
             try:
-                backup_command = (
-                    f"env LD_PRELOAD={docker_so_path} bench --site {self.name} backup "
-                    f"{with_files_flag} {conf_arg} {files_arg} {private_files_arg} {db_arg} "
-                    "--verbose"
+                # Frappe writes the DB backup in TWO sessions on backup_path_db: a
+                # gzip metadata header it then CLOSES, then `mariadb-dump | gzip >>`.
+                # On a FIFO the header close drops the writer count to 0, so the
+                # O_RDONLY reader (rclone) hits a premature EOF and finalizes after
+                # just the header - leaving the real dump with no reader (SIGPIPE or
+                # hang). Hold one extra persistent writer (fd 3) on the DB FIFO for
+                # the whole backup so the writer count never reaches 0 mid-stream;
+                # releasing it afterwards gives rclone a single clean EOF spanning
+                # header+dump. fd 3 writes nothing, so it adds no bytes. Only the DB
+                # needs this - config and tars are each written in a single session.
+                bench_argv = ["env", f"LD_PRELOAD={docker_so_path}", "bench", "--site", self.name, "backup"]
+                if with_files:
+                    bench_argv.append("--with-files")
+                if backup_path_conf:
+                    bench_argv += ["--backup-path-conf", backup_path_conf]
+                if backup_path_files:
+                    bench_argv += ["--backup-path-files", backup_path_files]
+                if backup_path_private_files:
+                    bench_argv += ["--backup-path-private-files", backup_path_private_files]
+                if backup_path_db:
+                    bench_argv += ["--backup-path-db", backup_path_db]
+                bench_argv.append("--verbose")
+                # Pass the FIFO path ($1) and the bench command ($2..) as positional
+                # args to the holder script - never interpolated into shell syntax -
+                # so a site name or path with shell metacharacters can't break out of
+                # it. The shell keeps fd 3 open while the bench command runs, then
+                # releases it.
+                holder_script = 'exec 3> "$1"; shift; "$@"; rc=$?; exec 3>&-; exit $rc'
+                backup_command = " ".join(
+                    quote(part)
+                    for part in ["bash", "-c", holder_script, "_", backup_path_db, *bench_argv]
                 )
                 self.bench.docker_execute(backup_command)
             finally:
@@ -948,6 +975,34 @@ print(">>>" + frappe.session.sid + "<<<")
         except Exception:
             return self.previous_tables
 
+    @property
+    def backup_encryption_enabled(self):
+        # Frappe encrypts backups with a post-dump `gpg -c <file>` pass (which
+        # reopens each dump path) ONLY when the System Settings "encrypt_backup"
+        # checkbox is on. That pass is fundamentally incompatible with FIFO
+        # streaming - a FIFO is drained once, so rclone consumes the plaintext
+        # during the dump and gpg then blocks reopening a writer-less FIFO. The
+        # setting lives in the site DB (tabSingles), not site_config (the key is
+        # auto-generated into config only on the first encrypted backup), so we
+        # read it the same way as `timezone`. On any failure assume it MAY be on:
+        # skipping streaming yields a slower-but-correct encrypted backup, whereas
+        # streaming an encrypted site would upload plaintext.
+        query = (
+            f"select value from {self.database}.tabSingles where "
+            "doctype = 'System Settings' and field = 'encrypt_backup'"
+        )
+        try:
+            # shell=True; quote every site_config-derived value so a password/host
+            # with shell metacharacters can't execute in the agent process.
+            value = self.execute(
+                f"{db_client_cli()} -h {quote(self.host)} -P {quote(str(self.db_port))} "
+                f"-u{quote(self.user)} -p{quote(self.password)} "
+                f"--connect-timeout 3 -sN -e {quote(query)}"
+            )["output"].strip()
+        except Exception:
+            return True
+        return value == "1"
+
     @job("Backup Site", priority="low")
     def backup_job(  # noqa: C901
         self,
@@ -956,11 +1011,19 @@ print(">>>" + frappe.session.sid + "<<<")
         keep_files_locally_after_offsite_backup: bool = False,
         stream: bool = False,
     ):
+        # Streaming pipes the dump through a FIFO straight to S3, but it can't
+        # carry an ENCRYPTED backup: Frappe encrypts in a post-dump `gpg -c` pass
+        # that reopens the (now drained, writer-less) FIFO and blocks forever - and
+        # rclone would have uploaded plaintext anyway. So route encrypted sites to
+        # the dump-to-disk + offsite-upload path, which produces a correct
+        # encrypted (`-enc`) offsite backup.
+        encrypted = self.backup_encryption_enabled
+
         # Stream straight to S3 only when explicitly requested and a local copy
         # isn't needed (streaming writes no files to disk). Every other case -
-        # local-only, offsite without streaming, or keep-locally - backs up to
-        # disk first and uploads offsite afterwards if required.
-        if not (offsite and stream) or keep_files_locally_after_offsite_backup:
+        # local-only, offsite without streaming, keep-locally, or encrypted - backs
+        # up to disk first and uploads offsite afterwards if required.
+        if not (offsite and stream) or keep_files_locally_after_offsite_backup or encrypted:
             backup_files = self.backup(with_files)
             uploaded_files = (
                 self.upload_offsite_backup(backup_files, offsite, keep_files_locally_after_offsite_backup)
@@ -968,6 +1031,13 @@ print(">>>" + frappe.session.sid + "<<<")
                 else {}
             )
         else:
+            # The streaming uploads shell out to rclone. If it isn't on PATH the
+            # reader threads would crash on Popen and the in-container backup would
+            # hang writing to a reader-less FIFO; fail fast with a clear error.
+            if not shutil.which("rclone"):
+                raise AgentException(
+                    {"traceback": "Streaming backup requires rclone, but it was not found on PATH."}
+                )
             todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
             public_file = todays_dt + "-%stream%-files.tar"
             db_file = todays_dt + "-%stream%-database.sql.gz"
@@ -1032,8 +1102,10 @@ print(">>>" + frappe.session.sid + "<<<")
 
             # The local FIFO names must keep the "%stream%" marker so the
             # bypass_unlink.so LD_PRELOAD shim blocks the framework from deleting
-            # them mid-stream. Strip the marker only for the S3 object key.
-            s3_names = {file: file.replace("%stream%-", "") for file in files_to_stream}
+            # them mid-stream. For the S3 object key, swap the sentinel for a plain
+            # "stream" label so streamed backups stay identifiable while dropping
+            # the "%" chars, which are unsafe in S3 keys and URLs.
+            s3_names = {file: file.replace("%stream%-", "stream-") for file in files_to_stream}
 
             # Pick each object's S3 chunk size up front so a too-large artifact
             # fails here - before any FIFO/backup work - with a clear message
@@ -1069,6 +1141,30 @@ print(">>>" + frappe.session.sid + "<<<")
             abort_event = threading.Event()
             rclone_results = {}
             threads = []
+            # Reader thread per file, so the failure path can tell a thread that
+            # genuinely crashed from one merely still blocked in open() (the backup
+            # died before writing that FIFO).
+            reader_threads = {}
+            # rclone rcat process per file (once started), so the failure path can
+            # kill one still uploading before deleting its key - otherwise a slow
+            # rcat could finalize a truncated object AFTER the delete.
+            rclone_procs = {}
+
+            def terminate_in_container_backup():
+                # The streaming pipeline (`bench backup` -> mariadb-dump | gzip ->
+                # FIFO) runs in the container via `docker exec`, and those processes
+                # do NOT die when the host-side docker exec client dies. So any
+                # abort - a failure mid-stream or the normal finally - must kill
+                # them explicitly or they orphan and wedge forever. todays_dt is
+                # unique to this backup and is in every one of their cmdlines.
+                with contextlib.suppress(Exception):
+                    self.bench.docker_execute(f"pkill -f {todays_dt}", non_zero_throw=False)
+
+            # rclone rcat finalizes on a normal EOF and can't tell a complete
+            # stream from one cut short, so a backup that fails mid-dump can leave
+            # a truncated object in S3 that rclone "uploaded" (exit 0). Track
+            # success and delete the streamed keys on any failure path.
+            success = False
             try:
                 # Frappe creates private/backups at site creation, but the
                 # streaming path is the only one that writes here before
@@ -1086,10 +1182,17 @@ print(">>>" + frappe.session.sid + "<<<")
                         file=file,
                         chunk_size=chunk_sizes[file],
                     ):
+                        # Pre-record a failure sentinel: if this thread crashes
+                        # before recording a result (rclone binary missing, or
+                        # open()/Popen() raising), the SIGPIPE handler still has
+                        # something concrete to surface. Overwritten on success.
+                        rclone_results[file] = (None, "rclone reader thread crashed or never started")
                         with open(fifo_path, "rb") as fd:
                             if abort_event.is_set():
                                 # Released by the finally block after a failure; don't
                                 # start an upload that would only push partial data.
+                                # Not a failure - drop the sentinel so it isn't reported.
+                                rclone_results.pop(file, None)
                                 return
                             subproc = subprocess.Popen(
                                 [
@@ -1140,6 +1243,7 @@ print(">>>" + frappe.session.sid + "<<<")
                                 close_fds=True,
                                 env=s3_env,
                             )
+                            rclone_procs[file] = subproc
                         # communicate() drains stderr while waiting, so rclone
                         # can't deadlock filling the stderr pipe buffer.
                         err = subproc.communicate()[1].decode()
@@ -1148,9 +1252,9 @@ print(">>>" + frappe.session.sid + "<<<")
 
                     t = threading.Thread(target=start_rclone, daemon=True)
                     threads.append(t)
+                    reader_threads[file] = t
                     t.start()
 
-                time.sleep(3)
                 try:
                     backup_root = "/home/frappe/frappe-bench/"
                     backup_path_db = os.path.join(backup_root, relative_path_to_backup_directory, db_file)
@@ -1175,29 +1279,54 @@ print(">>>" + frappe.session.sid + "<<<")
                         backup_path_private_files=backup_path_private_files,
                         streaming=True,
                     )
-                except AgentException as e:
-                    # If an rclone reader was killed mid-stream (commonly
-                    # earlyoom sending SIGTERM under memory pressure), the bench
-                    # backup fails with an opaque in-container SIGPIPE - tar/gzip
-                    # writing to a FIFO whose reader has gone. Give the reader
-                    # threads a moment to record their exit codes, then surface
-                    # the real cause instead of the misleading SIGPIPE traceback.
+                except AgentException:
+                    # The in-container backup fails with an opaque SIGPIPE whenever
+                    # an rclone reader exits early. Give the reader threads a moment
+                    # to record their exit codes, then surface the real cause.
                     for t in threads:
                         t.join(timeout=5)
-                    killed = {
-                        file: {"exit": ret, "error": err}
-                        for file, (ret, err) in rclone_results.items()
-                        if ret < 0
-                    }
-                    if killed:
+                    # Classify each reader to find whether rclone actually caused
+                    # the failure, vs the backup dying for its own reason:
+                    #   ret == 0        -> uploaded cleanly, ignore.
+                    #   ret int and !=0 -> rclone errored (ret<0 = signal/OOM,
+                    #                      ret>0 = S3 auth/bucket/endpoint/network).
+                    #   ret is None     -> thread never recorded a result. DEAD =>
+                    #                      crashed (real cause); ALIVE => merely
+                    #                      blocked in open() because the backup never
+                    #                      wrote that FIFO - a symptom, not the cause,
+                    #                      so it must not mask the real backup error.
+                    rclone_failures = {}
+                    for file, (ret, err) in rclone_results.items():
+                        if ret == 0:
+                            continue
+                        if ret is None:
+                            t = reader_threads.get(file)
+                            if t is not None and t.is_alive():
+                                continue  # blocked reader; backup died first
+                            err = "rclone reader thread crashed before starting the upload"
+                        rclone_failures[file] = {"exit": ret, "error": err}
+                    if rclone_failures:
+                        signal_killed = any(
+                            isinstance(d["exit"], int) and d["exit"] < 0
+                            for d in rclone_failures.values()
+                        )
+                        hint = (
+                            " (negative exit = killed by a signal, likely OOM/earlyoom)"
+                            if signal_killed
+                            else ""
+                        )
                         raise AgentException(
                             {
                                 "traceback": (
-                                    "Streaming backup failed: rclone upload process(es) were "
-                                    f"killed by a signal mid-stream (likely OOM). Killed: {killed}"
+                                    "Streaming backup failed: rclone upload(s) did not complete "
+                                    f"cleanly{hint}; the in-container dump then died with SIGPIPE. "
+                                    f"Per-file rclone exit code / stderr: {rclone_failures}"
                                 )
                             }
-                        ) from e
+                        )
+                    # No genuine rclone failure - the backup failed on its own (any
+                    # None readers were just blocked waiting for it). Re-raise the
+                    # original AgentException with the real in-container traceback.
                     raise
 
                 result = self.finalize_streamed_offsite_backup(
@@ -1214,15 +1343,51 @@ print(">>>" + frappe.session.sid + "<<<")
                 )
                 backup_files = result["backups"]
                 uploaded_files = result["offsite"]
+                success = True
             finally:
-                # Release any reader still blocked in open() (opening the FIFO
-                # O_RDWR never blocks and presents a writer, so the reader
-                # unblocks and then sees abort_event), and always remove the
-                # FIFOs - even if the backup failed before they were written.
                 abort_event.set()
+                # Guarantee the in-container pipeline is gone - orphans don't die
+                # with the docker exec client, so a failure on any path would
+                # otherwise leave them wedged forever.
+                terminate_in_container_backup()
+                # Release any reader still blocked in open() (opening the FIFO
+                # O_RDWR never blocks and presents a writer, so the reader unblocks,
+                # sees abort_event, and returns without starting rclone). Do this
+                # BEFORE the cleanup below so no new rclone registers and the join
+                # doesn't wait on a stuck open().
                 for path in fifo_paths.values():
                     with contextlib.suppress(OSError):
                         os.close(os.open(path, os.O_RDWR | os.O_NONBLOCK))
+                # On any failure, best-effort delete the streamed keys: rclone may
+                # have finalized a truncated object on a normal EOF, and the job is
+                # failing, so don't leave a partial object behind in S3.
+                if not success:
+                    # Kill any rclone still uploading (snapshot the dict - a reader
+                    # thread may still be inserting into it), then join the readers
+                    # so every rclone is reaped before we delete; nothing can
+                    # finalize a truncated object after this.
+                    for sp in list(rclone_procs.values()):
+                        if sp.poll() is None:
+                            with contextlib.suppress(Exception):
+                                sp.kill()
+                    for t in threads:
+                        t.join(timeout=10)
+                    for s3_name in s3_names.values():
+                        with contextlib.suppress(Exception):
+                            subprocess.run(
+                                [
+                                    "rclone", "deletefile", *s3_flags,
+                                    "--contimeout", "60s", "--timeout", "60s", "--retries", "1",
+                                    f":s3:{bucket}/{prefix}/{s3_name}",
+                                ],
+                                env=s3_env,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                                timeout=120,
+                            )
+                # Always remove the FIFOs - even if the backup failed before they
+                # were written.
+                for path in fifo_paths.values():
                     with contextlib.suppress(FileNotFoundError):
                         os.remove(path)
 
