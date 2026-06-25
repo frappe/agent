@@ -22,8 +22,6 @@ from rq import Queue, get_current_job
 from rq.command import send_stop_job_command
 from rq.job import Job as RQJob
 
-from agent.callbacks import callback
-
 if TYPE_CHECKING:
     from agent.base import Base
 
@@ -49,6 +47,41 @@ agent_database = SqliteDatabase(
 )
 
 
+def update_job(model: Model):
+    if isinstance(model, StepModel):
+        model = model.job
+
+    connection().sadd("dirty_jobs", model.id)
+
+
+def get_updated_jobs():
+    from agent.web import to_dict
+
+    redis = connection()
+    res = []
+
+    members = redis.smembers("dirty_jobs")
+
+    if not members:
+        return []
+
+    with redis.pipeline() as pipe:
+        for member in members:
+            pipe.smove("dirty_jobs", "processing_jobs", member)
+        pipe.execute()
+
+    for jid in map(int, members):
+        job = JobModel.get_or_none(JobModel.id == jid)
+
+        if not job:
+            redis.srem("processing_jobs", jid)
+            continue
+
+        res.append((to_dict(job), job))
+
+    return res
+
+
 def connection():
     from agent.server import Server
 
@@ -64,6 +97,8 @@ def queue(name):
 def save(wrapped, instance: Action, args, kwargs):
     wrapped(*args, **kwargs)
     instance.model.save()
+
+    update_job(instance.model)
 
 
 class Action:
@@ -158,7 +193,7 @@ def step(name):
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
 
-        instance.step_record.start(name, instance.job_record.model.id)
+        instance.step_record.start(name, instance.job_record.model)
         try:
             result = wrapped(*args, **kwargs)
         except AgentException as e:
@@ -176,7 +211,7 @@ def step(name):
     return wrapper
 
 
-def job(name: str, priority="default", timeout=None, on_success=None, on_failure=None):
+def job(name: str, priority="default", timeout=None):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from flask import has_request_context, request
@@ -214,8 +249,6 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
             timeout=final_timeout,
             result_ttl=24 * 3600,
             job_id=str(instance.job_record.model.id),
-            on_success=on_success or callback,
-            on_failure=on_failure or callback,
         )
         return instance.job_record.model.id
 

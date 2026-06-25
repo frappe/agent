@@ -31,6 +31,16 @@ stderr_logfile={{ directory }}/logs/worker.error.log
 user={{ user }}
 directory={{ directory }}
 
+[program:job_update_poll]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{ directory }}/env/bin/python {{ directory }}/repo/agent/job_update_poll.py"
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stdout_logfile={{ directory }}/logs/job_update_poll.log
+stderr_logfile={{ directory }}/logs/job_update_poll.error.log
+user={{ user }}
+directory={{ directory }}
+
 {% if is_proxy_server or is_standalone %}
 [program:nginx_reload_manager]
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{directory}}/env/bin/python {{ directory }}/repo/agent/nginx_reload_manager.py"
@@ -46,7 +56,7 @@ directory={{ directory }}
 
 [group:agent]
 
-{% set programs = "web, redis, worker" %}
+{% set programs = "web, redis, worker, job_update_poll" %}
 
 {% if is_proxy_server or is_standalone %}
     {% set programs = programs + ", nginx_reload_manager" %}

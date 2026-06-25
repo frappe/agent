@@ -47,10 +47,16 @@ class IdleMonitor:
 
     def inform_master(self) -> None:
         """Let the master know of idle benches"""
+        path = "/api/method/press.api.server.benches_are_idle"
+        token = self.config.get("agent_token")
+        if not token:
+            print("Agent token not configured")
+            return
+
         try:
             requests.post(
-                f"{self.config['press_url']}/api/method/press.api.server.benches_are_idle",
-                data={"server": self.config["name"], "access_token": self.config["access_token"]},
+                f"{self.config['press_url']}{path}",
+                headers={"X-Agent-Token": token},
                 timeout=10,
             )
             print(f"Informed master at {self.config['press_url']} that benches are idle")
