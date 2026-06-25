@@ -1003,6 +1003,9 @@ class Server(Base):
         total_output = self.execute(
             f"df -B1 {'/opt/volumes/benches' if os.path.exists('/opt/volumes/benches') else '/'}"
         ).get("output")
+        archived_output = self.execute(
+            "du -sB1 /home/frappe/archived/ --exclude assets | awk '{print $1}'"
+        ).get("output")
 
         if total_output:
             total_data = parse_total_disk_usage_output(total_output)
@@ -1016,6 +1019,13 @@ class Server(Base):
         if docker_output:
             docker_data = parse_docker_df_output(docker_output)
             app_storage_analysis["docker"] = docker_data
+
+        if archived_output:
+            archived_size = int(float(archived_output))
+            app_storage_analysis["archived"] = {
+                "size": archived_size,
+                "size_formatted": format_size(archived_size),
+            }
 
         return app_storage_analysis or {"error": failed_message}
 
