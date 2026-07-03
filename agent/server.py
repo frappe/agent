@@ -1229,11 +1229,16 @@ class Server(Base):
             "sentry_dsn": self.config.get("sentry_dsn"),
             "is_standalone": self.config.get("standalone", False),
         }
-        if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):
+        name = self.config.get("name", "")
+        is_proxy_server = name.startswith("n") and not name.startswith("nat")
+        is_app_server = name.startswith("f")
+        if is_proxy_server:
             data["is_proxy_server"] = True
 
-        if self.config.get("name", "").startswith("fs"):
+        if name.startswith("fs"):
             data["is_secondary"] = True
+
+        data["run_product_trial_worker"] = is_app_server or is_proxy_server
 
         self._render_template(
             "agent/supervisor.conf.jinja2",

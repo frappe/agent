@@ -31,6 +31,20 @@ stderr_logfile={{ directory }}/logs/worker.error.log
 user={{ user }}
 directory={{ directory }}
 
+{% if run_product_trial_worker %}
+[program:worker_product_trial]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{ directory }}/env/bin/rq worker {% if sentry_dsn %}--sentry-dsn '{{ sentry_dsn }}'{% endif %} --url redis://127.0.0.1:{{ redis_port }} product_trial"
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stopwaitsecs=1500
+killasgroup=true
+stdout_logfile={{ directory }}/logs/worker_product_trial.log
+stderr_logfile={{ directory }}/logs/worker_product_trial.error.log
+user={{ user }}
+directory={{ directory }}
+{% endif %}
+
 {% if is_proxy_server or is_standalone %}
 [program:nginx_reload_manager]
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{directory}}/env/bin/python {{ directory }}/repo/agent/nginx_reload_manager.py"
@@ -50,6 +64,10 @@ directory={{ directory }}
 
 {% if is_proxy_server or is_standalone %}
     {% set programs = programs + ", nginx_reload_manager" %}
+{% endif %}
+
+{% if run_product_trial_worker %}
+    {% set programs = programs + ", worker_product_trial" %}
 {% endif %}
 
 

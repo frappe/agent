@@ -37,6 +37,7 @@ if os.environ.get("SENTRY_DSN"):
         pass
 
 DEFAULT_TIMEOUT = 4 * 3600
+QUEUES = ("high", "default", "low", "signup")
 agent_database = SqliteDatabase(
     "jobs.sqlite3",
     timeout=15,
@@ -199,15 +200,18 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
             return result
         agent_job_id = get_agent_job_id()
         agent_job_timeout = None
+        agent_job_queue = None
         if has_request_context() and request and request.is_json:
             agent_job_timeout = request.json.get("agent_job_timeout", None)
+            agent_job_queue = request.json.get("agent_job_queue", None)
         instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
         final_timeout = (
             agent_job_timeout or timeout or Server().config.get("job_timeout", None) or DEFAULT_TIMEOUT
         )
         if not 0 <= final_timeout <= 24 * 3600:
             final_timeout = DEFAULT_TIMEOUT
-        queue(priority).enqueue_call(
+        final_queue = agent_job_queue if agent_job_queue in QUEUES else priority
+        queue(final_queue).enqueue_call(
             wrapped,
             args=args,
             kwargs=kwargs,
