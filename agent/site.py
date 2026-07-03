@@ -659,7 +659,7 @@ class Site(Base):
             if region:
                 client_kwargs["region_name"] = region.strip()
             if auth.get("ENDPOINT_URL"):
-                client_kwargs["endpoint_url"] = auth["ENDPOINT_URL"]
+                client_kwargs["endpoint_url"] = auth["ENDPOINT_URL"].strip()
 
             s3 = boto3.client("s3", **client_kwargs)
 
