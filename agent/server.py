@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import platform
 import shlex
@@ -32,6 +33,8 @@ from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
+
+logger = logging.getLogger(__name__)
 
 
 class Server(Base):
@@ -95,8 +98,21 @@ class Server(Base):
             os.mkdir(os.path.join(bench_directory, directory))
 
         bench_config_file = os.path.join(bench_directory, "config.json")
-        with open(bench_config_file, "w") as f:
-            json.dump(config, f, indent=1, sort_keys=True)
+        # Write atomically so an interrupted New Bench job can never leave a
+        # 0-byte config.json behind (which makes the bench silently 404).
+        fd, temp_path = tempfile.mkstemp(
+            dir=bench_directory, prefix=".config.", suffix=".json"
+        )
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(config, f, indent=1, sort_keys=True)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, bench_config_file)
+        except Exception:
+            with suppress(FileNotFoundError):
+                os.remove(temp_path)
+            raise
 
         config.update({"directory": bench_directory, "name": name})
         docker_compose = os.path.join(bench_directory, "docker-compose.yml")
@@ -844,8 +860,14 @@ class Server(Base):
     def benches(self) -> dict[str, Bench]:
         benches = {}
         for directory in os.listdir(self.benches_directory):
-            with suppress(Exception):
+            try:
                 benches[directory] = Bench(directory, self)
+            except Exception:
+                # A bench that fails to construct (e.g. missing/corrupt
+                # config.json) is skipped, which surfaces downstream as an
+                # opaque BenchNotExistsException -> 404. Log it so the real
+                # cause is diagnosable instead of silently swallowed.
+                logger.exception("Skipping bench %s: failed to load", directory)
         return benches
 
     def get_bench(self, bench):
