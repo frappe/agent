@@ -988,23 +988,28 @@ class Bench(Base):
 
     def set_bench_config(self, value, indent=1):
         """
-        To avoid partial writes, we need to first write the config to a temporary file,
-        then rename it to the original file.
+        Write the config atomically: dump to a temp file in the same directory,
+        fsync it, then os.replace() it onto config.json.
+
+        The temp file must live on the same filesystem as the target, otherwise
+        os.replace() fails with EXDEV. A previous version wrote the temp file to
+        /tmp and finished with shutil.copy2(), which truncates config.json before
+        streaming into it -- an interrupted write there left a 0-byte config.json
+        and made the bench silently disappear (BenchNotExistsException -> 404).
         """
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
-            json.dump(value, temp_file, indent=indent, sort_keys=True)
-            temp_file.flush()
-            os.fsync(temp_file.fileno())
-            temp_file.close()
-
-        os.rename(self.bench_config_file, self.bench_config_file + ".bak")
-
+        fd, temp_path = tempfile.mkstemp(
+            dir=self.directory, prefix=".config.", suffix=".json"
+        )
         try:
-            shutil.copy2(temp_file.name, self.bench_config_file)
-            os.remove(temp_file.name)
-        except Exception as e:
-            os.rename(self.bench_config_file + ".bak", self.bench_config_file)
-            raise e
+            with os.fdopen(fd, "w") as temp_file:
+                json.dump(value, temp_file, indent=indent, sort_keys=True)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, self.bench_config_file)
+        except Exception:
+            with suppress(FileNotFoundError):
+                os.remove(temp_path)
+            raise
 
     @job("Patch App")
     def patch_app(
