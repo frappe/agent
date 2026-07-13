@@ -161,12 +161,13 @@ def get_python_path(dirpath: str) -> str:
             if requires_python:
                 version_spec = sv.SimpleSpec(requires_python)
                 if version_spec.match(sv.Version("3.14.0")):
-                    # try to resolve python3.14 path
-                    python_path = shutil.which("python3.14")
-                    if python_path:
-                        return python_path
-                    # Temporary hardcoding until python 3.14 until we move to build server
-                    return "/usr/bin/python3.14"
+                    # Prefer a real python3.14 binary when present
+                    for candidate in (shutil.which("python3.14"), "/usr/bin/python3.14"):
+                        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                            return candidate
+                    # Spec matches 3.14 but no interpreter on this host (common on
+                    # Frappe 14/15 build images). Falling back avoids FileNotFoundError
+                    # during Pre-build compileall, which surfaces as empty step output.
 
     return _get_server_python_path()
 
