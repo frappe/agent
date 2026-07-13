@@ -729,6 +729,39 @@ def setup_erpnext(bench, site):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/waf", methods=["POST"])
+@validate_bench_and_site
+def update_waf_config(bench, site):
+    """Render the per-site ModSecurity config and reload bench nginx.
+
+    Receives the full WAF payload from Press (see press.agent.Agent.update_waf_config)
+    and dispatches to Bench.update_waf_config_job.
+    """
+    data = request.json or {}
+    job = Server().benches[bench].update_waf_config_job(site=site, **data)
+    return {"job": job}
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/waf", methods=["DELETE"])
+@validate_bench_and_site
+def disable_waf(bench, site):
+    job = Server().benches[bench].disable_waf_job(site=site)
+    return {"job": job}
+
+
+@application.route(
+    "/benches/<string:bench>/sites/<string:site>/waf/rotate-token",
+    methods=["POST"],
+)
+@validate_bench_and_site
+def rotate_waf_log_token(bench, site):
+    data = request.json or {}
+    job = Server().benches[bench].rotate_waf_log_token_job(
+        site=site, waf_log_token=data.get("waf_log_token", "")
+    )
+    return {"job": job}
+
+
 @application.route("/benches/<string:bench>/monitor", methods=["POST"])
 @validate_bench
 def fetch_monitor_data(bench):
