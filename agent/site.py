@@ -894,11 +894,11 @@ class Site(Base):
     def get_timezone(self):
         return self.timezone
 
-    def fetch_site_info(self):
+    def fetch_site_info(self, database_only=False):
         return {
             "config": self.config,
             "timezone": self.get_timezone(),
-            "usage": self.get_usage(),
+            "usage": self.get_usage(database_only=database_only),
         }
 
     def fetch_site_analytics(self):
@@ -1623,8 +1623,12 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return backups
 
-    def get_usage(self):
+    def get_usage(self, database_only=False):
         """Returns Usage in bytes"""
+        if database_only:
+            # Only the database size is needed; skip the file-size walk.
+            return {"database": b2mb(self.get_database_size())}
+
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
         private_directory = os.path.join(self.directory, "private")
