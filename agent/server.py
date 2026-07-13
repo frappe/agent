@@ -830,6 +830,37 @@ class Server(Base):
         self._generate_supervisor_config()
         self._update_supervisor()
 
+    def _enable_waf_infra_if_needed(self) -> None:
+        """Flip on master-nginx modsecurity load + supervisor watcher once.
+
+        Idempotent. Fires the first time any site on this server has a WAF
+        enabled. Does NOT auto-revert when all WAFs turn off later, because
+        unloading the nginx module mid-flight is racy (other benches'
+        reloads would race against the master reload) and the watcher
+        process idles for free once it has no audit logs to tail. Sites
+        with WAF disabled drop the per-site `modsecurity on;` directive
+        during their own `setup_nginx` regardless of this flag, so disabling
+        keeps working transparently.
+
+        Called from `Bench.update_waf_config_job` BEFORE the per-site
+        `setup_nginx()` so the `load_module` line is in place before the
+        first `modsecurity on;` directive is evaluated by nginx.
+        """
+        if self.config.get("modsecurity_enabled") and self.config.get("is_waf_enabled"):
+            return
+        self.update_config(
+            {"modsecurity_enabled": True, "is_waf_enabled": True}
+        )
+        # Master nginx gets the `load_module modsecurity_module.so;` line
+        # so per-site `modsecurity on;` directives in benches resolve.
+        self._generate_nginx_config()
+        # Start the supervisor watcher FIRST, before the nginx reload, so
+        # even if the reload fails (e.g. a stale bench conf still references
+        # the old module-less layout) the watcher process is already up and
+        # will catch events once nginx recovers.
+        self.setup_supervisor()
+        self._reload_nginx()
+
     def start_all_benches(self):
         for bench in self.benches.values():
             with suppress(Exception):
@@ -1179,6 +1210,7 @@ class Server(Base):
                 "proxy_ip": self.config.get("proxy_ip"),
                 "tls_protocols": self.config.get("tls_protocols"),
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", True),
+                "modsecurity_enabled": self.config.get("modsecurity_enabled", False),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
                 "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
                 "ip_accept": self.config.get("ip_accept", []),
@@ -1228,6 +1260,7 @@ class Server(Base):
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
             "is_standalone": self.config.get("standalone", False),
+            "is_waf_enabled": self.config.get("is_waf_enabled", False),
         }
         if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):
             data["is_proxy_server"] = True
@@ -1253,14 +1286,23 @@ class Server(Base):
                 raise e
 
     def _render_template(self, template, context, outfile, options=None):
+        rendered = self._render_template_str(template, context, options=options)
+        with open(outfile, "w") as f:
+            f.write(rendered)
+
+    def _render_template_str(self, template, context, options=None):
+        """Render a Jinja template from agent/templates as a string.
+
+        Used by config generators that need to inspect/clean the rendered
+        output before writing it to disk (e.g. the WAF generator, which
+        validates the ModSecurity file with `nginx -t` indirectly).
+        """
         if options is None:
             options = {}
         options.update({"loader": PackageLoader("agent", "templates")})
         environment = Environment(**options)
         template = environment.get_template(template)
-
-        with open(outfile, "w") as f:
-            f.write(template.render(**context))
+        return template.render(**context)
 
     def _update_supervisor(self):
         self.execute("sudo supervisorctl reread")

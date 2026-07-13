@@ -261,9 +261,18 @@ class Base:
     def log(self):
         data = self.data.copy()
         if self.skip_output_log:
-            data.update({"output": ""})
-        print(json.dumps(data, default=str))
-        self.update_redis()
+            data["output"] = ""
+
+        try:
+            print(json.dumps(data, default=str), flush=True)
+        except BrokenPipeError:
+			# stdout disappeared; don't fail the actual operation
+            pass
+
+        try:
+            self.update_redis()
+        except Exception:
+            pass
 
     @property
     def logs(self):

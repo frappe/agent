@@ -250,6 +250,7 @@ class TestSite(unittest.TestCase):
             "tls_protocols": None,
             "code_server": {},
             "cors_origins": cors_origins,
+            "waf_configs": {},
         }
         server._render_template("bench/nginx.conf.jinja2", context, output_file)
 

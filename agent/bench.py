@@ -27,6 +27,7 @@ from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
 from agent.utils import download_file, end_execution, get_execution_result, get_size
+from agent.waf import WAF
 
 if TYPE_CHECKING:
     from agent.server import Server
@@ -519,6 +520,54 @@ class Bench(Base):
             self.generate_nginx_config()
         return self.server._reload_nginx()
 
+    @job("Update WAF Configuration", priority="high")
+    def update_waf_config_job(self, site: str, **data):
+        """Render the per-site ModSecurity config and reload bench nginx.
+
+        The Press `Update WAF Configuration` AgentJob posts the full WAF
+        payload here; we render `modsec/main.conf`, persist the bearer token
+        the watcher will use to push logs back, then re-render the bench
+        nginx so the `modsecurity` directives pick up the new file.
+
+        Calling `server._enable_waf_infra_if_needed()` BEFORE `setup_nginx()`
+        ensures the master nginx has `load_module modsecurity_module.so;`
+        in place by the time the first `modsecurity on;` directive is
+        evaluated, and the supervisor has started the `waf_log_watcher`
+        process for this server. Idempotent — runs once per server.
+        """
+        site_obj = self.get_site(site)
+        waf = WAF(site_obj)
+        waf.update_token(data.get("waf_log_token", "") or "")
+        waf.generate(data)
+        self.server._enable_waf_infra_if_needed()
+        return self.setup_nginx()
+
+    @job("Disable WAF", priority="high")
+    def disable_waf_job(self, site: str, **_):
+        """Remove the per-site ModSecurity config and reload bench nginx.
+
+        The bench nginx re-render will omit the `modsecurity` directives
+        because `WAF.main_conf_path` returns None once the directory is gone.
+        """
+        site_obj = self.get_site(site)
+        WAF(site_obj).disable()
+        return self.setup_nginx()
+
+    @job("Rotate WAF Log Token", priority="high")
+    def rotate_waf_log_token_job(self, site: str, waf_log_token: str = ""):
+        """Replace the locally-cached bearer token without touching rules.
+
+        Only the audit-log watcher reads this token, so no nginx reload is
+        required. The watcher re-reads the token from disk on its next batch.
+        """
+        site_obj = self.get_site(site)
+        self._rotate_waf_log_token(site_obj, waf_log_token or "")
+        return {"token_rotated": True}
+
+    @step("Rotate WAF Log Token")
+    def _rotate_waf_log_token(self, site_obj, waf_log_token: str) -> None:
+        WAF(site_obj).update_token(waf_log_token)
+
     @step("Bench Setup NGINX Target")
     def setup_nginx_target(self):
         from filelock import FileLock
@@ -542,6 +591,19 @@ class Bench(Base):
 
         codeserver = _get_codeserver_config(self.directory)
 
+        # Per-site WAF config: maps site.name -> {enabled, modsec_main_conf}.
+        # Sites without an active WAF (or domain string entries emitted by the
+        # standalone template) simply miss from this map and the template
+        # omits the `modsecurity` directive for them.
+        waf_configs = {}
+        for site in sites:
+            main_conf = WAF(site).main_conf_path
+            if main_conf:
+                waf_configs[site.name] = {
+                    "enabled": True,
+                    "modsec_main_conf": main_conf,
+                }
+
         config = {
             "bench_name": self.name,
             "bench_name_slug": self.name.replace("-", "_"),
@@ -558,6 +620,7 @@ class Bench(Base):
             "tls_protocols": self.server.config.get("tls_protocols"),
             "code_server": codeserver,
             "cors_origins": _get_cors_origins(sites, self.common_site_config.get("allow_cors")),
+            "waf_configs": waf_configs,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
