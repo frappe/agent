@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import secrets
@@ -171,6 +172,56 @@ def end_execution(
     res["status"] = status or "Success"
     res["output"] = output or res["output"]
     return res
+
+
+def parse_json_output(output: str, validator=None):
+    """
+    Parse JSON from command output that may contain extra logs around the payload.
+
+    Prefer a clean-trailing payload when present. If multiple candidates remain
+    after that preference, raise instead of guessing.
+    """
+    def is_valid(value):
+        return not validator or validator(value)
+
+    try:
+        value = json.loads(output)
+        if not is_valid(value):
+            raise ValueError("Parsed JSON did not match expected shape")
+        return value
+    except (json.JSONDecodeError, ValueError) as e:
+        original_error = e
+        decoder = json.JSONDecoder()
+        trailing_candidate = None
+        dirty_candidate = None
+
+        for match in re.finditer(r"[\[{]", output):
+            try:
+                value, end = decoder.raw_decode(output[match.start() :])
+            except json.JSONDecodeError:
+                continue
+
+            if not is_valid(value):
+                continue
+
+            if not output[match.start() + end :].strip():
+                if trailing_candidate is not None:
+                    raise ValueError("Ambiguous JSON output")
+                trailing_candidate = value
+                continue
+
+            if dirty_candidate is not None:
+                raise ValueError("Ambiguous JSON output")
+
+            dirty_candidate = value
+
+        if trailing_candidate is not None:
+            return trailing_candidate
+
+        if dirty_candidate is not None:
+            return dirty_candidate
+
+        raise original_error
 
 
 def compute_file_hash(file_path, algorithm="sha256", raise_exception=True):
