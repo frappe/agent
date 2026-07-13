@@ -18,6 +18,14 @@ class ProxySQL(Server):
         )
         return self.execute(command)
 
+    @staticmethod
+    def _escape_sql(value):
+        return str(value).replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
+
+    @staticmethod
+    def _escape_sql_identifier(value):
+        return str(value).replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
+
     @job("Add User to ProxySQL")
     def add_user_job(
         self,
@@ -36,8 +44,8 @@ class ProxySQL(Server):
 
     @step("Add Backend to ProxySQL")
     def add_backend(self, backend):
-        backend_id = backend["id"]
-        backend_ip = backend["ip"]
+        backend_id = int(backend["id"])
+        backend_ip = self._escape_sql(backend["ip"])
         if self.proxysql_execute(f"SELECT 1 from mysql_servers where hostgroup_id = {backend_id}")["output"]:
             return
         commands = [
@@ -50,7 +58,11 @@ class ProxySQL(Server):
 
     @step("Add User to ProxySQL")
     def add_user(self, username: str, password: str, database: str, max_connections: int, backend: dict):
-        backend_id = backend["id"]
+        backend_id = int(backend["id"])
+        username = self._escape_sql(username)
+        password = self._escape_sql(password)
+        database = self._escape_sql(database)
+        max_connections = int(max_connections)
         commands = [
             (
                 "INSERT INTO mysql_users ( "
@@ -73,6 +85,7 @@ class ProxySQL(Server):
 
     @step("Remove User from ProxySQL")
     def remove_user(self, username):
+        username = self._escape_sql(username)
         commands = [
             f'DELETE FROM mysql_users WHERE username = "{username}"',
             "LOAD MYSQL USERS TO RUNTIME",
