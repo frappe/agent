@@ -1958,3 +1958,35 @@ def backup_db():
     offsite = data.get("offsite")
     job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}
+
+
+@application.route("/server/feature/enable", methods=["POST"])
+def enable_feature_worker():
+    server = Server()
+
+    server.update_config(
+        {
+            "enable_agent_job_update": True,
+        }
+    )
+
+    return {
+        "enabled": True,
+        "message": "Feature worker enabled",
+    }
+
+
+@application.route("/server/feature/disable", methods=["POST"])
+def disable_feature_worker():
+    server = Server()
+
+    server.update_config(
+        {
+            "enable_agent_job_update": False,
+        }
+    )
+
+    return {
+        "enabled": False,
+        "message": "Feature worker disabled",
+    }
