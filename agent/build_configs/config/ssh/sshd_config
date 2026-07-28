@@ -33,7 +33,7 @@ TrustedUserCAKeys /home/frappe/frappe-bench/config/ssh/ca.pub
 AuthorizedPrincipalsFile /home/frappe/frappe-bench/config/ssh/principals
 
 HostKey /home/frappe/frappe-bench/config/ssh/ssh_host_rsa_key
-HostCertificate /home/frappe/frappe-bench/config/ssh/ssh_host_rsa_key-cert.pub 
+HostCertificate /home/frappe/frappe-bench/config/ssh/ssh_host_rsa_key-cert.pub
 
 
 # Capability Limits
@@ -49,6 +49,11 @@ PermitOpen none
 PermitTunnel no
 PermitUserEnvironment no
 PermitUserRC no
+
+# sshd drops the image's ENV, so `bench build` over SSH symlinks assets.
+# Must stay on one line -- sshd keeps only the first SetEnv it reads.
+# PATH is left alone on purpose, it embeds the node version.
+SetEnv FRAPPE_HARD_LINK_ASSETS=True LANG=C.UTF-8 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONUNBUFFERED=1 HISTTIMEFORMAT="%Y-%m-%d %T "
 
 PrintMotd no
 
