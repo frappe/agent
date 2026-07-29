@@ -289,7 +289,7 @@ class DatabasePhysicalBackup(DatabaseServer):
         try:
             output = subprocess.check_output(command)
         except subprocess.CalledProcessError as e:
-            raise DatabaseSchemaExportError(e.output)  # noqa: B904
+            raise DatabaseSchemaExportError(e.output)
 
         return output.decode("utf-8")
 
