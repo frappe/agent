@@ -985,7 +985,7 @@ print(">>>" + frappe.session.sid + "<<<")
             return True
         return value == "1"
 
-    @job("Backup Site", priority="low")
+    @job("Backup Site", priority="backup")
     def backup_job(  # noqa: C901
         self,
         with_files=False,

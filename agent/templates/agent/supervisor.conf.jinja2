@@ -31,6 +31,24 @@ stderr_logfile={{ directory }}/logs/worker.error.log
 user={{ user }}
 directory={{ directory }}
 
+{# Backups get their own worker so they can't head-of-line block the shared queues. #}
+{# Queue order matters: backup is drained first, the rest are picked up only when backup is idle. #}
+{# Known ceiling: a long `low` job here delays a newly-enqueued backup until it finishes — drop #}
+{# the trailing queues if backup latency ever matters more than keeping this worker busy. #}
+[program:worker_backup]
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{ directory }}/env/bin/rq worker {% if sentry_dsn %}--sentry-dsn '{{ sentry_dsn }}'{% endif %} --url redis://127.0.0.1:{{ redis_port }} backup high default low"
+environment=PYTHONUNBUFFERED=1
+autostart=true
+autorestart=true
+stopwaitsecs=1500
+killasgroup=true
+numprocs={{ backup_workers }}
+process_name=%(program_name)s-%(process_num)d
+stdout_logfile={{ directory }}/logs/worker_backup.log
+stderr_logfile={{ directory }}/logs/worker_backup.error.log
+user={{ user }}
+directory={{ directory }}
+
 {% if is_proxy_server or is_standalone %}
 [program:nginx_reload_manager]
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{directory}}/env/bin/python {{ directory }}/repo/agent/nginx_reload_manager.py"
@@ -46,7 +64,7 @@ directory={{ directory }}
 
 [group:agent]
 
-{% set programs = "web, redis, worker" %}
+{% set programs = "web, redis, worker, worker_backup" %}
 
 {% if is_proxy_server or is_standalone %}
     {% set programs = programs + ", nginx_reload_manager" %}
