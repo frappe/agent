@@ -1311,6 +1311,18 @@ def refresh_database_usage():
     return {"job": job}
 
 
+@application.route("/database/check-and-repair-tables", methods=["POST"])
+def check_and_repair_tables():
+    data = request.json
+    job = DatabaseServer().check_and_repair_tables_job(
+        private_ip=data["private_ip"],
+        mariadb_root_password=data["mariadb_root_password"],
+        database=data["database"],
+        tables=data.get("tables"),
+    )
+    return {"job": job}
+
+
 @application.route("/database/binary/logs")
 def get_binary_logs():
     return jsonify(DatabaseServer().binary_logs)
