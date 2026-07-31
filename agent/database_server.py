@@ -231,6 +231,123 @@ WHERE `schema` IN (
         if not success:
             raise Exception(f"Failed to update schema size for {database}: {msg}")
 
+    @job("Check And Repair Database Tables")
+    def check_and_repair_tables_job(
+        self,
+        private_ip: str,
+        mariadb_root_password: str,
+        database: str,
+        tables: list[str] | None = None,
+    ):
+        check_result = self.check_database_tables(private_ip, mariadb_root_password, database, tables)
+        return self.repair_database_tables(
+            private_ip, mariadb_root_password, database, check_result["corrupted"]
+        )
+
+    @step("Check Database Tables")
+    def check_database_tables(  # noqa: C901
+        self, private_ip: str, mariadb_root_password: str, database: str, tables: list[str] | None = None
+    ):
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, database)
+        success, output = db.execute_query("SHOW TABLES;")
+        if not success:
+            raise Exception(f"Failed to fetch tables for {database}: {output}")
+        existing_tables = [x[0] for x in output[0].get("output").get("data")]
+
+        # Whitelist against tables that actually exist, so a caller-supplied `tables` list
+        # can't smuggle SQL through the unescaped identifiers used below.
+        if tables:
+            invalid_tables = [t for t in tables if t not in existing_tables]
+            tables = [t for t in tables if t in existing_tables]
+        else:
+            invalid_tables = []
+            tables = existing_tables
+
+        log = [f"Checking {len(tables)} table(s) in `{database}`."]
+        if invalid_tables:
+            log.append(f"Ignored {len(invalid_tables)} unknown table(s): {', '.join(invalid_tables)}")
+
+        corrupted = {}
+        batch_size = 50
+        for start in range(0, len(tables), batch_size):
+            batch = tables[start : start + batch_size]
+            query = "".join(f"CHECK TABLE `{table}`;\n" for table in batch)
+            success, output = db.execute_query(query, as_dict=True)
+            if not success:
+                raise Exception(f"Failed to check tables for {database}: {output}")
+            for table, result in zip(batch, output):
+                rows = result.get("output") or []
+                row = rows[-1] if rows else {}
+                msg_type, msg_text = row.get("Msg_type"), row.get("Msg_text")
+                if msg_type == "status" and msg_text == "OK":
+                    continue
+                if (
+                    msg_type == "note"
+                    and msg_text == "The storage engine for the table doesn't support check"
+                ):
+                    continue
+                corrupted[table] = msg_text
+
+        if corrupted:
+            log.append(f"Found {len(corrupted)} corrupted table(s):")
+            log.extend(f"- `{table}`: {msg}" for table, msg in corrupted.items())
+        else:
+            log.append("No corrupted tables found.")
+
+        return {
+            "output": "\n".join(log),
+            "tables": tables,
+            "invalid_tables": invalid_tables,
+            "corrupted": corrupted,
+        }
+
+    @step("Repair Database Tables")
+    def repair_database_tables(  # noqa: C901
+        self, private_ip: str, mariadb_root_password: str, database: str, corrupted: dict
+    ):
+        if not corrupted:
+            return {"output": "No corrupted tables found. Nothing to repair."}
+
+        db = Database(private_ip, self.db_port, "root", mariadb_root_password, database)
+        # Fetch engines for the whole schema instead of interpolating table names into an
+        # `IN (...)` clause, so no caller-supplied value ever gets built into the query.
+        success, output = db.execute_query(
+            f"SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA='{database}';",
+            as_dict=True,
+        )
+        if not success:
+            raise Exception(f"Failed to fetch table engines for {database}: {output}")
+        engines = {row["TABLE_NAME"]: row["ENGINE"] for row in output[0]["output"]}
+
+        repaired, failed, skipped = [], [], []
+        for table in corrupted:
+            engine = engines.get(table)
+            if engine == "MyISAM":
+                query = f"REPAIR TABLE `{table}`;"
+            elif engine == "InnoDB":
+                query = f"OPTIMIZE TABLE `{table}`;"
+            else:
+                skipped.append(table)
+                continue
+            success, _ = db.execute_query(query, commit=True)
+            (repaired if success else failed).append(table)
+
+        log = [f"Attempted to repair {len(corrupted)} corrupted table(s) in `{database}`."]
+        if repaired:
+            log.append(f"Repaired {len(repaired)} table(s): {', '.join(repaired)}")
+        if failed:
+            log.append(f"Failed to repair {len(failed)} table(s): {', '.join(failed)}")
+        if skipped:
+            log.append(f"Skipped {len(skipped)} table(s) with unsupported engine: {', '.join(skipped)}")
+
+        return {
+            "output": "\n".join(log),
+            "corrupted": corrupted,
+            "repaired": repaired,
+            "failed": failed,
+            "skipped": skipped,
+        }
+
     @job("Flush Tables")
     def flush_tables_job(self, private_ip: str, mariadb_root_password: str):
         self.flush_tables(private_ip, mariadb_root_password)
