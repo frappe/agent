@@ -268,6 +268,10 @@ WHERE `schema` IN (
                 raise Exception(f"Failed to check tables for {database}: {output}")
             for table, result in zip(batch, output):
                 rows = result.get("output") or []
+                error_rows = [r for r in rows if (r.get("Msg_type") or "").lower() == "error"]
+                if error_rows:
+                    corrupted[table] = "; ".join(r.get("Msg_text", "") for r in error_rows)
+                    continue
                 row = rows[-1] if rows else {}
                 msg_type, msg_text = row.get("Msg_type"), row.get("Msg_text")
                 if msg_type == "status" and msg_text == "OK":
@@ -326,10 +330,15 @@ WHERE `schema` IN (
                 failed[table] = str(output)
                 continue
 
-            # The statement can run without raising while still reporting failure in its
-            # result rows (e.g. Msg_type='error'), so the rows must be inspected directly
-            # rather than trusting `ran`.
+            # The statement can run without raising while still reporting failure in one of
+            # its result rows (e.g. Msg_type='error'), possibly followed by an unrelated
+            # status row, so every row must be checked instead of only the last one.
             rows = output[0].get("output") or []
+            error_rows = [r for r in rows if (r.get("Msg_type") or "").lower() == "error"]
+            if error_rows:
+                failed[table] = "; ".join(r.get("Msg_text", "") for r in error_rows)
+                continue
+
             row = rows[-1] if rows else {}
             msg_type, msg_text = row.get("Msg_type"), row.get("Msg_text")
             if msg_type == "status" and msg_text in ("OK", "Table is already up to date"):
