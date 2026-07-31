@@ -310,7 +310,7 @@ WHERE `schema` IN (
             raise Exception(f"Failed to fetch table engines for {database}: {output}")
         engines = {row["TABLE_NAME"]: row["ENGINE"] for row in output[0]["output"]}
 
-        repaired, failed, skipped = [], [], []
+        repaired, failed, skipped = [], {}, []
         for table in corrupted:
             engine = engines.get(table)
             if engine == "MyISAM":
@@ -320,14 +320,29 @@ WHERE `schema` IN (
             else:
                 skipped.append(table)
                 continue
-            success, _ = db.execute_query(query, commit=True)
-            (repaired if success else failed).append(table)
+
+            ran, output = db.execute_query(query, commit=True, as_dict=True)
+            if not ran:
+                failed[table] = str(output)
+                continue
+
+            # The statement can run without raising while still reporting failure in its
+            # result rows (e.g. Msg_type='error'), so the rows must be inspected directly
+            # rather than trusting `ran`.
+            rows = output[0].get("output") or []
+            row = rows[-1] if rows else {}
+            msg_type, msg_text = row.get("Msg_type"), row.get("Msg_text")
+            if msg_type == "status" and msg_text in ("OK", "Table is already up to date"):
+                repaired.append(table)
+            else:
+                failed[table] = msg_text or "Unknown error"
 
         log = [f"Attempted to repair {len(corrupted)} corrupted table(s) in `{database}`."]
         if repaired:
             log.append(f"Repaired {len(repaired)} table(s): {', '.join(repaired)}")
         if failed:
-            log.append(f"Failed to repair {len(failed)} table(s): {', '.join(failed)}")
+            log.append(f"Failed to repair {len(failed)} table(s):")
+            log.extend(f"- `{table}`: {msg}" for table, msg in failed.items())
         if skipped:
             log.append(f"Skipped {len(skipped)} table(s) with unsupported engine: {', '.join(skipped)}")
 
