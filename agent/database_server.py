@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import json
 import os
 import re
@@ -896,17 +897,30 @@ WHERE `schema` IN (
 
     @job("Upload Audit Logs To S3", priority="low")
     def upload_audit_logs_to_s3_job(self, private_ip: str, mariadb_root_password: str, offsite: dict) -> dict:
-        self.stage_audit_logs(private_ip, mariadb_root_password)
-        return self.upload_audit_logs_to_s3(offsite)
+        with self.audit_log_lock():
+            self.stage_audit_logs(private_ip, mariadb_root_password)
+            return self.upload_audit_logs_to_s3(offsite)
+
+    @contextlib.contextmanager
+    def audit_log_lock(self):
+        """Refuse overlapping runs, which would rotate and unlink under each other."""
+        os.makedirs(self.audit_log_pending_directory, exist_ok=True)
+        with open(os.path.join(self.audit_log_pending_directory, ".lock"), "w") as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as e:
+                raise Exception("Another audit log upload is already running on this server") from e
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     @step("Rotate Audit Log")
     def stage_audit_logs(self, private_ip: str, mariadb_root_password: str) -> dict:
-        """Close the current audit log and move every rotated file out of the plugin's namespace.
+        """Rotate the audit log and move the rotated files out of the plugin's namespace.
 
-        server_audit renames .1 to .2, .2 to .3 and so on at every rotation, so a file name
-        is only stable until the next one. Size-based rotation is switched off for the
-        duration so the only rotation is ours and the names can't move under us, then each
-        file is staged under a name nothing will reuse.
+        server_audit renames .1 to .2 and so on at every rotation, so names are only stable
+        between them. Size rotation is off for the duration to keep ours the only one.
         """
         mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
         rotate_size = self.get_global(mariadb, "server_audit_file_rotate_size")
@@ -934,8 +948,7 @@ WHERE `schema` IN (
             )
             # os.rename would clobber an existing destination silently; os.link refuses it
             os.link(source, destination)
-            # Only drop the source if it is still the file we just linked. A rotation here
-            # would have rebound the name to a log we never staged.
+            # Nothing can rotate here, but unlinking a rebound name loses a log for good
             if os.stat(source).st_ino == os.stat(destination).st_ino:
                 os.unlink(source)
             staged.append(os.path.basename(destination))

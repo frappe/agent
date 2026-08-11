@@ -163,3 +163,28 @@ class TestStageAuditLogs(unittest.TestCase):
             (Path(self.server.audit_log_pending_directory) / staged).read_text(),
             RECORD.format(second="01"),
         )
+
+
+class TestAuditLogLock(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.server = DatabaseServer.__new__(DatabaseServer)
+        self.server.audit_log_pending_directory = os.path.join(self.directory.name, "audit_pending")
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def acquire(self):
+        with self.server.audit_log_lock():
+            pass
+
+    def test_a_second_run_is_refused_while_the_first_holds_the_lock(self):
+        # Overlapping runs rotate and unlink under each other, which loses audit logs
+        with self.server.audit_log_lock():
+            self.assertRaisesRegex(Exception, "already running", self.acquire)
+
+    def test_the_lock_is_released_when_a_run_fails(self):
+        with self.assertRaises(OSError), self.server.audit_log_lock():
+            raise OSError
+
+        self.acquire()
