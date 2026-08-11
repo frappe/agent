@@ -920,12 +920,28 @@ WHERE `schema` IN (
         """Rotate the audit log and move the rotated files out of the plugin's namespace.
 
         server_audit renames .1 to .2 and so on at every rotation, so names are only stable
-        between them. audit_log_lock keeps ours the only rotation for the duration.
+        between them. Rotations are frozen while the files are moved, and audit_log_lock
+        keeps a second run from rotating too.
         """
         mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
+        rotations = self.get_global(mariadb, "server_audit_file_rotations")
         mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
+        # 0 means the plugin stops rotating, so the names can't move while we read them
+        mariadb.execute_query("SET GLOBAL server_audit_file_rotations = 0;", commit=True)
+        try:
+            staged = self.move_rotated_audit_logs_to_pending()
+        finally:
+            # Left at 0 the live log never rotates and grows past the disk cap
+            mariadb.execute_query(f"SET GLOBAL server_audit_file_rotations = {int(rotations)};", commit=True)
 
-        return {"staged_files": self.move_rotated_audit_logs_to_pending()}
+        return {"staged_files": staged}
+
+    @staticmethod
+    def get_global(mariadb: Database, variable: str) -> int:
+        success, output = mariadb.execute_query(f"SELECT @@GLOBAL.{variable};")
+        if not success:
+            raise Exception(f"Failed to read {variable}: {output}")
+        return output[0]["output"]["data"][0][0]
 
     def move_rotated_audit_logs_to_pending(self) -> list[str]:
         os.makedirs(self.audit_log_pending_directory, exist_ok=True)
