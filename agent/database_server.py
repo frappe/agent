@@ -18,6 +18,12 @@ from agent.database import CustomPeeweeDB, Database
 from agent.job import job, step
 from agent.server import Server
 
+# server_audit rotates server_audit.log to .1, .1 to .2 and so on. We move those to
+# audit_pending under a name that can't be reused, then upload and delete from there.
+AUDIT_LOG_ROTATED_RE = re.compile(r"^server_audit\.log\.\d+$")
+AUDIT_LOG_STAGED_RE = re.compile(r"^server_audit_\d{14}_\d+\.log$")
+AUDIT_LOG_RECORD_RE = re.compile(r"^\d{8} \d{2}:\d{2}:\d{2},")
+
 
 class DatabaseServer(Server):
     def __init__(self, directory=None):
@@ -29,6 +35,8 @@ class DatabaseServer(Server):
 
         self.mariadb_directory = "/var/lib/mysql"
         self.pt_stalk_directory = "/var/lib/pt-stalk"
+        self.audit_log_directory = "/var/log/mysql"
+        self.audit_log_pending_directory = os.path.join(self.audit_log_directory, "audit_pending")
 
         self.job = None
         self.step = None
@@ -880,6 +888,111 @@ WHERE `schema` IN (
             "failed_uploads": failed_uploads,
         }
 
+    def get_audit_logs(self) -> dict:
+        return {
+            "rotated": list_audit_logs(self.audit_log_directory, AUDIT_LOG_ROTATED_RE),
+            "pending_upload": list_audit_logs(self.audit_log_pending_directory, AUDIT_LOG_STAGED_RE),
+        }
+
+    @job("Upload Audit Logs To S3", priority="low")
+    def upload_audit_logs_to_s3_job(self, private_ip: str, mariadb_root_password: str, offsite: dict) -> dict:
+        self.stage_audit_logs(private_ip, mariadb_root_password)
+        return self.upload_audit_logs_to_s3(offsite)
+
+    @step("Rotate Audit Log")
+    def stage_audit_logs(self, private_ip: str, mariadb_root_password: str) -> dict:
+        """Close the current audit log and move every rotated file out of the plugin's namespace.
+
+        server_audit renames .1 to .2, .2 to .3 and so on at every rotation, so a file
+        name is only stable until the next one. Staging under a unique name means we
+        can't upload one file and then delete another that rotated into its name.
+        """
+        mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
+        mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
+
+        os.makedirs(self.audit_log_pending_directory, exist_ok=True)
+        staged = []
+        for log in list_audit_logs(self.audit_log_directory, AUDIT_LOG_ROTATED_RE):
+            source = os.path.join(self.audit_log_directory, log["name"])
+            index = log["name"].rsplit(".", 1)[-1]
+            rotated_at = datetime.fromtimestamp(log["modified_at"]).strftime("%Y%m%d%H%M%S")
+            destination = os.path.join(
+                self.audit_log_pending_directory, f"server_audit_{rotated_at}_{index}.log"
+            )
+            # os.rename overwrites silently. Refuse rather than lose an audit log.
+            if os.path.exists(destination):
+                raise FileExistsError(f"Staged audit log already exists: {destination}")
+            os.rename(source, destination)
+            staged.append(os.path.basename(destination))
+
+        return {"staged_files": staged}
+
+    @step("Upload Audit Logs To S3")
+    def upload_audit_logs_to_s3(self, offsite: dict) -> dict:
+        import boto3
+
+        offsite_files = {}
+        failed_uploads = {}
+
+        bucket, auth, prefix = (
+            offsite["bucket"],
+            offsite["auth"],
+            offsite["path"],
+        )
+        region = auth.get("REGION")
+
+        if region:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+                region_name=region,
+            )
+        else:
+            s3 = boto3.client(
+                "s3",
+                aws_access_key_id=auth["ACCESS_KEY"],
+                aws_secret_access_key=auth["SECRET_KEY"],
+            )
+
+        tmp_folder = get_tmp_folder_path()
+        for log in list_audit_logs(self.audit_log_pending_directory, AUDIT_LOG_STAGED_RE):
+            audit_log = log["name"]
+            audit_log_path = os.path.join(self.audit_log_pending_directory, audit_log)
+            audit_log_gz_path = os.path.join(tmp_folder, f"{audit_log}.gz")
+            offsite_path = os.path.join(prefix, f"{audit_log}.gz")
+            try:
+                start, end = parse_audit_log_time_range(audit_log_path)
+                if not start:
+                    # Nothing was audited in this window. Don't bill for an empty object.
+                    os.remove(audit_log_path)
+                    continue
+
+                cmd = f"gzip -c {audit_log_path} > {audit_log_gz_path}"
+                subprocess.run(cmd, shell=True, check=True)
+                gzipped_size = os.path.getsize(audit_log_gz_path)
+                with open(audit_log_gz_path, "rb") as f:
+                    s3.upload_fileobj(f, bucket, offsite_path)
+                offsite_files[audit_log] = {
+                    "size": gzipped_size,
+                    "uncompressed_size": log["size"],
+                    "path": offsite_path,
+                    "start_timestamp": start,
+                    "end_timestamp": end,
+                }
+                # Unlike binlogs, nothing else reclaims this disk space for us
+                os.remove(audit_log_path)
+            except Exception as e:
+                failed_uploads[audit_log] = str(e)
+            finally:
+                with contextlib.suppress(Exception):
+                    os.remove(audit_log_gz_path)
+
+        return {
+            "offsite_files": offsite_files,
+            "failed_uploads": failed_uploads,
+        }
+
     def _get_current_binlog(self) -> str | None:
         index_file = Path(self.mariadb_directory) / "mysql-bin.index"
         if index_file.exists():
@@ -948,3 +1061,39 @@ def get_tmp_folder_path():
     if not os.path.exists(path):
         return "/tmp/"
     return path
+
+
+def list_audit_logs(directory: str, pattern: re.Pattern) -> list[dict]:
+    path = Path(directory)
+    if not path.exists():
+        return []
+
+    logs = []
+    for file in path.iterdir():
+        if not pattern.match(file.name):
+            continue
+        stat = file.stat()
+        logs.append({"name": file.name, "size": stat.st_size, "modified_at": stat.st_mtime})
+
+    return sorted(logs, key=lambda log: log["name"])
+
+
+def parse_audit_log_time_range(path: str) -> tuple[str | None, str | None]:
+    """Return the timestamps of the first and last record in a server_audit log.
+
+    Press shows this as the window the file covers, so it has to come from the records
+    themselves rather than the file's mtime.
+    """
+    start = end = None
+    with open(path, errors="replace") as f:
+        for line in f:
+            # Queries can contain newlines, so match the record prefix instead of
+            # assuming one record per line.
+            if not AUDIT_LOG_RECORD_RE.match(line):
+                continue
+            timestamp = datetime.strptime(line[:17], "%Y%m%d %H:%M:%S").isoformat()
+            if start is None:
+                start = timestamp
+            end = timestamp
+
+    return start, end
