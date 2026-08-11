@@ -919,16 +919,23 @@ WHERE `schema` IN (
             destination = os.path.join(
                 self.audit_log_pending_directory, f"server_audit_{rotated_at}_{index}.log"
             )
-            # os.rename overwrites silently. Refuse rather than lose an audit log.
-            if os.path.exists(destination):
-                raise FileExistsError(f"Staged audit log already exists: {destination}")
-            os.rename(source, destination)
+            # os.rename clobbers silently, and checking first leaves a window where an
+            # overlapping job replaces the path and we later delete a log we never
+            # uploaded. os.link refuses an existing destination atomically.
+            os.link(source, destination)
+            os.unlink(source)
             staged.append(os.path.basename(destination))
 
         return {"staged_files": staged}
 
     @step("Upload Audit Logs To S3")
     def upload_audit_logs_to_s3(self, offsite: dict) -> dict:
+        """Upload every staged audit log, then delete it from disk.
+
+        Returns {"offsite_files": {name: {size, uncompressed_size, path,
+        start_timestamp, end_timestamp}}, "failed_uploads": {name: error}}. Press turns
+        each offsite_files entry into a MariaDB Audit Log record.
+        """
         import boto3
 
         offsite_files = {}
