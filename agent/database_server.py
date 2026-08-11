@@ -903,13 +903,26 @@ WHERE `schema` IN (
     def stage_audit_logs(self, private_ip: str, mariadb_root_password: str) -> dict:
         """Close the current audit log and move every rotated file out of the plugin's namespace.
 
-        server_audit renames .1 to .2, .2 to .3 and so on at every rotation, so a file
-        name is only stable until the next one. Staging under a unique name means we
-        can't upload one file and then delete another that rotated into its name.
+        server_audit renames .1 to .2, .2 to .3 and so on at every rotation, so a file name
+        is only stable until the next one. Size-based rotation is switched off for the
+        duration so the only rotation is ours and the names can't move under us, then each
+        file is staged under a name nothing will reuse.
         """
         mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
-        mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
+        rotate_size = self.get_global(mariadb, "server_audit_file_rotate_size")
+        mariadb.execute_query("SET GLOBAL server_audit_file_rotate_size = 0;", commit=True)
+        try:
+            mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
+            staged = self.move_rotated_audit_logs_to_pending()
+        finally:
+            # Left off, the live log would grow past the disk cap until the next run
+            mariadb.execute_query(
+                f"SET GLOBAL server_audit_file_rotate_size = {int(rotate_size)};", commit=True
+            )
 
+        return {"staged_files": staged}
+
+    def move_rotated_audit_logs_to_pending(self) -> list[str]:
         os.makedirs(self.audit_log_pending_directory, exist_ok=True)
         staged = []
         for log in list_audit_logs(self.audit_log_directory, AUDIT_LOG_ROTATED_RE):
@@ -919,14 +932,22 @@ WHERE `schema` IN (
             destination = os.path.join(
                 self.audit_log_pending_directory, f"server_audit_{rotated_at}_{index}.log"
             )
-            # os.rename clobbers silently, and checking first leaves a window where an
-            # overlapping job replaces the path and we later delete a log we never
-            # uploaded. os.link refuses an existing destination atomically.
+            # os.rename would clobber an existing destination silently; os.link refuses it
             os.link(source, destination)
-            os.unlink(source)
+            # Only drop the source if it is still the file we just linked. A rotation here
+            # would have rebound the name to a log we never staged.
+            if os.stat(source).st_ino == os.stat(destination).st_ino:
+                os.unlink(source)
             staged.append(os.path.basename(destination))
 
-        return {"staged_files": staged}
+        return staged
+
+    @staticmethod
+    def get_global(mariadb: Database, variable: str) -> int:
+        success, output = mariadb.execute_query(f"SELECT @@GLOBAL.{variable} AS value;")
+        if not success:
+            raise Exception(f"Failed to read {variable}: {output}")
+        return output[0]["output"]["data"][0][0]
 
     @step("Upload Audit Logs To S3")
     def upload_audit_logs_to_s3(self, offsite: dict) -> dict:
