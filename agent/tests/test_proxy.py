@@ -255,6 +255,30 @@ class TestProxy(unittest.TestCase):
         with open(redirect_file) as r:
             self.assertDictEqual(json.load(r), original_dict)
 
+    def test_generated_proxy_config_recovers_real_client_ip_from_cloudflare(self):
+        """Test proxy.conf trusts Cloudflare ranges for realip before any server block."""
+        proxy = self._get_fake_proxy()
+        proxy.upstreams_directory = self.upstreams_directory
+        proxy.error_pages_directory = os.path.join(self.test_dir, "pages")
+        proxy.secondary_config_path = os.path.join(self.test_dir, "secondaries.json")
+
+        upstream_directory = os.path.join(self.upstreams_directory, "10.0.0.1")
+        os.makedirs(upstream_directory)
+        with open(os.path.join(upstream_directory, "site.frappe.cloud"), "w") as f:
+            f.write("active")
+
+        config = {"domain": self.tld, "nginx_directory": proxy.nginx_directory}
+        with patch.object(Proxy, "get_config", return_value=config):
+            proxy._generate_proxy_config()
+
+        with open(os.path.join(proxy.nginx_directory, "proxy.conf")) as f:
+            rendered = f.read()
+
+        self.assertIn("real_ip_header CF-Connecting-IP;", rendered)
+        first_server_block = rendered.index("server {")
+        self.assertLess(rendered.index("set_real_ip_from 173.245.48.0/20;"), first_server_block)
+        self.assertLess(rendered.index("set_real_ip_from 2400:cb00::/32;"), first_server_block)
+
     def test_rename_does_not_update_partial_strings(self):
         """Test rename doesn't update part of other custom domains."""
         proxy = self._get_fake_proxy()

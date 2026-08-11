@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -56,11 +58,23 @@ class Server(Base):
     def press_url(self):
         return self.config.get("press_url", "https://frappecloud.com")
 
+    @property
+    def backup_workers(self) -> int:
+        return self.config.get("backup_workers", 1)
+
     def docker_login(self, registry):
-        url = registry["url"]
-        username = registry["username"]
-        password = registry["password"]
+        url = shlex.quote(registry["url"])
+        username = shlex.quote(registry["username"])
+        password = shlex.quote(registry["password"])
         return self.execute(f"docker login -u {username} -p {password} {url}")
+
+    def docker_inspect_manifest(self, image_tag: str):
+        try:
+            return self.execute(f"docker manifest inspect {shlex.quote(image_tag)}")
+        except AgentException as e:
+            if "no such manifest" in e.data.get("output", ""):
+                raise Exception(f"Image {image_tag} not found in registry") from e
+            raise
 
     def establish_connection_with_registry(self, max_retries: int, registry: dict[str, str]):
         """Given the attempt count try and establish connection with the registry else Raise"""
@@ -140,7 +154,7 @@ class Server(Base):
         """
         for attempt in range(max_retries):
             try:
-                self.execute(f"docker inspect {name}")
+                self.execute(f"docker inspect {shlex.quote(name)}")
             except AgentException:
                 break  # container does not exist
             else:
@@ -150,14 +164,11 @@ class Server(Base):
 
     def get_image_size(self, image_tag: str):
         try:
-            return (
-                to_bytes(
-                    self.execute(
-                        f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E "^{image_tag} "'
-                    )["output"].split()[-1]
-                )
-                / 1024**3
+            image_tag_pattern = shlex.quote(f"^{image_tag} ")
+            image_size_command = (
+                f'docker image ls --format "{{{{.Tag}}}} {{{{.Size}}}}" | grep -E {image_tag_pattern}'
             )
+            return to_bytes(self.execute(image_size_command)["output"].split()[-1]) / 1024**3
         except AgentException:
             pass
 
@@ -224,7 +235,7 @@ class Server(Base):
     def _push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
         self.docker_login(registry_settings)
         for image in images:
-            self.execute(f"docker push {image}")
+            self.execute(f"docker push {shlex.quote(image)}")
 
     @job("Remove Redis Localhost Bind")
     def remove_redis_localhost_bind(self):
@@ -261,7 +272,7 @@ class Server(Base):
     def disable_production_on_bench(self, name: str):
         """In case of corrupted bench / site config don't stall archive"""
         self._check_site_on_bench(name)
-        self.execute(f"docker rm {name} --force")
+        self.execute(f"docker rm {shlex.quote(name)} --force")
 
     @job("Run Benches on Shared FS")
     def change_bench_directory(
@@ -286,7 +297,7 @@ class Server(Base):
             self.restart_benches(
                 is_primary=is_primary,
                 registry_settings=registry_settings,
-                secondary_server_private_ip=secondary_server_private_ip if not is_primary else None,
+                secondary_server_private_ip=(secondary_server_private_ip if not is_primary else None),
             )
 
     @step("Configure Site with Redis Private IP")
@@ -357,7 +368,10 @@ class Server(Base):
     def _stop_bench_workers(self):
         """Stop all workers except redis"""
         for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl stop frappe-bench-web: frappe-bench-workers:", as_root=True)
+            bench.docker_execute(
+                "supervisorctl stop frappe-bench-web: frappe-bench-workers:",
+                as_root=True,
+            )
 
     @job("Start Bench Workers")
     def start_bench_workers(self):
@@ -367,7 +381,10 @@ class Server(Base):
     def _start_bench_workers(self):
         """Start all workers"""
         for _, bench in self.benches.items():
-            bench.docker_execute("supervisorctl start frappe-bench-web: frappe-bench-workers:", as_root=True)
+            bench.docker_execute(
+                "supervisorctl start frappe-bench-web: frappe-bench-workers:",
+                as_root=True,
+            )
 
     @job("Force Remove All Benches")
     def force_remove_all_benches(self):
@@ -383,8 +400,11 @@ class Server(Base):
         bench_directory = os.path.join(self.benches_directory, name)
         if not os.path.exists(bench_directory):
             return
+
+        image_tag = None
         try:
             bench = Bench(name, self)
+            image_tag = bench.docker_image
         except json.JSONDecodeError:
             self.disable_production_on_bench(name)
         except FileNotFoundError as e:
@@ -397,6 +417,16 @@ class Server(Base):
 
         self.container_exists(name)
         self.move_bench_to_archived_directory(name)
+        if image_tag:
+            self.remove_docker_image(image_tag)
+
+    def remove_docker_image(self, image_tag: str):
+        # Check if the image is present in registry before trying to remove locally
+        with contextlib.suppress(Exception):
+            manifest = self.docker_inspect_manifest(image_tag)
+            if not manifest:
+                return
+            self.execute(f"docker rmi {shlex.quote(image_tag)} --force")
 
     @job("Cleanup Unused Files", priority="low")
     def cleanup_unused_files(self, force: bool = False):
@@ -409,7 +439,7 @@ class Server(Base):
     def remove_benches_without_container(self, benches: list[str]):
         for bench in benches:
             try:
-                self.execute(f"docker ps -a | grep {bench}")
+                self.execute(f"docker ps -a | grep {shlex.quote(bench)}")
             except AgentException as e:
                 if e.data.returncode:
                     self.move_to_archived_directory(Bench(bench, self))
@@ -686,7 +716,10 @@ class Server(Base):
 
     def execute(self, command, directory=None, skip_output_log=False, non_zero_throw=True):
         return super().execute(
-            command, directory=directory, skip_output_log=skip_output_log, non_zero_throw=non_zero_throw
+            command,
+            directory=directory,
+            skip_output_log=skip_output_log,
+            non_zero_throw=non_zero_throw,
         )
 
     @job("Pull Docker Images", priority="high")
@@ -698,7 +731,7 @@ class Server(Base):
         self.docker_login(registry)
 
         for image_tag in image_tags:
-            command = f"docker pull {image_tag}"
+            command = f"docker pull {shlex.quote(image_tag)}"
             self.execute(command, directory=self.directory)
 
     @job("Reload NGINX")
@@ -846,25 +879,32 @@ class Server(Base):
         self.step = value
 
     def update_agent_web(self, url=None, branch="master"):
+        branch = branch or "master"
         directory = os.path.join(self.directory, "repo")
         self.execute("git reset --hard", directory=directory)
         self.execute("git clean -fd", directory=directory)
         if url:
-            self.execute(f"git remote set-url upstream {url}", directory=directory)
+            self.execute(f"git remote set-url upstream {shlex.quote(url)}", directory=directory)
         self.execute("git fetch upstream", directory=directory)
-        self.execute(f"git checkout {branch}", directory=directory)
-        self.execute(f"git merge --ff-only upstream/{branch}", directory=directory)
+        self.execute(f"git checkout {shlex.quote(branch)}", directory=directory)
+        self.execute(f"git merge --ff-only upstream/{shlex.quote(branch)}", directory=directory)
         self.execute("./env/bin/pip install -e repo", directory=self.directory)
 
         self._generate_redis_config()
         self._generate_supervisor_config()
-        self.execute("sudo supervisorctl reread")
+        # reread alone loads the new config without acting on it; update is what
+        # actually adds and starts programs that are new in the template.
+        self._update_supervisor()
         self.execute("sudo supervisorctl restart agent:redis")
 
         self.setup_nginx()
         for worker in range(self.config["workers"]):
             worker_name = f"agent:worker-{worker}"
             self.execute(f"sudo supervisorctl restart {worker_name}")
+
+        for worker in range(self.backup_workers):
+            worker_name = f"agent:worker_backup-{worker}"
+            self.execute(f"sudo supervisorctl restart {worker_name}", non_zero_throw=False)
 
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
@@ -893,8 +933,12 @@ class Server(Base):
 
         # Stop required services
         if restart_rq_workers:
-            for worker_id in supervisor_status.get("worker", {}):
-                self.execute(f"sudo supervisorctl stop agent:worker-{worker_id}", non_zero_throw=False)
+            for group in ("worker", "worker_backup"):
+                for worker_id in supervisor_status.get(group, {}):
+                    self.execute(
+                        f"sudo supervisorctl stop agent:{group}-{worker_id}",
+                        non_zero_throw=False,
+                    )
 
         # Stop NGINX Reload Manager if it's a proxy server
         is_proxy_server = (
@@ -903,7 +947,10 @@ class Server(Base):
             and not self.config.get("name").startswith("nat")
         )
         if is_proxy_server:
-            self.execute("sudo supervisorctl stop agent:nginx_reload_manager", non_zero_throw=False)
+            self.execute(
+                "sudo supervisorctl stop agent:nginx_reload_manager",
+                non_zero_throw=False,
+            )
 
         # Stop redis
         if restart_redis and supervisor_status.get("redis") == "RUNNING":
@@ -929,6 +976,8 @@ class Server(Base):
         if restart_rq_workers:
             for i in range(self.config["workers"]):
                 self.execute(f"sudo supervisorctl start agent:worker-{i}")
+            for i in range(self.backup_workers):
+                self.execute(f"sudo supervisorctl start agent:worker_backup-{i}", non_zero_throw=False)
 
         if restart_web_workers:
             self.execute("sudo supervisorctl start agent:web")
@@ -1198,6 +1247,7 @@ class Server(Base):
             "redis_port": self.config["redis_port"],
             "gunicorn_workers": self.config.get("gunicorn_workers", 2),
             "workers": self.config["workers"],
+            "backup_workers": self.backup_workers,
             "directory": self.directory,
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
