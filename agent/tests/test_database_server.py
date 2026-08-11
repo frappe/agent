@@ -99,37 +99,8 @@ class TestStageAuditLogs(unittest.TestCase):
 
     def stage(self):
         # Only the MariaDB connection is mocked; the file moves are real.
-        with patch("agent.database_server.Database") as Db, patch.object(DatabaseServer, "db_port", 3306):
-            self.queries = Db.return_value.execute_query
-            self.queries.return_value = (True, [{"output": {"data": [[1073741824]]}}])
+        with patch("agent.database_server.Database"), patch.object(DatabaseServer, "db_port", 3306):
             return DatabaseServer.stage_audit_logs.__wrapped__(self.server, "127.0.0.1", "password")
-
-    def executed(self):
-        return [call.args[0] for call in self.queries.call_args_list]
-
-    def test_size_rotation_is_off_only_while_the_files_are_being_moved(self):
-        # A rotation midway renumbers every file, so ours must be the only one that can
-        # happen while we are moving them. It has to go back on or the log outgrows the cap.
-        write(Path(self.directory.name) / "server_audit.log.1", RECORD.format(second="01"))
-
-        self.stage()
-
-        self.assertEqual(
-            self.executed()[1:],
-            [
-                "SET GLOBAL server_audit_file_rotate_size = 0;",
-                "SET GLOBAL server_audit_file_rotate_now = 1;",
-                "SET GLOBAL server_audit_file_rotate_size = 1073741824;",
-            ],
-        )
-
-    def test_size_rotation_is_restored_even_when_staging_blows_up(self):
-        write(Path(self.directory.name) / "server_audit.log.1", RECORD.format(second="01"))
-
-        with patch.object(DatabaseServer, "move_rotated_audit_logs_to_pending", side_effect=OSError):
-            self.assertRaises(OSError, self.stage)
-
-        self.assertEqual(self.executed()[-1], "SET GLOBAL server_audit_file_rotate_size = 1073741824;")
 
     def test_moves_rotated_logs_out_of_the_plugin_namespace(self):
         for name in ["server_audit.log", "server_audit.log.1", "server_audit.log.2"]:

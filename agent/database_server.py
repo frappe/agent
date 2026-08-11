@@ -920,21 +920,12 @@ WHERE `schema` IN (
         """Rotate the audit log and move the rotated files out of the plugin's namespace.
 
         server_audit renames .1 to .2 and so on at every rotation, so names are only stable
-        between them. Size rotation is off for the duration to keep ours the only one.
+        between them. audit_log_lock keeps ours the only rotation for the duration.
         """
         mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
-        rotate_size = self.get_global(mariadb, "server_audit_file_rotate_size")
-        mariadb.execute_query("SET GLOBAL server_audit_file_rotate_size = 0;", commit=True)
-        try:
-            mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
-            staged = self.move_rotated_audit_logs_to_pending()
-        finally:
-            # Left off, the live log would grow past the disk cap until the next run
-            mariadb.execute_query(
-                f"SET GLOBAL server_audit_file_rotate_size = {int(rotate_size)};", commit=True
-            )
+        mariadb.execute_query("SET GLOBAL server_audit_file_rotate_now = 1;", commit=True)
 
-        return {"staged_files": staged}
+        return {"staged_files": self.move_rotated_audit_logs_to_pending()}
 
     def move_rotated_audit_logs_to_pending(self) -> list[str]:
         os.makedirs(self.audit_log_pending_directory, exist_ok=True)
@@ -954,13 +945,6 @@ WHERE `schema` IN (
             staged.append(os.path.basename(destination))
 
         return staged
-
-    @staticmethod
-    def get_global(mariadb: Database, variable: str) -> int:
-        success, output = mariadb.execute_query(f"SELECT @@GLOBAL.{variable} AS value;")
-        if not success:
-            raise Exception(f"Failed to read {variable}: {output}")
-        return output[0]["output"]["data"][0][0]
 
     @step("Upload Audit Logs To S3")
     def upload_audit_logs_to_s3(self, offsite: dict) -> dict:
