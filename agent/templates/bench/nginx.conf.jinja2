@@ -16,6 +16,15 @@ map $host $site_name_{{ bench_name_slug }} {
 	default $host;
 }
 
+# when the app breaks before frappe can render its own error page, gunicorn/werkzeug
+# send their bare "Internal Server Error" html. swap it for our page.
+# done with sub_filter and not `error_page 500` because interception throws away the
+# response body, which would kill frappe's own error pages and api tracebacks
+map $upstream_status $internal_server_error_page_{{ bench_name_slug }} {
+	500     '<style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style><iframe src="/internal_server_error.html"></iframe><div hidden>';
+	default '<h1>Internal Server Error</h1>';
+}
+
 {% if cors_origins %}
 map "$host:$http_origin" $cors_origin_{{ bench_name_slug }} {
 	default "";
@@ -153,7 +162,13 @@ server {
 		proxy_read_timeout {{ http_timeout }};
 		proxy_redirect off;
 
+		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
+
 		proxy_pass  http://{{ bench_name }}-web-server;
+	}
+
+	location = /internal_server_error.html {
+		root {{ error_pages_directory }};
 	}
 
 	proxy_intercept_errors on;
@@ -314,7 +329,13 @@ server {
 		proxy_read_timeout {{ http_timeout }};
 		proxy_redirect off;
 
+		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
+
 		proxy_pass  http://{{ bench_name }}-web-server;
+	}
+
+	location = /internal_server_error.html {
+		root {{ error_pages_directory }};
 	}
 
 	# optimizations
