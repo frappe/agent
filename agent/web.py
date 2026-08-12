@@ -1441,6 +1441,18 @@ def upload_binlogs_to_s3():
     return {"job": job}
 
 
+@application.route("/database/audit-logs/list", methods=["GET"])
+def get_audit_logs():
+    return jsonify(DatabaseServer().get_audit_logs())
+
+
+@application.route("/database/audit-logs/upload", methods=["POST"])
+def upload_audit_logs_to_s3():
+    data = request.json
+    job = DatabaseServer().upload_audit_logs_to_s3_job(**data)
+    return {"job": job}
+
+
 @application.route("/database/binlogs/indexer/add", methods=["POST"])
 def add_binlogs_to_indexer():
     data = request.json
