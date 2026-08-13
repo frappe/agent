@@ -40,30 +40,47 @@ class InvalidRange(Exception):
     """The caller asked for a range that cannot be served."""
 
 
-def get_backup_jobs(site: str, start: str, end: str) -> list[dict]:
+def get_backup_jobs(site: str, start: str, end: str) -> dict:
     """Every Backup Site job this server ran for one site, newest first."""
     start_at, end_at = parse_range(start, end)
 
-    jobs = (
+    query = (
         JobModel.select()
         .where(
             (JobModel.name == JOB_NAME)
-            # A LIKE narrows the scan; site_of below is what actually decides
-            & (JobModel.data.contains(site))
+            & matches_site(site)
             & (JobModel.start >= start_at)
             & (JobModel.start < end_at)
         )
         .order_by(JobModel.id.desc())
-        .limit(MAX_JOBS)
+        # One over the cap, so a full page can be told apart from an exact fit
+        .limit(MAX_JOBS + 1)
     )
 
-    jobs = list(jobs)
+    jobs = list(query)
+    truncated = len(jobs) > MAX_JOBS
+    jobs = jobs[:MAX_JOBS]
+
     steps = steps_of(jobs)
-    return [
-        summarise(job, steps.get(job.id, []))
-        for job in jobs
-        if site_of(load_json(job.data), steps.get(job.id, [])) == site
-    ]
+    return {
+        "jobs": [
+            summarise(job, steps.get(job.id, []))
+            for job in jobs
+            # site_of still decides, in case a LIKE wildcard widened the match
+            if site_of(load_json(job.data), steps.get(job.id, [])) == site
+        ],
+        # Says so rather than quietly dropping the oldest days in the range
+        "truncated": truncated,
+    }
+
+
+def matches_site(site: str):
+    """Match the site's own backup paths.
+
+    Anchored on the separators around the name, so a site whose name merely contains
+    this one cannot match and eat the row limit before the exact filter runs.
+    """
+    return JobModel.data.contains(f"/{site}/private/backups/") | JobModel.data.contains(f"://{site}/backups/")
 
 
 def parse_range(start: str, end: str) -> tuple[datetime, datetime]:
