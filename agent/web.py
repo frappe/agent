@@ -16,6 +16,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
 
+from agent.backup_log import InvalidRange, get_backup_jobs
 from agent.base import AgentException
 from agent.builder import ImageBuilder
 from agent.database import JSONEncoderForSQLQueryResult
@@ -1628,6 +1629,21 @@ def jobs(id=None, ids=None, status=None):
         data = get_jobs(limit=100)
 
     return jsonify(json.loads(json.dumps(data, default=str)))
+
+
+@application.route("/sites/<string:site>/backup-jobs")
+def site_backup_jobs(site):
+    """Backup Site jobs this server ran for one site, for an audit of a past date.
+
+    Scoped to the named site and a bounded date range, so it cannot be used to walk
+    the whole job database or read another site's runs.
+    """
+    try:
+        jobs = get_backup_jobs(site, request.args.get("start"), request.args.get("end"))
+    except InvalidRange as e:
+        return jsonify({"message": str(e)}), 400
+
+    return jsonify({"site": site, "jobs": jobs})
 
 
 @application.route("/jobs/<int:id>/cancel", methods=["POST"])
