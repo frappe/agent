@@ -16,7 +16,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
 
-from agent.backup_log import InvalidRange, get_backup_jobs
+from agent.backup_log import InvalidRange, parse_range
 from agent.base import AgentException
 from agent.builder import ImageBuilder, PatchImageBuilder
 from agent.database import JSONEncoderForSQLQueryResult
@@ -1676,19 +1676,25 @@ def jobs(id=None, ids=None, status=None):
     return jsonify(json.loads(json.dumps(data, default=str)))
 
 
-@application.route("/sites/<string:site>/backup-jobs")
-def site_backup_jobs(site):
-    """Backup Site jobs this server ran for one site, for an audit of a past date.
+@application.route("/server/backup-jobs", methods=["POST"])
+def fetch_backup_jobs():
+    """Queue a read of the job database for one site's backups, for an audit of a past date.
 
-    Scoped to the named site and a bounded date range, so it cannot be used to walk
-    the whole job database or read another site's runs.
+    Scoped to the named site and a bounded date range, so it cannot be used to walk the
+    whole job database or read another site's runs. The range is checked here so a bad
+    one is a failed request rather than a failed job.
     """
+    site = request.args.get("site")
+    if not site:
+        return jsonify({"message": "site is required"}), 400
+
     try:
-        result = get_backup_jobs(site, request.args.get("start"), request.args.get("end"))
+        parse_range(request.args.get("start"), request.args.get("end"))
     except InvalidRange as e:
         return jsonify({"message": str(e)}), 400
 
-    return jsonify({"site": site, **result})
+    job = Server().fetch_backup_jobs(site, request.args.get("start"), request.args.get("end"))
+    return {"job": job}
 
 
 @application.route("/jobs/<int:id>/cancel", methods=["POST"])
