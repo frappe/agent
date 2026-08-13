@@ -1684,11 +1684,11 @@ def site_backup_jobs(site):
     the whole job database or read another site's runs.
     """
     try:
-        jobs = get_backup_jobs(site, request.args.get("start"), request.args.get("end"))
+        result = get_backup_jobs(site, request.args.get("start"), request.args.get("end"))
     except InvalidRange as e:
         return jsonify({"message": str(e)}), 400
 
-    return jsonify({"site": site, "jobs": jobs})
+    return jsonify({"site": site, **result})
 
 
 @application.route("/jobs/<int:id>/cancel", methods=["POST"])
