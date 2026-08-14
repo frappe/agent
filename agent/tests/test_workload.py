@@ -1,7 +1,8 @@
+import tempfile
 import unittest
 from pathlib import Path
 
-from agent.workload import InvalidWorkload, WorkloadConfig
+from agent.workload import InvalidWorkload, Workload, WorkloadConfig
 
 
 class TestWorkloadConfig(unittest.TestCase):
@@ -57,6 +58,22 @@ class TestWorkloadConfig(unittest.TestCase):
 
         with self.assertRaisesRegex(InvalidWorkload, "host_port"):
             WorkloadConfig(config, {}).validate()
+
+
+class TestWorkloadEnvironmentFiles(unittest.TestCase):
+    def test_overlapping_deployments_use_distinct_environment_files(self):
+        workload = object.__new__(Workload)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+
+            first = workload._write_environment(directory, {"TOKEN": "first"})
+            second = workload._write_environment(directory, {"TOKEN": "second"})
+
+            self.assertNotEqual(first, second)
+            self.assertEqual(first.read_text(), "TOKEN=first\n")
+            self.assertEqual(second.read_text(), "TOKEN=second\n")
+            self.assertEqual(first.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(second.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

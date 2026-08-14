@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
+
+from filelock import FileLock
 
 from agent.base import Base
 from agent.job import job, step
@@ -41,15 +44,23 @@ class Workload(Base):
         deployment = WorkloadConfig(config, environment)
         deployment.validate()
         directory = self._create_directory(deployment.name)
-        environment_file = directory / "environment"
-        self._write_environment(environment_file, deployment.environment)
-        return self.deploy(deployment.public_config(), str(environment_file))
+        environment_file = self._write_environment(directory, deployment.environment)
+        try:
+            return self.deploy(deployment.public_config(), str(environment_file))
+        except Exception:
+            environment_file.unlink(missing_ok=True)
+            raise
 
     @job("Deploy Workload", priority="low")
     def deploy(self, config: dict, environment_file: str):
         deployment = WorkloadConfig(config, {})
         deployment.validate()
-        self._deploy(deployment, Path(environment_file))
+        try:
+            lock_path = Path(environment_file).parent / ".deploy.lock"
+            with FileLock(lock_path, timeout=300):
+                self._deploy(deployment, Path(environment_file))
+        finally:
+            Path(environment_file).unlink(missing_ok=True)
 
     @step("Deploy Workload")
     def _deploy(self, deployment: WorkloadConfig, environment_file: Path):
@@ -114,13 +125,21 @@ class Workload(Base):
         directory.chmod(0o700)
         return directory
 
-    def _write_environment(self, path: Path, environment: dict[str, str]):
-        temporary = path.with_suffix(".tmp")
-        with temporary.open("w") as file:
-            for key, value in sorted(environment.items()):
-                file.write(f"{key}={value}\n")
-        temporary.chmod(0o600)
-        temporary.replace(path)
+    def _write_environment(self, directory: Path, environment: dict[str, str]) -> Path:
+        descriptor, name = tempfile.mkstemp(prefix="environment-", dir=directory)
+        path = Path(name)
+        try:
+            os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "w") as file:
+                descriptor = -1
+                for key, value in sorted(environment.items()):
+                    file.write(f"{key}={value}\n")
+        except Exception:
+            if descriptor != -1:
+                os.close(descriptor)
+            path.unlink(missing_ok=True)
+            raise
+        return path
 
     def _write_config(self, directory: Path, config: dict):
         path = directory / "config.json"
