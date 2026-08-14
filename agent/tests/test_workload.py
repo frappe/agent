@@ -1,8 +1,9 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
-from agent.workload import InvalidWorkload, Workload, WorkloadConfig
+from agent.workload import ENVIRONMENT_FILE_MAX_AGE, InvalidWorkload, Workload, WorkloadConfig
 
 
 class TestWorkloadConfig(unittest.TestCase):
@@ -61,19 +62,48 @@ class TestWorkloadConfig(unittest.TestCase):
 
 
 class TestWorkloadEnvironmentFiles(unittest.TestCase):
-    def test_overlapping_deployments_use_distinct_environment_files(self):
+    def test_queued_environment_files_are_distinct_and_encrypted(self):
         workload = object.__new__(Workload)
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
+            workload.directory = temporary_directory
 
             first = workload._write_environment(directory, {"TOKEN": "first"})
             second = workload._write_environment(directory, {"TOKEN": "second"})
 
             self.assertNotEqual(first, second)
-            self.assertEqual(first.read_text(), "TOKEN=first\n")
-            self.assertEqual(second.read_text(), "TOKEN=second\n")
+            self.assertNotIn(b"first", first.read_bytes())
+            self.assertNotIn(b"second", second.read_bytes())
             self.assertEqual(first.stat().st_mode & 0o777, 0o600)
             self.assertEqual(second.stat().st_mode & 0o777, 0o600)
+
+    def test_plaintext_exists_only_while_worker_uses_it(self):
+        workload = object.__new__(Workload)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            workload.directory = temporary_directory
+            queued = workload._write_environment(directory, {"TOKEN": "secret"})
+
+            with workload._decrypted_environment(queued) as runtime:
+                self.assertEqual(runtime.read_text(), "TOKEN=secret\n")
+                self.assertEqual(runtime.stat().st_mode & 0o777, 0o600)
+
+            self.assertFalse(runtime.exists())
+
+    def test_expired_encrypted_file_from_cancelled_job_is_removed(self):
+        workload = object.__new__(Workload)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            workload.directory = temporary_directory
+            expired = workload._write_environment(directory, {"TOKEN": "expired"})
+            fresh = workload._write_environment(directory, {"TOKEN": "fresh"})
+            expired_time = expired.stat().st_mtime - ENVIRONMENT_FILE_MAX_AGE - 1
+            os.utime(expired, (expired_time, expired_time))
+
+            workload._remove_expired_environments(directory)
+
+            self.assertFalse(expired.exists())
+            self.assertTrue(fresh.exists())
 
 
 if __name__ == "__main__":

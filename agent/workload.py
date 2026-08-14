@@ -5,10 +5,12 @@ import os
 import re
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from cryptography.fernet import Fernet
 from filelock import FileLock
 
 from agent.base import Base
@@ -16,6 +18,7 @@ from agent.job import job, step
 
 WORKLOAD_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$")
+ENVIRONMENT_FILE_MAX_AGE = 24 * 60 * 60
 
 
 class InvalidWorkload(ValueError):
@@ -44,6 +47,7 @@ class Workload(Base):
         deployment = WorkloadConfig(config, environment)
         deployment.validate()
         directory = self._create_directory(deployment.name)
+        self._remove_expired_environments(directory)
         environment_file = self._write_environment(directory, deployment.environment)
         try:
             return self.deploy(deployment.public_config(), str(environment_file))
@@ -57,8 +61,10 @@ class Workload(Base):
         deployment.validate()
         try:
             lock_path = Path(environment_file).parent / ".deploy.lock"
-            with FileLock(lock_path, timeout=300):
-                self._deploy(deployment, Path(environment_file))
+            with FileLock(lock_path, timeout=300), self._decrypted_environment(
+                Path(environment_file)
+            ) as decrypted:
+                self._deploy(deployment, decrypted)
         finally:
             Path(environment_file).unlink(missing_ok=True)
 
@@ -120,26 +126,66 @@ class Workload(Base):
         return os.path.join(os.path.dirname(self.server.benches_directory), "workloads")
 
     def _create_directory(self, name: str) -> Path:
-        directory = Path(self.directory) / name
-        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        root = Path(self.directory)
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        root.chmod(0o700)
+        directory = root / name
+        directory.mkdir(mode=0o700, exist_ok=True)
         directory.chmod(0o700)
         return directory
 
     def _write_environment(self, directory: Path, environment: dict[str, str]) -> Path:
-        descriptor, name = tempfile.mkstemp(prefix="environment-", dir=directory)
+        content = "".join(f"{key}={value}\n" for key, value in sorted(environment.items()))
+        encrypted = self._environment_cipher().encrypt(content.encode())
+        return self._write_protected_file(directory, "environment-queued-", encrypted)
+
+    @contextmanager
+    def _decrypted_environment(self, encrypted_path: Path):
+        content = self._environment_cipher().decrypt(encrypted_path.read_bytes())
+        path = self._write_protected_file(encrypted_path.parent, "environment-runtime-", content)
+        try:
+            yield path
+        finally:
+            path.unlink(missing_ok=True)
+
+    def _environment_cipher(self) -> Fernet:
+        key_path = Path(self.directory) / ".environment.key"
+        with FileLock(f"{key_path}.lock", timeout=30):
+            if not key_path.exists():
+                self._write_exclusive_file(key_path, Fernet.generate_key())
+            key_path.chmod(0o600)
+            return Fernet(key_path.read_bytes())
+
+    def _write_protected_file(self, directory: Path, prefix: str, content: bytes) -> Path:
+        descriptor, name = tempfile.mkstemp(prefix=prefix, dir=directory)
         path = Path(name)
         try:
             os.fchmod(descriptor, 0o600)
-            with os.fdopen(descriptor, "w") as file:
+            with os.fdopen(descriptor, "wb") as file:
                 descriptor = -1
-                for key, value in sorted(environment.items()):
-                    file.write(f"{key}={value}\n")
+                file.write(content)
         except Exception:
             if descriptor != -1:
                 os.close(descriptor)
             path.unlink(missing_ok=True)
             raise
         return path
+
+    def _write_exclusive_file(self, path: Path, content: bytes):
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb") as file:
+                descriptor = -1
+                file.write(content)
+        finally:
+            if descriptor != -1:
+                os.close(descriptor)
+
+    def _remove_expired_environments(self, directory: Path):
+        cutoff = time.time() - ENVIRONMENT_FILE_MAX_AGE
+        for path in directory.glob("environment-queued-*"):
+            if path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
 
     def _write_config(self, directory: Path, config: dict):
         path = directory / "config.json"
