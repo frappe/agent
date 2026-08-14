@@ -136,7 +136,14 @@ class Job(Action):
     @save
     def cancel(self):
         self.job.cancel()
+        self._cleanup_cancelled_workload_environment()
         self.model.status = "Failure"
+
+    def _cleanup_cancelled_workload_environment(self):
+        from agent.server import Server
+        from agent.workload import Workload
+
+        Workload(Server()).cleanup_cancelled_environment(self.model.data)
 
     @save
     def stop(self):

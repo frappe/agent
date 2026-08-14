@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import unittest
@@ -104,6 +105,18 @@ class TestWorkloadEnvironmentFiles(unittest.TestCase):
 
             self.assertFalse(expired.exists())
             self.assertTrue(fresh.exists())
+
+    def test_cancelled_job_removes_its_encrypted_environment(self):
+        workload = object.__new__(Workload)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            workload.directory = temporary_directory
+            queued = workload._write_environment(directory, {"TOKEN": "secret"})
+            job_data = json.dumps({"function": "deploy", "args": [{}, str(queued)], "kwargs": {}})
+
+            workload.cleanup_cancelled_environment(job_data)
+
+            self.assertFalse(queued.exists())
 
 
 if __name__ == "__main__":

@@ -95,6 +95,15 @@ class Workload(Base):
         )
         return {"name": name, "logs": result["output"]}
 
+    def cleanup_cancelled_environment(self, job_data: str):
+        data = json.loads(job_data)
+        if data.get("function") != "deploy":
+            return
+        arguments = data.get("args", [])
+        if len(arguments) < 2:
+            return
+        self._remove_queued_environment(arguments[1])
+
     @job("Rollback Workload", priority="low")
     def rollback(self, name: str):
         validate_name(name)
@@ -186,6 +195,15 @@ class Workload(Base):
         for path in directory.glob("environment-queued-*"):
             if path.stat().st_mtime < cutoff:
                 path.unlink(missing_ok=True)
+
+    def _remove_queued_environment(self, name: str):
+        root = Path(self.directory).resolve()
+        path = Path(name).resolve()
+        if os.path.commonpath((root, path)) != str(root):
+            raise InvalidWorkload("Queued environment path is outside the workloads directory")
+        if not path.name.startswith("environment-queued-"):
+            raise InvalidWorkload("Invalid queued environment path")
+        path.unlink(missing_ok=True)
 
     def _write_config(self, directory: Path, config: dict):
         path = directory / "config.json"
