@@ -227,6 +227,17 @@ class Server(Base):
             self.disable_production_on_bench(bench_name)
             self._move_bench_to_archived_directory(bench_name)
 
+    @job("Fetch Backup Jobs")
+    def fetch_backup_jobs(self, site: str, start: str, end: str):
+        return self._fetch_backup_jobs(site, start, end)
+
+    @step("Fetch Backup Jobs")
+    def _fetch_backup_jobs(self, site: str, start: str, end: str):
+        """Walking the job database can take seconds, so it runs here and not in a worker."""
+        from agent.backup_log import get_backup_jobs
+
+        return get_backup_jobs(site, start, end)
+
     @job("Push Images to Registry")
     def push_images_to_registry(self, images: list[str], registry_settings: dict[str, str]) -> None:
         return self._push_images_to_registry(images, registry_settings)
