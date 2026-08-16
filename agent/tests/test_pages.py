@@ -5,6 +5,9 @@ import os
 import unittest
 
 PAGES_DIRECTORY = os.path.join(os.path.dirname(__file__), "..", "pages")
+BENCH_NGINX_TEMPLATE = os.path.join(
+    os.path.dirname(__file__), "..", "templates", "bench", "nginx.conf.jinja2"
+)
 
 
 def read_pages():
@@ -33,3 +36,16 @@ class TestPages(unittest.TestCase):
         for name, html in read_pages():
             if "dashboard-url" in html:
                 self.assertIn("dashboard/sites/${window.location.hostname}", html, name)
+
+    def test_bench_name_placeholder_is_substituted_by_nginx(self):
+        # an unsubstituted __BENCH_NAME__ ships a dead link to the site owner
+        with open(BENCH_NGINX_TEMPLATE) as f:
+            template = f.read()
+
+        substituted = "sub_filter '__BENCH_NAME__' '{{ bench_name }}';"
+        for name, html in read_pages():
+            if "__BENCH_NAME__" not in html:
+                continue
+            page_locations = template.count(f"location = /{name} {{")
+            self.assertTrue(page_locations, f"{name} is not served by the bench nginx config")
+            self.assertEqual(template.count(substituted), page_locations, name)

@@ -129,15 +129,11 @@
     </div>
     <p class="footer">
       Site owner? Review the
-      <a class="dashboard-url" href="https://frappecloud.com/dashboard"
+      <a
+        href="https://frappecloud.com/dashboard/benches/__BENCH_NAME__/logs/web.error.log"
         >error logs</a
       >
       to identify the cause.
     </p>
-    <script>
-      // the dashboard link needs the site name, which only the browser knows here
-      document.querySelector(".dashboard-url").href =
-        `https://frappecloud.com/dashboard/sites/${window.location.hostname}`;
-    </script>
   </body>
 </html>
