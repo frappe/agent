@@ -121,8 +121,12 @@
         <h1>The application returned an error</h1>
         <p>Error: 500 Internal Server Error</p>
       </div>
+      <!-- nginx serves this page inside an iframe, so links need _top to escape
+           it. Both targets send X-Frame-Options: SAMEORIGIN and would otherwise
+           refuse to render. -->
       <a
         class="button"
+        target="_top"
         href="https://docs.frappe.io/cloud/performance-error-debugging#500-internal-server-error"
         >View troubleshooting guide</a
       >
@@ -130,6 +134,7 @@
     <p class="footer">
       Site owner? Review the
       <a
+        target="_top"
         href="https://frappecloud.com/dashboard/benches/__BENCH_NAME__/logs/web.error.log"
         >error logs</a
       >
