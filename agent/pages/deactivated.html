@@ -124,15 +124,9 @@
       >.
     </p>
     <script>
-<<<<<<< HEAD
-        const dashboardUrl = document.querySelector('.dashboard-url');
-        const siteName = window.location.hostname;        
-        dashboardUrl.href = `https://frappecloud.com/dashboard/sites/${siteName}`;
-=======
       // the dashboard link needs the site name, which only the browser knows here
       document.querySelector(".dashboard-url").href =
         `https://frappecloud.com/dashboard/sites/${window.location.hostname}`;
->>>>>>> e421d72 (feat(pages): Redesign the error pages)
     </script>
   </body>
 </html>
