@@ -361,7 +361,10 @@ class ValidationManager(Base, JobMixin):
             actual += ".0"
 
         sv_actual = sv.Version(actual)
-        sv_expected = sv.SimpleSpec(expected)
+        try:
+            sv_expected = sv.SimpleSpec(expected)
+        except ValueError:
+            sv_expected = sv.NpmSpec(expected)
 
         return sv_actual in sv_expected
 
