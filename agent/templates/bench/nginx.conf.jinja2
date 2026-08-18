@@ -178,6 +178,9 @@ server {
 
 	location = /internal_server_error.html {
 		root {{ error_pages_directory }};
+		# one static page is shared by every bench on the server, so the link to this
+		# bench's web.error.log can only be completed here
+		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
 	}
 
 	proxy_intercept_errors on;
@@ -346,6 +349,9 @@ server {
 
 	location = /internal_server_error.html {
 		root {{ error_pages_directory }};
+		# one static page is shared by every bench on the server, so the link to this
+		# bench's web.error.log can only be completed here
+		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
 	}
 
 	# optimizations
