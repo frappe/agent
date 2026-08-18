@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import unittest
 
 PAGES_DIRECTORY = os.path.join(os.path.dirname(__file__), "..", "pages")
@@ -36,6 +37,19 @@ class TestPages(unittest.TestCase):
         for name, html in read_pages():
             if "dashboard-url" in html:
                 self.assertIn("dashboard/sites/${window.location.hostname}", html, name)
+
+    def test_iframed_pages_escape_the_frame(self):
+        # nginx injects the 500 page as an iframe. Without _top a link loads inside
+        # that frame, and both destinations send X-Frame-Options: SAMEORIGIN.
+        with open(BENCH_NGINX_TEMPLATE) as f:
+            template = f.read()
+
+        for name, html in read_pages():
+            if f'iframe src="/{name}"' not in template:
+                continue
+            for tag in re.findall(r"<a\b[^>]*>", html):
+                if 'href="http' in tag:
+                    self.assertIn('target="_top"', tag, f"{name}: {tag}")
 
     def test_bench_name_placeholder_is_substituted_by_nginx(self):
         # an unsubstituted __BENCH_NAME__ ships a dead link to the site owner
