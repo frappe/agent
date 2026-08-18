@@ -121,8 +121,13 @@
         <h1>The application returned an error</h1>
         <p>Error: 500 Internal Server Error</p>
       </div>
+      <!-- nginx serves this page inside an iframe. A link with no target loads
+           into that frame, and both destinations send X-Frame-Options:
+           SAMEORIGIN, so the browser refuses to render them. _blank opens a new
+           top-level tab, which is never framed, and leaves this page up. -->
       <a
         class="button"
+        target="_blank"
         href="https://docs.frappe.io/cloud/performance-error-debugging#500-internal-server-error"
         >View troubleshooting guide</a
       >
@@ -130,6 +135,7 @@
     <p class="footer">
       Site owner? Review the
       <a
+        target="_blank"
         href="https://frappecloud.com/dashboard/benches/__BENCH_NAME__/logs/web.error.log"
         >error logs</a
       >
