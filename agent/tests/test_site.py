@@ -608,6 +608,31 @@ class TestSite(unittest.TestCase):
             ],
         )
 
+    def test_restore_site_passes_verbose_flag(self):
+        """Ensure restore_site includes --verbose in the bench command."""
+        bench = self._get_test_bench()
+        site_name = "restore-site.frappe.cloud"
+        self._create_test_site(site_name)
+        self._make_site_config(site_name)
+
+        site = Site(site_name, bench)
+        with patch.object(site, "bench_execute") as mock_execute, patch.object(
+            bench, "create_mariadb_user", return_value=(None, "temp_user", "temp_pass")
+        ), patch.object(bench, "drop_mariadb_user"):
+            Site.restore_site.__wrapped__(
+                site,
+                mariadb_root_password="root_pass",
+                admin_password="admin_pass",
+                database_file="/path/to/database.sql.gz",
+                public_file="/path/to/public_files.tar",
+                private_file="/path/to/private_files.tar",
+            )
+
+        mock_execute.assert_called_once()
+        command = mock_execute.call_args[0][0]
+        self.assertIn("--force restore", command)
+        self.assertIn("--verbose", command)
+
     def test_get_cors_origins_skips_unsafe_hostnames(self):
         sites = [
             SimpleNamespace(
