@@ -248,21 +248,19 @@ server {
 		proxy_pass $upstream_server_hash;
 	}
 
-	proxy_intercept_errors on;
-	error_page 429 /exceeded.html;
-	location /exceeded.html {
+	# proxy_intercept_errors stays off here. Every status that the bench sends, and
+	# the page that goes with it, passes through untouched. These two pages are for
+	# the errors that this server makes, which mean that the app server is down or
+	# too slow. The bench never gets to answer in that case.
+	error_page 502 /server_unreachable.html;
+	error_page 504 /server_timeout.html;
+
+	location /server_unreachable.html {
 		root {{ error_pages_directory }};
 		internal;
 	}
 
-	error_page 502 /bad_gateway.html;
-	location /bad_gateway.html {
-		root {{ error_pages_directory }};
-		internal;
-	}
-
-	error_page 504 /gateway_timeout.html;
-	location /gateway_timeout.html {
+	location /server_timeout.html {
 		root {{ error_pages_directory }};
 		internal;
 	}

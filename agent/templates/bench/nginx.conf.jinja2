@@ -190,6 +190,18 @@ server {
 		internal;
 	}
 
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
 	# optimizations
 	sendfile on;
 	keepalive_timeout 15;
@@ -352,6 +364,32 @@ server {
 		# one static page is shared by every bench on the server, so the link to this
 		# bench's web.error.log can only be completed here
 		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
+	}
+
+	# the bench serves the page for every failure of its own, and the proxy passes
+	# the response through. A 502 or 504 that the proxy makes instead means that it
+	# never reached this server, and it has its own pages for that
+	proxy_intercept_errors on;
+
+	# 429 comes from the rate limiter of frappe, so gunicorn sends it
+	error_page 429 /exceeded.html;
+	location /exceeded.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	# 502 and 504 come from nginx, when gunicorn refuses the connection or passes
+	# http_timeout
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
 	}
 
 	# optimizations
