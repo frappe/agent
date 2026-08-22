@@ -190,6 +190,18 @@ server {
 		internal;
 	}
 
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
 	# optimizations
 	sendfile on;
 	keepalive_timeout 15;
@@ -352,6 +364,21 @@ server {
 		# one static page is shared by every bench on the server, so the link to this
 		# bench's web.error.log can only be completed here
 		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
+	}
+
+	# 502/504 are intercepted here and not on the proxy, so that a proxy-generated
+	# 502/504 means the app server itself is down or slow, not this bench
+	proxy_intercept_errors on;
+	error_page 502 /bad_gateway.html;
+	location /bad_gateway.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	error_page 504 /gateway_timeout.html;
+	location /gateway_timeout.html {
+		root {{ error_pages_directory }};
+		internal;
 	}
 
 	# optimizations

@@ -255,18 +255,6 @@ server {
 		internal;
 	}
 
-	error_page 502 /bad_gateway.html;
-	location /bad_gateway.html {
-		root {{ error_pages_directory }};
-		internal;
-	}
-
-	error_page 504 /gateway_timeout.html;
-	location /gateway_timeout.html {
-		root {{ error_pages_directory }};
-		internal;
-	}
-
 	{% endif %}
 }
 
