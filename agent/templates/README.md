@@ -46,27 +46,39 @@ The layer that owns a failure serves the page for it:
 | Status | Page | Served by | Meaning |
 | --- | --- | --- | --- |
 | 402 | `suspended.html`, `suspended_saas.html` | proxy, ports 10092 and 10093 | The site is suspended. |
-| 429 | `exceeded.html` | proxy, and standalone bench | The site is over its rate limit. |
+| 429 | `exceeded.html` | bench | The site reached its daily usage limit. |
 | 500 | `internal_server_error.html` | bench | The site raised an exception. |
 | 502 | `bad_gateway.html` | bench | Gunicorn is down. |
+| 502 | `server_unreachable.html` | proxy | The application server is down. |
 | 503 | `deactivated.html` | proxy, port 10091 | The site is deactivated. |
 | 504 | `gateway_timeout.html` | bench | Gunicorn passed `http_timeout`. |
+| 504 | `server_timeout.html` | proxy | The application server did not answer in time. |
 
 The proxy sends a suspended, deactivated or unknown site to a local upstream on
 127.0.0.1. That upstream returns the status, and the proxy serves the page for it.
 
-The proxy does not intercept 502 and 504. A 502 or 504 from the bench passes through
-it and reaches the visitor. A 502 or 504 that the proxy makes itself means that the
-application server is down or slow, and NGINX serves its own default page. This split
-keeps a bench failure and a server failure apart. If the proxy itself is down, the
-visitor gets no page at all, because there is no HTTP response.
+Each layer serves a page for its own failures only. The bench owns 429, 500, 502 and
+504, because all four come from the site or from gunicorn. The proxy owns 402, 503 and
+the 502 and 504 that it makes itself. A 502 or 504 from the proxy means that it never
+reached the application server, so the site is not the cause. The bench pages name the
+site, and the proxy pages name the server. If the proxy itself is down, the visitor
+gets no page at all, because there is no HTTP response.
 
-Two rules control how these blocks work:
+Three rules of NGINX control how these blocks work:
 
+- `error_page` always catches a status that NGINX makes itself. A refused upstream
+  makes 502. A slow upstream makes 504. `limit_req` makes 429.
+- `proxy_intercept_errors on` adds the responses of the upstream to that. The bench
+  needs it, because gunicorn sends the 429 of the rate limiter of Frappe. The proxy
+  keeps it off, so that the pages of the bench pass through it.
 - `error_page 502 /bad_gateway.html` keeps the 502 status. A page location is
   `internal`, so a visitor cannot request it directly.
-- `proxy_intercept_errors on` only affects a status that has an `error_page` line.
-  Every other status passes through.
+
+Interception throws the response body away. Do not turn it on at the proxy for a
+status that the bench answers itself. The visitor then gets the page of the proxy for
+a failure of the bench, and the two layers become impossible to tell apart.
+`$upstream_status` cannot separate them. NGINX sets it to 502 both when the bench
+answers 502 and when the connection to the bench is refused.
 
 Status 500 uses `sub_filter` and not `error_page`. Interception discards the response
 body, which would also remove the error pages of Frappe and the tracebacks of the API.
@@ -84,3 +96,16 @@ before you deploy it:
 
 A local NGINX has no `headers-more` module. Remove the `more_set_headers` lines before
 the test, or build the module first.
+
+A change to an error page needs more than `nginx -t`. Start a local NGINX with the
+rendered config, and make each status happen:
+
+1. To get a 502, point the upstream at a port that nothing listens on.
+2. To get a 504, point the upstream at a server that sleeps, and lower
+   `proxy_read_timeout`.
+3. To get a status from the upstream itself, point the upstream at a small HTTP server
+   that returns that status with a body of its own. The body tells you if the layer
+   passed the response through, or replaced it with a page.
+
+Run the config of the bench and the config of the proxy separately. A page can only
+reach a visitor if every layer above it passes the response through.

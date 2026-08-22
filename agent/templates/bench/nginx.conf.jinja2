@@ -366,9 +366,20 @@ server {
 		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
 	}
 
-	# 502/504 are intercepted here and not on the proxy, so that a proxy-generated
-	# 502/504 means the app server itself is down or slow, not this bench
+	# the bench serves the page for every failure of its own, and the proxy passes
+	# the response through. A 502 or 504 that the proxy makes instead means that it
+	# never reached this server, and it has its own pages for that
 	proxy_intercept_errors on;
+
+	# 429 comes from the rate limiter of frappe, so gunicorn sends it
+	error_page 429 /exceeded.html;
+	location /exceeded.html {
+		root {{ error_pages_directory }};
+		internal;
+	}
+
+	# 502 and 504 come from nginx, when gunicorn refuses the connection or passes
+	# http_timeout
 	error_page 502 /bad_gateway.html;
 	location /bad_gateway.html {
 		root {{ error_pages_directory }};
