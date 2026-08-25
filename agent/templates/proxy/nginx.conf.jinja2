@@ -195,9 +195,6 @@ server {
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "";
 
-		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
-		more_set_headers "X-Proxy-Cache: $upstream_cache_status";
-
 		proxy_pass $upstream_server_hash;
 	}
 
@@ -209,8 +206,6 @@ server {
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Forwarded-Proto $scheme;
 		proxy_set_header Connection "upgrade";
-
-		more_set_headers "X-Proxy-Upstream: $socket_upstream_hash";
 
 		proxy_pass $socket_upstream_hash;
 	}
@@ -237,8 +232,6 @@ server {
 		{% else %}
 		proxy_set_header Connection "";
 		{% endif %}
-
-		more_set_headers "X-Proxy-Upstream: $upstream_server_hash";
 
 		more_set_headers "Access-Control-Allow-Origin: $access_control_allow_origin";
 		more_set_headers "Access-Control-Allow-Headers: $access_control_allow_headers";
