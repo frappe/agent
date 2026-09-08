@@ -512,11 +512,11 @@ class Bench(Base):
         return backups
 
     @step("Bench Setup NGINX")
-    def setup_nginx(self):
+    def setup_nginx(self, ignore_missing_site_configs=False):
         from filelock import FileLock
 
         with FileLock(os.path.join(self.directory, "nginx.config.lock")):
-            self.generate_nginx_config()
+            self.generate_nginx_config(ignore_missing_site_configs=ignore_missing_site_configs)
         return self.server._reload_nginx()
 
     @step("Bench Setup NGINX Target")
@@ -533,9 +533,22 @@ class Bench(Base):
                 if site.name.endswith("." + wildcard_domain):
                     site.host = "*." + wildcard_domain
 
-    def generate_nginx_config(self):
-        sites = [s for s in self.valid_sites.values()]
-        domains = _get_domains(sites)
+    def generate_nginx_config(self, ignore_missing_site_configs=False):
+        sites = list(self.valid_sites.values())
+        while True:
+            try:
+                domains = _get_domains(sites)
+                cors_origins = _get_cors_origins(sites, self.common_site_config.get("allow_cors"))
+            except FileNotFoundError as error:
+                missing_site = next((site for site in sites if site.config_file == error.filename), None)
+                if not ignore_missing_site_configs or not missing_site:
+                    raise
+
+                # Parallel site updates can move a site after this source bench's site list is read.
+                # Ignore that stale entry only site update jobs
+                sites.remove(missing_site)
+                continue
+            break
 
         if standalone := self.server.config.get("standalone"):
             self._set_sites_host(sites)
@@ -557,7 +570,7 @@ class Bench(Base):
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
             "code_server": codeserver,
-            "cors_origins": _get_cors_origins(sites, self.common_site_config.get("allow_cors")),
+            "cors_origins": cors_origins,
         }
         nginx_config = os.path.join(self.directory, "nginx.conf")
 
@@ -1596,7 +1609,10 @@ def _normalize_cors_origins(origins: str | list[str] | None) -> list[str]:
     return normalized
 
 
-def _get_cors_origins(sites: list[Site], bench_cors: str | list[str] | None = None) -> list[tuple[str, str]]:
+def _get_cors_origins(
+    sites: list[Site],
+    bench_cors: str | list[str] | None = None,
+) -> list[tuple[str, str]]:
     """Return nginx map entries for site-aware CORS responses.
 
     Exact origins are matched against ``$host:$http_origin`` and echoed back
