@@ -321,6 +321,7 @@ def update_nginx_ip_access():
     job = Server().update_nginx_access(
         ip_accept=data.get("ip_accept", []),
         ip_drop=data.get("ip_drop", []),
+        proxy_ip=data.get("proxy_ip"),
     )
     return {"job": job}
 

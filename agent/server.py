@@ -795,15 +795,18 @@ class Server(Base):
         )
 
     @job("Update NGINX IP access")
-    def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str]):
-        self.update_config_ip(ip_accept, ip_drop)
+    def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str], proxy_ip: str | None = None):
+        self.update_config_ip(ip_accept, ip_drop, proxy_ip)
         self.update_agent_nginx_config()
         self.reload_nginx()
 
     @step("Update config IP access")
-    def update_config_ip(self, ip_accept: list[str], ip_drop: list[str]):
+    def update_config_ip(self, ip_accept: list[str], ip_drop: list[str], proxy_ip: str | None = None):
         config = self.get_config(for_update=True)
         config.update({"ip_accept": ip_accept, "ip_drop": ip_drop})
+        # Without it nginx matches the proxy's own address and every rule passes.
+        if proxy_ip:
+            config["proxy_ip"] = proxy_ip
         self.set_config(config, indent=4)
 
     def update_config(self, value):
