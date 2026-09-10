@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from agent.base import AgentException
 from agent.server import Server
 
 
@@ -76,3 +77,23 @@ class TestServerNginxAccess(unittest.TestCase):
 
         self.assertNotIn("real_ip_header", config)
         self.assertNotIn("set_real_ip_from", config)
+
+    def test_update_config_ip_rejects_a_source_nginx_cannot_parse(self):
+        for source in ["1.2.3.4; }", "", "not-an-ip", 3232235777, None]:
+            with self.subTest(source=source), self.assertRaises(AgentException):
+                self.update_config_ip([source], [], "10.3.1.0/24")
+
+    def test_update_config_ip_rejects_a_proxy_ip_nginx_cannot_parse(self):
+        with self.assertRaises(AgentException):
+            self.update_config_ip([], [], "10.3.1.0/24; deny all")
+
+    def test_a_rejected_source_leaves_the_stored_config_untouched(self):
+        """A persisted bad value would break every later reload, not just this one."""
+        self.update_config_ip(["183.82.5.84/32"], ["0.0.0.0/0"], "10.3.1.0/24")
+
+        with self.assertRaises(AgentException):
+            self.update_config_ip(["garbage"], [], "10.3.26.0/24")
+
+        config = self.server.config
+        self.assertEqual(config["ip_accept"], ["183.82.5.84/32"])
+        self.assertEqual(config["proxy_ip"], "10.3.1.0/24")
