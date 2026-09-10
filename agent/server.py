@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
 import os
 import platform
@@ -32,6 +33,28 @@ from agent.nfs_handler import NFSHandler
 from agent.patch_handler import run_patches
 from agent.site import Site
 from agent.utils import get_supervisor_processes_status, is_registry_healthy
+
+
+def is_ip_network(value: object) -> bool:
+    """Whether the value is an IP address or CIDR that nginx will accept."""
+    if not isinstance(value, str):
+        return False
+    try:
+        ipaddress.ip_network(value, strict=False)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_ip_sources(ip_accept: list[str], ip_drop: list[str], proxy_ip: str | None) -> None:
+    """Nginx renders these raw, so one bad value breaks every reload that follows."""
+    sources = [*ip_accept, *ip_drop]
+    if proxy_ip:
+        sources.append(proxy_ip)
+
+    for source in sources:
+        if not is_ip_network(source):
+            raise AgentException({"error": f"{source!r} is not a valid IP address or CIDR."})
 
 
 class Server(Base):
@@ -795,15 +818,22 @@ class Server(Base):
         )
 
     @job("Update NGINX IP access")
-    def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str]):
-        self.update_config_ip(ip_accept, ip_drop)
+    def update_nginx_access(self, ip_accept: list[str], ip_drop: list[str], proxy_ip: str | None = None):
+        self.update_config_ip(ip_accept, ip_drop, proxy_ip)
         self.update_agent_nginx_config()
         self.reload_nginx()
 
     @step("Update config IP access")
-    def update_config_ip(self, ip_accept: list[str], ip_drop: list[str]):
+    def update_config_ip(self, ip_accept: list[str], ip_drop: list[str], proxy_ip: str | None = None):
+        # Reject before the lock is taken, so a bad value leaves the server on
+        # the config it already had.
+        validate_ip_sources(ip_accept, ip_drop, proxy_ip)
+
         config = self.get_config(for_update=True)
         config.update({"ip_accept": ip_accept, "ip_drop": ip_drop})
+        # Without it nginx matches the proxy's own address and every rule passes.
+        if proxy_ip:
+            config["proxy_ip"] = proxy_ip
         self.set_config(config, indent=4)
 
     def update_config(self, value):
