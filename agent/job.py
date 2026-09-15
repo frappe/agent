@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import traceback
 from typing import TYPE_CHECKING
@@ -36,6 +37,10 @@ if os.environ.get("SENTRY_DSN"):
     except ImportError:
         pass
 
+logger = logging.getLogger(__name__)
+
+DEFAULT_TIMEOUT = 4 * 3600
+MAX_TIMEOUT = 24 * 3600
 
 agent_database = SqliteDatabase(
     "jobs.sqlite3",
@@ -176,7 +181,81 @@ def step(name):
     return wrapper
 
 
-def job(name: str, priority="default", on_success=None, on_failure=None):
+def _requested_job_timeout():
+    """`agent_job_timeout` from the request body, when the body is a JSON object.
+
+    The body is not always an object: /proxy/wildcards POSTs a JSON *array*
+    (press sends `get_wildcard_domains()` straight through), so `.get()` on the
+    parsed body raises AttributeError there and 500s the endpoint before the job
+    can be enqueued - which is what broke "Add Wildcard Hosts to Proxy", and with
+    it wildcard TLS renewals, last time this landed. `get_json(silent=True)` also
+    keeps a body that doesn't parse from aborting the request with a 400.
+    """
+    from flask import has_request_context, request
+
+    if not (has_request_context() and request):
+        return None
+    payload = request.get_json(silent=True)
+    if isinstance(payload, dict):
+        return payload.get("agent_job_timeout")
+    return None
+
+
+def _configured_job_timeout():
+    """`job_timeout` from the agent's config.json.
+
+    Handed to resolve_job_timeout as a callable so it is read only when the
+    request didn't carry a timeout of its own. `Base.set_config` rewrites
+    config.json by renaming it aside first, and `Base.config` reads it without
+    taking the lock, so every read on this path is a chance to hit
+    FileNotFoundError - and constructing Server() re-reads the file three more
+    times in set_config_attributes().
+    """
+    from agent.server import Server
+
+    return Server().config.get("job_timeout")
+
+
+def resolve_job_timeout(*candidates) -> int:
+    """Return the first candidate usable as an RQ job timeout, else DEFAULT_TIMEOUT.
+
+    Candidates are tried in order of precedence and may be any JSON type: they
+    come from a request body (press sends `agent_job_timeout`) and from
+    config.json. A value that isn't a positive integer within MAX_TIMEOUT is
+    skipped rather than raising, because this runs in the request handler that
+    enqueues the job - a bad timeout must not turn every enqueue into a 500.
+
+    A candidate may also be a zero-argument callable, evaluated only once every
+    earlier candidate has been rejected, and never allowed to raise. Resolving a
+    timeout is not worth failing an enqueue over: this runs for every agent job,
+    so anything that can throw here takes down every job type at once.
+
+    Skipping (instead of falling straight back to the default) means a garbled
+    request param still leaves an operator's configured `job_timeout` in play.
+    Zero is not usable: RQ would kill the work horse 60s in.
+    """
+    for candidate in candidates:
+        if callable(candidate):
+            try:
+                candidate = candidate()
+            except Exception:
+                logger.warning("Could not resolve a job timeout from %r", candidate, exc_info=True)
+                continue
+        if not candidate:
+            continue
+        try:
+            timeout = int(candidate)
+        except (TypeError, ValueError):
+            logger.warning("Ignoring non-numeric job timeout %r", candidate)
+            continue
+        if not 0 < timeout <= MAX_TIMEOUT:
+            logger.warning("Ignoring job timeout %r, outside 1-%s seconds", candidate, MAX_TIMEOUT)
+            continue
+        return timeout
+    return DEFAULT_TIMEOUT
+
+
+def job(name: str, priority="default", timeout=None, on_success=None, on_failure=None):
     @wrapt.decorator
     def wrapper(wrapped, instance: Base, args, kwargs):
         from agent.base import AgentException
@@ -195,12 +274,14 @@ def job(name: str, priority="default", on_success=None, on_failure=None):
                 instance.job_record.success(result)
             return result
         agent_job_id = get_agent_job_id()
+        agent_job_timeout = _requested_job_timeout()
         instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
+        final_timeout = resolve_job_timeout(agent_job_timeout, timeout, _configured_job_timeout)
         queue(priority).enqueue_call(
             wrapped,
             args=args,
             kwargs=kwargs,
-            timeout=4 * 3600,
+            timeout=final_timeout,
             result_ttl=24 * 3600,
             job_id=str(instance.job_record.model.id),
             on_success=on_success or callback,
