@@ -1185,6 +1185,11 @@ WHERE `schema` IN (
         return None
 
     def _get_indexed_binlogs(self) -> list[str]:
+        # Includes binlogs without indexable queries (idle binlogs, or only GRANT and the like),
+        # which have no rows in the query table and would otherwise be re-queued for indexing
+        # forever, blocking every later binlog
+        if hasattr(self.binlog_indexer, "indexed_binlogs"):
+            return self.binlog_indexer.indexed_binlogs()
         return [
             x[0]
             for x in self.binlog_indexer._execute_query(
