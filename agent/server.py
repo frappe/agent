@@ -270,8 +270,7 @@ class Server(Base):
 
                 content = content.replace("127.0.0.1", "0.0.0.0")
 
-                with open(path, "w") as f:
-                    f.write(content)
+                self.write_file_with_backup(path, content)
 
     def _check_site_on_bench(self, bench_name: str):
         """Check if sites are present on the benches"""

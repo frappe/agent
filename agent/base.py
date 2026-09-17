@@ -258,6 +258,28 @@ class Base:
         if release_lock and self._config_file_lock:
             self._config_file_lock.release()
 
+    def write_file_with_backup(self, path: str, content: str):
+        """Same temp-write + .bak dance as set_config, for non-JSON config files.
+
+        Temp file lives in /tmp (may be another filesystem), so copy2 not rename;
+        the .bak rename is what keeps the old version recoverable if the copy
+        dies mid-way (full disk, OOM kill).
+        """
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+            temp_file.close()
+
+        os.rename(path, path + ".bak")
+
+        try:
+            shutil.copy2(temp_file.name, path)
+            os.remove(temp_file.name)
+        except Exception as e:
+            os.rename(path + ".bak", path)
+            raise e
+
     def log(self):
         data = self.data.copy()
         if self.skip_output_log:
