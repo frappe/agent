@@ -26,9 +26,14 @@ class TestWriteFileWithBackup(unittest.TestCase):
         with open(self.path + ".bak") as f:
             self.assertEqual(f.read(), "old")
 
-    def test_restores_original_when_copy_fails(self):
-        with patch("agent.base.shutil.copy2", side_effect=OSError("disk full")), self.assertRaises(OSError):
+    def test_leaves_original_untouched_when_write_fails(self):
+        with patch("agent.base.os.replace", side_effect=OSError("disk full")), self.assertRaises(OSError):
             Base().write_file_with_backup(self.path, "new")
         with open(self.path) as f:
             self.assertEqual(f.read(), "old")
-        self.assertFalse(os.path.exists(self.path + ".bak"))
+        self.assertEqual(sorted(os.listdir(self.dir)), ["redis-cache.conf", "redis-cache.conf.bak"])
+
+    def test_keeps_file_mode(self):
+        os.chmod(self.path, 0o644)
+        Base().write_file_with_backup(self.path, "new")
+        self.assertEqual(os.stat(self.path).st_mode & 0o777, 0o644)
