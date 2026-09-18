@@ -472,7 +472,9 @@ WHERE `schema` IN (
                 MASTER_PORT = {master_db_port},
                 MASTER_USER = 'root',
                 MASTER_PASSWORD = '{master_mariadb_root_password}',
-                MASTER_USE_GTID=slave_pos;
+                MASTER_USE_GTID=slave_pos,
+                MASTER_SSL=0,
+                MASTER_SSL_VERIFY_SERVER_CERT=0;
             """)
             return {
                 "success": True,
