@@ -18,6 +18,7 @@ from agent.base import AgentException
 from agent.bench import Bench, _get_cors_origins, _normalize_cors_origins
 from agent.server import Server
 from agent.site import Site
+from agent.utils import parse_json_output
 
 NGINX_FUZZ_ALPHABET = string.ascii_letters + string.digits + ":;/?.-_[]@{}\"'\\\n\r\t *,$"
 CORS_NGINX_HYPOTHESIS_CASES = 512
@@ -228,6 +229,11 @@ class TestSite(unittest.TestCase):
             server = Server()
         server.benches_directory = self.benches_directory
         return Bench(self.bench_name, server)
+
+    def _get_test_site(self, site_name: str = "test.local") -> Site:
+        self._create_test_site(site_name)
+        self._make_site_config(site_name)
+        return Site(site_name, self._get_test_bench())
 
     def _render_bench_nginx(self, cors_origins, standalone=False):
         output_file = os.path.join(self.test_dir, "nginx.conf")
@@ -588,6 +594,139 @@ class TestSite(unittest.TestCase):
             _normalize_cors_origins("https://example.com/some/path?q=1"),
             ["https://example.com"],
         )
+
+    def test_parse_json_output_extracts_json_from_noisy_logs(self):
+        output = 'Duckwalk override: custom app loaded\n  ["frappe", "erpnext", "insights"]'
+
+        self.assertEqual(parse_json_output(output), ["frappe", "erpnext", "insights"])
+
+    def test_parse_json_output_uses_validator_to_ignore_trailing_json_logs(self):
+        output = '["frappe", "erpnext"]\n{"status": "done"}'
+
+        self.assertEqual(
+            parse_json_output(output, validator=lambda value: isinstance(value, list)),
+            ["frappe", "erpnext"],
+        )
+
+    def test_parse_json_output_prefers_clean_trailing_payload_over_prefix_json_logs(self):
+        output = '[200]\n["frappe", "erpnext"]'
+
+        self.assertEqual(
+            parse_json_output(output, validator=lambda value: isinstance(value, list)),
+            ["frappe", "erpnext"],
+        )
+
+    def test_parse_json_output_raises_for_ambiguous_matching_json(self):
+        output = '{"status": "running"}\nlog line\n{"status": "done"}\nmore logs'
+
+        with self.assertRaises(ValueError):
+            parse_json_output(
+                output,
+                validator=lambda value: isinstance(value, dict) and "status" in value,
+            )
+
+    def test_restore_site_uses_verbose_flag(self):
+        site = self._get_test_site("restore.local")
+
+        with (
+            patch.object(site.bench, "create_mariadb_user", return_value=("db", "temp-user", "temp-pass")),
+            patch.object(site.bench, "drop_mariadb_user"),
+            patch.object(Site, "bench_execute", return_value={"output": ""}) as bench_execute,
+            patch.object(Site, "restore_site", new=Site.restore_site.__wrapped__),
+        ):
+            site.restore_site(
+                "root-pass",
+                "admin-pass",
+                os.path.join(site.bench.sites_directory, "restore.local", "private", "backups", "db.sql.gz"),
+                "",
+                "",
+            )
+
+        self.assertIn("--force restore --verbose", bench_execute.call_args.args[0])
+
+    def test_uninstall_unavailable_apps_parses_noisy_installed_apps_output(self):
+        site = self._get_test_site("apps.local")
+
+        with (
+            patch.object(
+                Site,
+                "bench_execute",
+                side_effect=[
+                    {
+                        "output": (
+                            "[200]\n"
+                            "Duckwalk override: custom app loaded\n"
+                            '["frappe", "erpnext", "insights", "greendigit"]\n'
+                            '{"status": "done"}'
+                        )
+                    },
+                    {"output": ""},
+                    {"output": ""},
+                    {"output": ""},
+                    {"output": ""},
+                ],
+            ) as bench_execute,
+            patch.object(
+                Site,
+                "uninstall_unavailable_apps",
+                new=Site.uninstall_unavailable_apps.__wrapped__,
+            ),
+        ):
+            site.uninstall_unavailable_apps(["frappe", "erpnext"])
+
+        self.assertEqual(
+            [call.args[0] for call in bench_execute.call_args_list],
+            [
+                "execute frappe.get_installed_apps",
+                "remove-from-installed-apps 'insights'",
+                "clear-cache",
+                "remove-from-installed-apps 'greendigit'",
+                "clear-cache",
+            ],
+        )
+
+    def test_apps_as_json_ignores_trailing_json_logs(self):
+        site = self._get_test_site("apps-json.local")
+
+        with patch.object(
+            Site,
+            "bench_execute",
+            return_value={
+                "output": (
+                    '{"apps-json.local": [{"app": "frappe"}]}\n'
+                    '{"status": "done"}'
+                )
+            },
+        ):
+            self.assertEqual(site.apps_as_json, [{"app": "frappe"}])
+
+    def test_get_analytics_ignores_prefix_and_trailing_json_logs(self):
+        site = self._get_test_site("analytics.local")
+
+        with patch.object(
+            Site,
+            "bench_execute",
+            return_value={
+                "output": (
+                    '[200]\n'
+                    '{"installed_apps": [], "users": [], "country": "IN", "language": "english", '
+                    '"time_zone": "UTC", "setup_complete": true, "scheduler_enabled": true}\n'
+                    '{"status": "done"}'
+                )
+            },
+        ):
+            self.assertEqual(
+                site.get_analytics(),
+                {
+                    "installed_apps": [],
+                    "users": [],
+                    "country": "IN",
+                    "language": "english",
+                    "time_zone": "UTC",
+                    "setup_complete": True,
+                    "scheduler_enabled": True,
+                },
+            )
 
     def test_get_cors_origins_with_quoted_allow_cors(self):
         sites = [
