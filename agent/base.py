@@ -258,6 +258,28 @@ class Base:
         if release_lock and self._config_file_lock:
             self._config_file_lock.release()
 
+    def write_file_with_backup(self, path: str, content: str):
+        """Keep the previous version as <path>.bak and replace <path> atomically.
+
+        Unlike set_config, the temp file is written next to the target so
+        os.replace stays on one filesystem: a kill at any point leaves <path>
+        either fully old or fully new, never truncated.
+        """
+        shutil.copy2(path, path + ".bak")
+
+        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix=f".{os.path.basename(path)}.")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+            shutil.copymode(path, temp_path)
+            os.replace(temp_path, path)
+        except Exception:
+            with suppress(OSError):
+                os.remove(temp_path)
+            raise
+
     def log(self):
         data = self.data.copy()
         if self.skip_output_log:
