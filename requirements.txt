@@ -27,7 +27,7 @@ filelock==3.13.1
 sentry-sdk[flask, rq]==2.1.1
 sql_metadata==2.15.0
 py-spy==0.4.0
-mariadb-binlog-indexer==0.0.19
+mariadb-binlog-indexer==0.0.20
 mariadb-table-usage==0.0.3
 psutil==7.0.0
 tomli==2.4.1
