@@ -654,8 +654,7 @@ class Bench(Base):
                 updated = True
                 content += requirepass_line
 
-            with open(conf_file, "w") as f:
-                f.write(content)
+            self.write_file_with_backup(conf_file, content)
 
         return updated
 
