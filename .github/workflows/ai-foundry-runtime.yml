@@ -37,7 +37,7 @@ jobs:
 
       - name: Run Foundry static contracts
         run: |
-          python -m unittest -v agent.tests.test_ai_foundry_runtime_contract_static
+          python agent/tests/test_ai_foundry_runtime_contract_static.py -v
 
       - name: Verify no stub implementations remain
         run: |
