@@ -33,16 +33,43 @@ jobs:
           for req in dist.requires or []:
               print(" -", req)
           print("duckdb", duckdb.__version__)
-          candidates = [
-              "mariadb_binlog_indexer",
-              "binlog_indexer",
-          ]
+          top_levels = sorted({
+              str(path).split("/")[0]
+              for path in (dist.files or [])
+              if "/" in str(path) and str(path).endswith(".py")
+          })
+          print("top_levels", top_levels)
           imported = []
-          for name in candidates:
+          for name in top_levels:
+              if name.endswith(".dist-info") or name.startswith("_"):
+                  continue
               try:
                   __import__(name)
                   imported.append(name)
-              except ModuleNotFoundError:
-                  pass
+              except Exception as exc:
+                  print("import failed", name, type(exc).__name__, str(exc))
+                  raise
           print("imported", imported)
+          PY
+
+      - name: Inspect DuckDB API usage
+        run: |
+          python - <<'PY'
+          from importlib.metadata import distribution
+          from pathlib import Path
+          dist = distribution("mariadb-binlog-indexer")
+          root = Path(dist.locate_file(""))
+          seen = 0
+          for item in dist.files or []:
+              p = Path(dist.locate_file(item))
+              if p.suffix != ".py" or not p.exists():
+                  continue
+              text = p.read_text(encoding="utf-8", errors="ignore")
+              if "duckdb" in text:
+                  print("FILE", item)
+                  for line in text.splitlines():
+                      if "duckdb" in line:
+                          print(line[:500])
+                          seen += 1
+          print("duckdb references", seen)
           PY
