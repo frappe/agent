@@ -84,6 +84,13 @@ class FoundryRuntimeContractTests(unittest.TestCase):
         self.assertIn("secret_ref = CharField", models)
         self.assertNotIn("secret_value = CharField", models)
 
+    def test_ai_control_ui_exposes_run_approvals(self):
+        source = (ROOT / "agent" / "static" / "ai_control" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("/ai/api/approvals?limit=250", source)
+        self.assertIn("/ai/api/approvals/${id}/decision", source)
+        self.assertIn("/ai/api/runs/${id}", source)
+        self.assertIn("decideApproval", source)
+
     def test_v4_migration_is_registered(self):
         patches = (ROOT / "agent" / "patches.txt").read_text(encoding="utf-8")
         self.assertIn("agent.patches.expand_ai_control_center_foundry_runtime_v4", patches)
