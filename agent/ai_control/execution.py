@@ -6,8 +6,7 @@ import os
 import re
 import time
 import uuid
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from flask import current_app
 
@@ -29,6 +28,9 @@ from agent.ai_control.store import (
     update_tool_call,
 )
 
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MANAGED_TOOL_PREFIX = "agent_tool_"
 
