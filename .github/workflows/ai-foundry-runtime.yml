@@ -40,6 +40,9 @@ jobs:
           python -m compileall -q agent/tests/test_ai_foundry_runtime_functional.py
           python -m compileall -q agent/tests/test_ai_protocol_auth.py
 
+      - name: Check AI Control JavaScript syntax
+        run: node --check agent/static/ai_control/app.js
+
       - name: Lint new Foundry runtime files
         run: |
           ruff check             agent/ai_control/execution.py             agent/tests/test_ai_foundry_runtime_contract_static.py             agent/tests/test_ai_foundry_runtime_functional.py             agent/tests/test_ai_protocol_auth.py             agent/patches/expand_ai_control_center_foundry_runtime_v4.py
