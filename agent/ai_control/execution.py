@@ -28,7 +28,6 @@ from agent.ai_control.store import (
     update_tool_call,
 )
 
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
