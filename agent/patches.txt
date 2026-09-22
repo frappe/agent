@@ -5,3 +5,4 @@ agent.patches.create_binlog_index_folder
 agent.patches.create_ai_control_tables
 agent.patches.expand_ai_control_center_v2
 agent.patches.expand_ai_control_center_a2a_v3
+agent.patches.expand_ai_control_center_foundry_runtime_v4
