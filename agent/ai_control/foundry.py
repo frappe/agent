@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,6 +152,195 @@ class FoundryClient:
             "status": getattr(response, "status", None),
         }
 
+    def get_agent(self, agent_name: str) -> dict[str, Any]:
+        project = self._project()
+        return self._to_dict(project.agents.get(agent_name=agent_name))
+
+    def get_agent_version(self, agent_name: str, agent_version: str) -> dict[str, Any]:
+        project = self._project()
+        return self._to_dict(
+            project.agents.get_version(agent_name=agent_name, agent_version=str(agent_version))
+        )
+
+    @staticmethod
+    def _latest_version_id(agent: Any) -> str:
+        versions = getattr(agent, "versions", None)
+        latest = None
+        if isinstance(versions, dict):
+            latest = versions.get("latest")
+        elif versions is not None:
+            latest = getattr(versions, "latest", None)
+        if isinstance(latest, dict):
+            value = latest.get("version") or latest.get("id")
+        else:
+            value = getattr(latest, "version", None) or getattr(latest, "id", None)
+        if value is None:
+            raise RuntimeError("Foundry agent latest version could not be resolved")
+        return str(value).rsplit(":", 1)[-1]
+
+    @staticmethod
+    def _tool_name(tool: Any) -> str | None:
+        if isinstance(tool, dict):
+            value = tool.get("name")
+            if value:
+                return str(value)
+            function = tool.get("function")
+            if isinstance(function, dict) and function.get("name"):
+                return str(function["name"])
+            return None
+        value = getattr(tool, "name", None)
+        if value:
+            return str(value)
+        function = getattr(tool, "function", None)
+        value = getattr(function, "name", None) if function is not None else None
+        return str(value) if value else None
+
+    def list_agent_tools(self, agent_name: str) -> list[dict[str, Any]]:
+        project = self._project()
+        record = project.agents.get(agent_name=agent_name)
+        version_id = self._latest_version_id(record)
+        version = project.agents.get_version(agent_name=agent_name, agent_version=version_id)
+        definition = getattr(version, "definition", None)
+        tools = getattr(definition, "tools", None) or []
+        return [self._to_dict(tool) for tool in tools]
+
+    def sync_agent_function_tools(
+        self,
+        agent_name: str,
+        function_tools: list[dict[str, Any]],
+        *,
+        managed_prefix: str = "agent_tool_",
+    ) -> dict[str, Any]:
+        """Publish one new Foundry agent version with Agent-managed function tools.
+
+        Existing non-Agent tools are preserved. Previously published Agent-managed
+        function tools are replaced, making the operation idempotent at the
+        logical configuration level while retaining Foundry version history.
+        """
+        try:
+            from azure.ai.projects.models import FunctionTool
+        except ImportError as exc:
+            raise RuntimeError("azure-ai-projects with FunctionTool support is required") from exc
+
+        project = self._project()
+        record = project.agents.get(agent_name=agent_name)
+        version_id = self._latest_version_id(record)
+        version = project.agents.get_version(agent_name=agent_name, agent_version=version_id)
+        definition = copy.deepcopy(getattr(version, "definition", None))
+        if definition is None:
+            raise RuntimeError(f"Foundry agent '{agent_name}' has no version definition")
+        if not hasattr(definition, "tools"):
+            raise RuntimeError(
+                f"Foundry agent '{agent_name}' definition does not support function tools"
+            )
+
+        existing = list(getattr(definition, "tools", None) or [])
+        retained = [
+            tool
+            for tool in existing
+            if not str(self._tool_name(tool) or "").startswith(managed_prefix)
+        ]
+
+        managed = []
+        for spec in function_tools:
+            name = str(spec.get("name") or "").strip()
+            if not name.startswith(managed_prefix):
+                raise ValueError(f"Managed function tool name must start with '{managed_prefix}'")
+            parameters = spec.get("parameters") or {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            }
+            managed.append(
+                FunctionTool(
+                    name=name,
+                    parameters=parameters,
+                    description=str(spec.get("description") or name),
+                    strict=bool(spec.get("strict", True)),
+                )
+            )
+
+        definition.tools = [*retained, *managed]
+        created = project.agents.create_version(
+            agent_name=agent_name,
+            definition=definition,
+        )
+        data = self._to_dict(created)
+        return {
+            "agent_name": agent_name,
+            "previous_version": version_id,
+            "new_version": data.get("version") or data.get("id"),
+            "managed_tool_count": len(managed),
+            "preserved_tool_count": len(retained),
+            "agent_version": data,
+        }
+
+    def _serialize_response(self, response: Any, *, agent_name: str, conversation_id: str) -> dict[str, Any]:
+        outputs: list[dict[str, Any]] = []
+        for item in getattr(response, "output", None) or []:
+            data = self._to_dict(item)
+            for field in ("type", "name", "call_id", "arguments", "id", "status"):
+                value = getattr(item, field, None)
+                if value is not None:
+                    data[field] = value
+            outputs.append(data)
+        model_extra = getattr(response, "model_extra", None) or {}
+        return {
+            "agent_name": agent_name,
+            "conversation_id": conversation_id,
+            "response_id": getattr(response, "id", None),
+            "output_text": getattr(response, "output_text", "") or "",
+            "output": outputs,
+            "usage": self._to_dict(getattr(response, "usage", None)),
+            "status": getattr(response, "status", None),
+            "agent_session_id": model_extra.get("agent_session_id") if isinstance(model_extra, dict) else None,
+        }
+
+    def invoke_agent(
+        self,
+        agent_name: str,
+        input_items: Any,
+        *,
+        conversation_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Invoke a persisted Foundry agent over its dedicated Responses endpoint."""
+        project = self._project()
+        openai = project.get_openai_client(agent_name=agent_name)
+        if not conversation_id:
+            conversation = openai.conversations.create()
+            conversation_id = conversation.id
+        response = openai.responses.create(
+            conversation=conversation_id,
+            input=input_items,
+        )
+        return self._serialize_response(
+            response,
+            agent_name=agent_name,
+            conversation_id=conversation_id,
+        )
+
+    def submit_tool_outputs(
+        self,
+        agent_name: str,
+        conversation_id: str,
+        outputs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if not conversation_id:
+            raise ValueError("conversation_id is required")
+        if not outputs:
+            raise ValueError("at least one function_call_output is required")
+        project = self._project()
+        openai = project.get_openai_client(agent_name=agent_name)
+        response = openai.responses.create(
+            conversation=conversation_id,
+            input=outputs,
+        )
+        return self._serialize_response(
+            response,
+            agent_name=agent_name,
+            conversation_id=conversation_id,
+        )
+
     def create_vector_store(self, name: str) -> dict[str, Any]:
         project = self._project()
         openai = project.get_openai_client()
@@ -192,6 +382,8 @@ class FoundryClient:
                 "toolboxes": True,
                 "responses": True,
                 "conversations": True,
+                "function_tools": True,
+                "tool_outputs": True,
                 "file_search": True,
                 "vector_stores": True,
             },
