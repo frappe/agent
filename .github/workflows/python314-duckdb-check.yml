@@ -19,11 +19,9 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Resolve MariaDB binlog indexer with DuckDB 1.5.5
+      - name: Resolve latest MariaDB binlog indexer on Python 3.14
         run: |
-          uv pip install --system \
-            "mariadb-binlog-indexer==0.0.20" \
-            "duckdb==1.5.5"
+          uv pip install --system "mariadb-binlog-indexer"
 
       - name: Verify installed metadata
         run: |
