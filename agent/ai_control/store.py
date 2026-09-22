@@ -13,6 +13,8 @@ from agent.ai_control.models import (
     AIIntegrationModel,
     AIKnowledgeSourceModel,
     AIProductionToolModel,
+    AIToolCallModel,
+    AIApprovalRequestModel,
     FoundryAssetModel,
     A2AParticipantModel,
     A2AContextModel,
@@ -453,3 +455,169 @@ def list_a2a_tasks(limit: int = 100, context_id: str | None = None):
 
 def get_a2a_task(task_id: str) -> A2ATaskModel:
     return A2ATaskModel.get(A2ATaskModel.task_id == task_id)
+
+
+def get_production_tool(tool_id: int) -> AIProductionToolModel:
+    return AIProductionToolModel.get_by_id(int(tool_id))
+
+
+def get_production_tool_by_ref(tool_ref: str | int) -> AIProductionToolModel:
+    raw = str(tool_ref).strip()
+    if raw.isdigit():
+        return get_production_tool(int(raw))
+    row = AIProductionToolModel.get_or_none(AIProductionToolModel.name == raw)
+    if row is None:
+        raise AIProductionToolModel.DoesNotExist()
+    return row
+
+
+def list_bound_production_tools(agent_name: str) -> list[dict[str, Any]]:
+    bindings = (
+        AIBindingModel.select()
+        .where(
+            (AIBindingModel.source_type == "agent")
+            & (AIBindingModel.source_ref == agent_name)
+            & (AIBindingModel.target_type == "production_tool")
+            & (AIBindingModel.status == "Active")
+        )
+        .order_by(AIBindingModel.id)
+    )
+    result = []
+    for binding in bindings:
+        try:
+            tool = get_production_tool(int(binding.target_ref))
+        except (ValueError, AIProductionToolModel.DoesNotExist):
+            continue
+        if str(tool.status or "").lower() == "disabled":
+            continue
+        item = tool.as_dict()
+        item["binding_id"] = binding.id
+        item["binding"] = binding.as_dict()
+        result.append(item)
+    return result
+
+
+def get_agent_tool_binding(agent_name: str, tool_id: int) -> AIBindingModel | None:
+    return AIBindingModel.get_or_none(
+        (AIBindingModel.source_type == "agent")
+        & (AIBindingModel.source_ref == agent_name)
+        & (AIBindingModel.target_type == "production_tool")
+        & (AIBindingModel.target_ref == str(int(tool_id)))
+    )
+
+
+def remove_agent_tool_binding(agent_name: str, tool_id: int) -> dict[str, Any]:
+    row = get_agent_tool_binding(agent_name, tool_id)
+    if row is None:
+        raise AIBindingModel.DoesNotExist()
+    data = row.as_dict()
+    row.delete_instance()
+    return data
+
+
+def get_execution(execution_id: int) -> AIExecutionModel:
+    return AIExecutionModel.get_by_id(int(execution_id))
+
+
+def update_execution(row: AIExecutionModel, *, status=None, result=None, ended=False, duration_ms=None):
+    if status is not None:
+        row.status = status
+    if result is not None:
+        row.result_json = json.dumps(result, default=str)
+    if ended:
+        row.ended_at = datetime.datetime.now()
+    if duration_ms is not None:
+        row.duration_ms = str(round(duration_ms, 3))
+    row.save()
+    return row
+
+
+def create_tool_call(*, execution_id, agent_name, response_id, conversation_id, call_id, tool_id, tool_name, arguments):
+    return AIToolCallModel.create(
+        execution_id=int(execution_id),
+        agent_name=agent_name,
+        response_id=response_id,
+        conversation_id=conversation_id,
+        call_id=call_id,
+        tool_id=tool_id,
+        tool_name=tool_name,
+        arguments_json=json.dumps(arguments or {}, ensure_ascii=False, default=str),
+        status="Pending",
+    )
+
+
+def get_tool_call(tool_call_id: int) -> AIToolCallModel:
+    return AIToolCallModel.get_by_id(int(tool_call_id))
+
+
+def update_tool_call(row, *, status=None, result=None, error=None, approval_id=None, ended=False):
+    if status is not None:
+        row.status = status
+    if result is not None:
+        row.result_json = json.dumps(result, ensure_ascii=False, default=str)
+    if error is not None:
+        row.error = error
+    if approval_id is not None:
+        row.approval_id = int(approval_id)
+    if ended:
+        row.ended_at = datetime.datetime.now()
+    row.save()
+    return row
+
+
+def list_tool_calls(execution_id=None, limit=500):
+    query = AIToolCallModel.select().order_by(AIToolCallModel.id.desc())
+    if execution_id is not None:
+        query = query.where(AIToolCallModel.execution_id == int(execution_id))
+    return [row.as_dict() for row in query.limit(max(1, min(int(limit), 2000)))]
+
+
+def create_approval_request(*, execution_id, tool_call_id, agent_name, tool_name, risk_level, approval_policy, request_data, requested_by=None, expires_at=None):
+    return AIApprovalRequestModel.create(
+        execution_id=int(execution_id),
+        tool_call_id=int(tool_call_id),
+        agent_name=agent_name,
+        tool_name=tool_name,
+        risk_level=risk_level or "review",
+        approval_policy=approval_policy or "manual",
+        status="Pending",
+        request_json=json.dumps(request_data or {}, ensure_ascii=False, default=str),
+        requested_by=requested_by,
+        expires_at=expires_at,
+    )
+
+
+def get_approval_request(approval_id: int) -> AIApprovalRequestModel:
+    return AIApprovalRequestModel.get_by_id(int(approval_id))
+
+
+def list_approval_requests(status=None, execution_id=None, limit=500):
+    query = AIApprovalRequestModel.select().order_by(AIApprovalRequestModel.id.desc())
+    if status:
+        query = query.where(AIApprovalRequestModel.status == status)
+    if execution_id is not None:
+        query = query.where(AIApprovalRequestModel.execution_id == int(execution_id))
+    return [row.as_dict() for row in query.limit(max(1, min(int(limit), 2000)))]
+
+
+def decide_approval_request(approval_id: int, decision: str, *, decided_by=None, note=None):
+    row = get_approval_request(approval_id)
+    normalized = str(decision or "").strip().lower()
+    if normalized not in {"approved", "rejected"}:
+        raise ValueError("decision must be Approved or Rejected")
+    if row.status != "Pending":
+        raise ValueError(f"approval request is already {row.status}")
+    now = datetime.datetime.now()
+    if row.expires_at and now > row.expires_at:
+        row.status = "Expired"
+        row.decided_at = now
+        row.decided_by = decided_by
+        row.decision_note = note or "Foundry function-call approval window expired"
+        row.save()
+        raise ValueError("approval request has expired; re-run the agent task")
+    row.status = "Approved" if normalized == "approved" else "Rejected"
+    row.decided_by = decided_by
+    row.decision_note = note
+    row.decided_at = now
+    row.save()
+    return row
