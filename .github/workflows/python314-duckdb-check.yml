@@ -1,0 +1,35 @@
+name: Python 3.14 DuckDB Compatibility
+
+on:
+  push:
+    branches:
+      - fix-python314-duckdb
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Resolve MariaDB binlog indexer with DuckDB 1.5.5
+        run: |
+          uv pip install --system \
+            "mariadb-binlog-indexer==0.0.20" \
+            "duckdb==1.5.5"
+
+      - name: Verify installed metadata
+        run: |
+          python - <<'PY'
+          from importlib.metadata import version
+          import duckdb
+          print("mariadb-binlog-indexer", version("mariadb-binlog-indexer"))
+          print("duckdb", duckdb.__version__)
+          PY
