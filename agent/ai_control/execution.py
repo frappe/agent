@@ -137,15 +137,25 @@ def execute_production_tool(tool: dict[str, Any], arguments: dict[str, Any]) -> 
     except Exception as exc:
         raise FoundryExecutionError(f"Could not build Agent route '{endpoint}': {exc}") from exc
 
+    view = current_app.view_functions.get(endpoint)
+    if view is None:
+        raise FoundryExecutionError(f"Agent endpoint '{endpoint}' is not registered")
+
+    # This is an in-process control-plane invocation, not a second unauthenticated
+    # HTTP request. Flask route decorators (bench/site validation, etc.) remain
+    # wrapped around the view function, while the global HTTP access-token hook
+    # is not re-entered. Authorization is the explicit Agent-tool binding plus
+    # the risk/approval gate enforced by this runtime.
     started = time.monotonic()
-    with current_app.test_client() as client:
-        response = client.open(
-            path,
-            method=method,
-            query_string=query,
-            json=body if body is not None else None,
-            headers={"X-Alazab-AI-Control": "foundry-agent-runtime"},
-        )
+    with current_app.test_request_context(
+        path,
+        method=method,
+        query_string=query,
+        json=body if body is not None else None,
+        headers={"X-Alazab-AI-Control": "foundry-agent-runtime"},
+    ):
+        raw_response = view(**path_params)
+        response = current_app.make_response(raw_response)
     result = {
         "ok": 200 <= response.status_code < 400,
         "status_code": response.status_code,
