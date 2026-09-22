@@ -3,6 +3,7 @@
 The sidecar exposes one orchestrator Agent Card. Internal Foundry agents and
 Copilot remain virtual/trusted participants managed by Agent AI Control Center.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -43,11 +44,14 @@ def build_app():
             'A2A runtime dependencies are not installed. Install the Agent extra: pip install -e ".[ai-a2a]"'
         ) from exc
 
-    host, port, rpc_path, interface_url = _settings()
+    _, _, rpc_path, interface_url = _settings()
 
     card = AgentCard(
         name="Alazab A2A Orchestrator",
-        description="GPT-5.6 Sol orchestration layer for trusted Foundry agents and the Copilot Frappe/Bench participant.",
+        description=(
+            "GPT-5.6 Sol orchestration layer for trusted Foundry agents "
+            "and the Copilot Frappe/Bench participant."
+        ),
         supported_interfaces=[
             AgentInterface(
                 protocol_binding="JSONRPC",
@@ -63,11 +67,16 @@ def build_app():
             AgentSkill(
                 id="alazab-a2a-orchestration",
                 name="Alazab A2A orchestration",
-                description="Routes tasks through GPT-5.6 Sol to trusted Foundry agents and Copilot according to participant capabilities.",
+                description=(
+                    "Routes tasks through GPT-5.6 Sol to trusted Foundry agents "
+                    "and Copilot according to participant capabilities."
+                ),
                 tags=["a2a", "foundry", "copilot", "frappe", "gpt-5.6-sol"],
                 input_modes=["text/plain"],
                 output_modes=["text/plain", "application/json"],
-                examples=["Inspect the ERP state and ask the maintenance agent to assess the operational impact."],
+                examples=[
+                    "Inspect the ERP state and ask the maintenance agent to assess the operational impact."
+                ],
             )
         ],
     )
@@ -91,7 +100,9 @@ def build_app():
                 source="a2a-client",
                 context_id=task.context_id,
             )
-            output_text = result.get("output_text") or __import__("json").dumps(result, ensure_ascii=False, default=str)
+            output_text = result.get("output_text") or __import__("json").dumps(
+                result, ensure_ascii=False, default=str
+            )
             await event_queue.enqueue_event(
                 new_text_artifact_update_event(
                     task_id=task.id,

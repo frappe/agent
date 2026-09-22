@@ -3,6 +3,7 @@
 MCP is an external/additional transport. It exposes Agent-owned Foundry/A2A
 capabilities and does not bypass the A2A runtime to call Copilot tools directly.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,11 +13,23 @@ from mcp.server import MCPServer
 
 from agent.ai_control.a2a_runtime import (
     send_message as send_a2a_message,
+)
+from agent.ai_control.a2a_runtime import (
     status as a2a_status_payload,
+)
+from agent.ai_control.a2a_runtime import (
     sync_participants as sync_a2a_participants,
+)
+from agent.ai_control.a2a_runtime import (
     tasks as list_a2a_tasks,
 )
-from agent.ai_control.store import list_a2a_participants, list_assets, list_integrations
+from agent.ai_control.execution import FoundryAgentRuntime
+from agent.ai_control.store import (
+    list_a2a_participants,
+    list_assets,
+    list_bound_production_tools,
+    list_integrations,
+)
 from agent.ai_control.training import send_training_message as send_training_message_runtime
 
 mcp = MCPServer(
@@ -60,8 +73,25 @@ def list_ai_assets(asset_type: str | None = None, project: str | None = None) ->
     """List Foundry assets and Agent-managed AI integrations."""
     return {
         "assets": list_assets(asset_type, project),
-        "integrations": list_integrations(asset_type if asset_type in {"mcp", "a2a", "api", "webhook", "ai_tool"} else None),
+        "integrations": list_integrations(
+            asset_type if asset_type in {"mcp", "a2a", "api", "webhook", "ai_tool"} else None
+        ),
     }
+
+
+@mcp.tool()
+def list_foundry_bound_tools(agent_name: str) -> dict[str, Any]:
+    """List Agent-owned production tools explicitly bound to a Foundry agent."""
+    return {
+        "agent_name": agent_name,
+        "tools": list_bound_production_tools(agent_name),
+    }
+
+
+@mcp.tool()
+def sync_foundry_bound_tools(agent_name: str) -> dict[str, Any]:
+    """Publish the current Agent tool bindings as Foundry function tools."""
+    return FoundryAgentRuntime().sync_tools(agent_name)
 
 
 @mcp.tool()

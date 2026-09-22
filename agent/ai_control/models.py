@@ -70,7 +70,7 @@ class FoundryAssetModel(AIControlModel):
 
     class Meta:
         database = agent_database
-        indexes = ((('project', 'asset_type', 'name'), True),)
+        indexes = ((("project", "asset_type", "name"), True),)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -102,7 +102,7 @@ class AIBindingModel(AIControlModel):
 
     class Meta:
         database = agent_database
-        indexes = ((('source_type', 'source_ref', 'target_type', 'target_ref'), True),)
+        indexes = ((("source_type", "source_ref", "target_type", "target_ref"), True),)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -321,6 +321,84 @@ class AIProductionToolModel(AIControlModel):
         }
 
 
+class AIToolCallModel(AIControlModel):
+    """Audit record for one client-side function call requested by a Foundry agent."""
+
+    id = AutoField()
+    execution_id = IntegerField(index=True)
+    agent_name = CharField(index=True)
+    response_id = CharField(null=True, index=True)
+    conversation_id = CharField(null=True, index=True)
+    call_id = CharField(index=True)
+    tool_id = IntegerField(null=True, index=True)
+    tool_name = CharField(index=True)
+    arguments_json = TextField(default="{}")
+    status = CharField(default="Pending", index=True)
+    approval_id = IntegerField(null=True, index=True)
+    result_json = TextField(default="{}")
+    error = TextField(null=True)
+    started_at = DateTimeField(default=datetime.datetime.now)
+    ended_at = DateTimeField(null=True)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "execution_id": self.execution_id,
+            "agent_name": self.agent_name,
+            "response_id": self.response_id,
+            "conversation_id": self.conversation_id,
+            "call_id": self.call_id,
+            "tool_id": self.tool_id,
+            "tool_name": self.tool_name,
+            "arguments": _decode_json(self.arguments_json),
+            "status": self.status,
+            "approval_id": self.approval_id,
+            "result": _decode_json(self.result_json),
+            "error": self.error,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+        }
+
+
+class AIApprovalRequestModel(AIControlModel):
+    """Human approval gate for a sensitive Foundry-requested Agent tool call."""
+
+    id = AutoField()
+    execution_id = IntegerField(index=True)
+    tool_call_id = IntegerField(index=True)
+    agent_name = CharField(index=True)
+    tool_name = CharField(index=True)
+    risk_level = CharField(default="review", index=True)
+    approval_policy = CharField(default="manual", index=True)
+    status = CharField(default="Pending", index=True)
+    request_json = TextField(default="{}")
+    requested_by = CharField(null=True)
+    decided_by = CharField(null=True)
+    decision_note = TextField(null=True)
+    created_at = DateTimeField(default=datetime.datetime.now)
+    expires_at = DateTimeField(null=True, index=True)
+    decided_at = DateTimeField(null=True)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "execution_id": self.execution_id,
+            "tool_call_id": self.tool_call_id,
+            "agent_name": self.agent_name,
+            "tool_name": self.tool_name,
+            "risk_level": self.risk_level,
+            "approval_policy": self.approval_policy,
+            "status": self.status,
+            "request": _decode_json(self.request_json),
+            "requested_by": self.requested_by,
+            "decided_by": self.decided_by,
+            "decision_note": self.decision_note,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "decided_at": self.decided_at.isoformat() if self.decided_at else None,
+        }
+
+
 class A2AParticipantModel(AIControlModel):
     """One participant in the local Alazab A2A network."""
 
@@ -428,6 +506,8 @@ AI_CONTROL_TABLES = [
     AITrainingMessageModel,
     AIConfigurationModel,
     AIProductionToolModel,
+    AIToolCallModel,
+    AIApprovalRequestModel,
     A2AParticipantModel,
     A2AContextModel,
     A2ATaskModel,

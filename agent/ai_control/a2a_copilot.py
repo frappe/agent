@@ -1,4 +1,5 @@
 """Signed internal A2A client for the Copilot Frappe/Bench participant."""
+
 from __future__ import annotations
 
 import hashlib
@@ -27,9 +28,13 @@ class CopilotA2AConfiguration:
 
     @classmethod
     def from_environment(cls):
-        base_url = (os.environ.get("A2A_COPILOT_BASE_URL") or os.environ.get("COPILOT_CHANNEL_BASE_URL") or "").strip()
+        base_url = (
+            os.environ.get("A2A_COPILOT_BASE_URL") or os.environ.get("COPILOT_CHANNEL_BASE_URL") or ""
+        ).strip()
         secret = (os.environ.get("ALAZAB_AGENT_CHANNEL_SECRET") or "").strip()
-        timeout = float(os.environ.get("A2A_COPILOT_TIMEOUT") or os.environ.get("COPILOT_CHANNEL_TIMEOUT") or "120")
+        timeout = float(
+            os.environ.get("A2A_COPILOT_TIMEOUT") or os.environ.get("COPILOT_CHANNEL_TIMEOUT") or "120"
+        )
         if not base_url:
             raise RuntimeError("A2A_COPILOT_BASE_URL is not configured")
         if not secret:
@@ -47,7 +52,7 @@ class CopilotA2AClient:
 
     def _headers(self, payload: dict[str, Any]) -> dict[str, str]:
         timestamp = str(int(time.time()))
-        message = f"{timestamp}.{_canonical_json(payload)}".encode("utf-8")
+        message = f"{timestamp}.{_canonical_json(payload)}".encode()
         signature = hmac.new(self.config.secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
         return {
             "Content-Type": "application/json",
@@ -55,7 +60,9 @@ class CopilotA2AClient:
             "X-Alazab-Signature": signature,
         }
 
-    def dispatch(self, action: str, arguments: dict[str, Any] | None = None, request_id: str | None = None) -> dict[str, Any]:
+    def dispatch(
+        self, action: str, arguments: dict[str, Any] | None = None, request_id: str | None = None
+    ) -> dict[str, Any]:
         payload = {
             "protocol": A2A_INTERNAL_PROTOCOL,
             "request_id": request_id or str(uuid.uuid4()),
@@ -91,13 +98,16 @@ class CopilotA2AClient:
         source: str,
         configuration: str,
     ) -> dict[str, Any]:
-        return self.dispatch(
-            "message.send",
-            {
-                "message": message,
-                "context_id": context_id,
-                "task_id": task_id,
-                "source": source,
-                "configuration": configuration,
-            },
-        ).get("result") or {}
+        return (
+            self.dispatch(
+                "message.send",
+                {
+                    "message": message,
+                    "context_id": context_id,
+                    "task_id": task_id,
+                    "source": source,
+                    "configuration": configuration,
+                },
+            ).get("result")
+            or {}
+        )
