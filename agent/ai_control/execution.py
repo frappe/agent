@@ -6,7 +6,8 @@ import os
 import re
 import time
 import uuid
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from flask import current_app
 
@@ -156,7 +157,7 @@ def execute_production_tool(tool: dict[str, Any], arguments: dict[str, Any]) -> 
     ):
         raw_response = view(**path_params)
         response = current_app.make_response(raw_response)
-    result = {
+    return {
         "ok": 200 <= response.status_code < 400,
         "status_code": response.status_code,
         "method": method,
@@ -164,7 +165,6 @@ def execute_production_tool(tool: dict[str, Any], arguments: dict[str, Any]) -> 
         "elapsed_ms": round((time.monotonic() - started) * 1000, 3),
         "result": _json_value(response),
     }
-    return result
 
 
 class FoundryAgentRuntime:
@@ -231,7 +231,14 @@ class FoundryAgentRuntime:
             update_tool_call(row, status="Failure", result=result, error=str(exc), ended=True)
             return result
 
-    def _advance(self, execution, response: dict[str, Any], *, requested_by: str | None, step: int):
+    def _advance(  # noqa: C901
+        self,
+        execution,
+        response: dict[str, Any],
+        *,
+        requested_by: str | None,
+        step: int,
+    ):
         max_steps = max(1, min(int(os.environ.get("FOUNDRY_AGENT_MAX_STEPS", "20")), 100))
         while step < max_steps:
             calls = self._function_calls(response)
@@ -274,7 +281,13 @@ class FoundryAgentRuntime:
 
                 if tool is None:
                     result = {"ok": False, "error": f"Unmanaged or missing function tool: {function_name}"}
-                    update_tool_call(call_row, status="Failure", result=result, error=result["error"], ended=True)
+                    update_tool_call(
+                        call_row,
+                        status="Failure",
+                        result=result,
+                        error=result["error"],
+                        ended=True,
+                    )
                     outputs.append(self._output(call_id, result))
                     continue
 
@@ -347,7 +360,7 @@ class FoundryAgentRuntime:
             finish_execution(execution, "Failure", {"phase": "failed", "error": str(exc)})
             raise
 
-    def resume(self, execution_id: int):
+    def resume(self, execution_id: int):  # noqa: C901
         execution = get_execution(execution_id)
         if execution.resource_type != "foundry_agent_run":
             raise ValueError("execution is not a Foundry agent run")
@@ -389,7 +402,11 @@ class FoundryAgentRuntime:
             update_execution(execution, status="AwaitingApproval", result=state)
             return self.run_detail(execution.id)
 
-        update_execution(execution, status="Running", result={**state, "phase": "running", "outputs": outputs})
+        update_execution(
+            execution,
+            status="Running",
+            result={**state, "phase": "running", "outputs": outputs},
+        )
         try:
             response = self.client.submit_tool_outputs(
                 str(state.get("agent_name") or execution.resource_id),
@@ -406,13 +423,25 @@ class FoundryAgentRuntime:
             finish_execution(execution, "Failure", {"phase": "failed", "error": str(exc)})
             raise
 
-    def execute_tool(self, agent_name: str, tool_ref: str | int, arguments: dict[str, Any], *, requested_by=None):
+    def execute_tool(
+        self,
+        agent_name: str,
+        tool_ref: str | int,
+        arguments: dict[str, Any],
+        *,
+        requested_by=None,
+    ):
         tool = get_production_tool_by_ref(tool_ref).as_dict()
         execution = record_execution(
             "tool.execute",
             "production_tool",
             str(tool["id"]),
-            {"agent_name": agent_name, "tool_id": tool["id"], "arguments": arguments, "requested_by": requested_by},
+            {
+                "agent_name": agent_name,
+                "tool_id": tool["id"],
+                "arguments": arguments,
+                "requested_by": requested_by,
+            },
             status="Running",
         )
         call_row = create_tool_call(
@@ -441,7 +470,11 @@ class FoundryAgentRuntime:
             update_execution(
                 execution,
                 status="AwaitingApproval",
-                result={"phase": "awaiting_approval", "tool_call_id": call_row.id, "approval_id": approval.id},
+                result={
+                    "phase": "awaiting_approval",
+                    "tool_call_id": call_row.id,
+                    "approval_id": approval.id,
+                },
             )
             return self.run_detail(execution.id)
 
