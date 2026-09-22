@@ -15,6 +15,7 @@ from agent.ai_control.store import (
     create_approval_request,
     create_tool_call,
     finish_execution,
+    get_agent_tool_binding,
     get_approval_request,
     get_execution,
     get_production_tool,
@@ -48,6 +49,19 @@ def managed_tool_name(tool: dict[str, Any]) -> str:
 def managed_tool_id(function_name: str) -> int | None:
     match = re.match(rf"^{re.escape(MANAGED_TOOL_PREFIX)}(\d+)_", str(function_name or ""))
     return int(match.group(1)) if match else None
+
+
+def _bound_tool(agent_name: str, tool_id: int) -> dict[str, Any] | None:
+    binding = get_agent_tool_binding(agent_name, tool_id)
+    if binding is None or str(binding.status or "").lower() != "active":
+        return None
+    try:
+        tool = get_production_tool(tool_id).as_dict()
+    except Exception:
+        return None
+    if str(tool.get("status") or "").lower() == "disabled":
+        return None
+    return tool
 
 
 def production_tool_contract(tool: dict[str, Any]) -> dict[str, Any]:
@@ -263,12 +277,11 @@ class FoundryAgentRuntime:
                 call_id = str(item.get("call_id") or item.get("id") or uuid.uuid4())
                 arguments = self._arguments(item)
                 tool_id = managed_tool_id(function_name)
-                tool = None
-                if tool_id is not None:
-                    try:
-                        tool = get_production_tool(tool_id).as_dict()
-                    except Exception:
-                        tool = None
+                tool = (
+                    _bound_tool(str(response.get("agent_name") or execution.resource_id or ""), tool_id)
+                    if tool_id is not None
+                    else None
+                )
                 call_row = create_tool_call(
                     execution_id=execution.id,
                     agent_name=str(response.get("agent_name") or execution.resource_id or ""),
@@ -381,7 +394,11 @@ class FoundryAgentRuntime:
                 pending.append(call_row.id)
                 continue
             if approval.status == "Approved":
-                tool = get_production_tool(int(call_row.tool_id)).as_dict()
+                tool = _bound_tool(call_row.agent_name, int(call_row.tool_id))
+                if tool is None:
+                    raise FoundryExecutionError(
+                        f"Tool '{call_row.tool_name}' is no longer bound to '{call_row.agent_name}'"
+                    )
                 arguments = json.loads(call_row.arguments_json or "{}")
                 outputs.append(self._output(call_row.call_id, self._execute_call(call_row, tool, arguments)))
             elif approval.status == "Rejected":
@@ -433,6 +450,10 @@ class FoundryAgentRuntime:
         requested_by=None,
     ):
         tool = get_production_tool_by_ref(tool_ref).as_dict()
+        if _bound_tool(agent_name, int(tool["id"])) is None:
+            raise FoundryExecutionError(
+                f"Production tool '{tool['name']}' is not actively bound to agent '{agent_name}'"
+            )
         execution = record_execution(
             "tool.execute",
             "production_tool",
@@ -501,7 +522,11 @@ class FoundryAgentRuntime:
             return self.run_detail(execution.id)
         if approval.status != "Approved":
             raise FoundryExecutionError(f"Approval is {approval.status}")
-        tool = get_production_tool(int(call_row.tool_id)).as_dict()
+        tool = _bound_tool(call_row.agent_name, int(call_row.tool_id))
+        if tool is None:
+            raise FoundryExecutionError(
+                f"Tool '{call_row.tool_name}' is no longer bound to '{call_row.agent_name}'"
+            )
         arguments = json.loads(call_row.arguments_json or "{}")
         result = self._execute_call(call_row, tool, arguments)
         finish_execution(execution, "Success" if result.get("ok") else "Failure", result)
