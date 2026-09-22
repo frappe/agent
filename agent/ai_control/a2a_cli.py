@@ -1,4 +1,5 @@
 """Operator CLI for local A2A integration checks."""
+
 from __future__ import annotations
 
 import argparse

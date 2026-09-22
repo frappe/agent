@@ -137,8 +137,7 @@ def resolve_orchestrator_model() -> dict[str, str]:
         )
     raise RuntimeError(
         "Multiple synchronized deployments identify as gpt-5.6-sol; "
-        "configure A2A_ORCHESTRATOR_MODEL explicitly: "
-        + ", ".join(deployment_names)
+        "configure A2A_ORCHESTRATOR_MODEL explicitly: " + ", ".join(deployment_names)
     )
 
 
@@ -430,9 +429,7 @@ def _run_orchestration_loop(
     while True:
         step += 1
         if max_steps is not None and step > max_steps:
-            raise RuntimeError(
-                f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}"
-            )
+            raise RuntimeError(f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}")
 
         response = FoundryClient().responses_with_tools(
             model=model_info["deployment"],
@@ -444,8 +441,7 @@ def _run_orchestration_loop(
         response_id = str(response.get("id") or "")
         if response_id and response_id in seen_response_ids:
             raise RuntimeError(
-                f"Foundry Responses returned duplicate response id {response_id}; "
-                "orchestration stopped"
+                f"Foundry Responses returned duplicate response id {response_id}; orchestration stopped"
             )
         if response_id:
             seen_response_ids.add(response_id)

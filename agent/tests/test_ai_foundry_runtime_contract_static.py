@@ -32,7 +32,7 @@ class FoundryRuntimeContractTests(unittest.TestCase):
 
     def test_tool_calls_and_approvals_are_persistent(self):
         source = (AI / "models.py").read_text(encoding="utf-8")
-        table_list = source[source.index("AI_CONTROL_TABLES ="):]
+        table_list = source[source.index("AI_CONTROL_TABLES =") :]
         for model in ("AIToolCallModel", "AIApprovalRequestModel"):
             self.assertIn(f"class {model}", source)
             self.assertIn(model, table_list)

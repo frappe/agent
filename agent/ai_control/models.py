@@ -70,7 +70,7 @@ class FoundryAssetModel(AIControlModel):
 
     class Meta:
         database = agent_database
-        indexes = ((('project', 'asset_type', 'name'), True),)
+        indexes = ((("project", "asset_type", "name"), True),)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -102,7 +102,7 @@ class AIBindingModel(AIControlModel):
 
     class Meta:
         database = agent_database
-        indexes = ((('source_type', 'source_ref', 'target_type', 'target_ref'), True),)
+        indexes = ((("source_type", "source_ref", "target_type", "target_ref"), True),)
 
     def as_dict(self) -> dict[str, Any]:
         return {

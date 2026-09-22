@@ -133,11 +133,7 @@ async def _probe_mcp(integration: AIIntegrationModel) -> dict[str, Any]:
             listed = await client.list_tools()
             raw_tools = getattr(listed, "tools", listed) or []
             tools = [_mcp_value(tool) for tool in raw_tools]
-            server_info = (
-                _mcp_value(client.server_info)
-                if getattr(client, "server_info", None)
-                else None
-            )
+            server_info = _mcp_value(client.server_info) if getattr(client, "server_info", None) else None
             result = {
                 "ok": True,
                 "elapsed_ms": round((time.monotonic() - started) * 1000, 3),

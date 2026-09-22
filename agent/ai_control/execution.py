@@ -208,9 +208,7 @@ class FoundryAgentRuntime:
     @staticmethod
     def _function_calls(response: dict[str, Any]) -> list[dict[str, Any]]:
         return [
-            item
-            for item in (response.get("output") or [])
-            if str(item.get("type") or "") == "function_call"
+            item for item in (response.get("output") or []) if str(item.get("type") or "") == "function_call"
         ]
 
     @staticmethod
