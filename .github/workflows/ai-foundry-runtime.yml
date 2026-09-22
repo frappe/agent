@@ -97,3 +97,27 @@ jobs:
           assert tool.type == "function"
           print("SDK_IMPORTS_AND_FUNCTION_TOOL_OK")
           PY
+
+
+  runtime-behavior:
+    name: Foundry runtime behavior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Agent test runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run Foundry behavior and authentication tests
+        run: |
+          python -m unittest \
+            agent.tests.test_ai_foundry_runtime_functional \
+            agent.tests.test_ai_protocol_auth \
+            -v

@@ -174,7 +174,10 @@ class FoundryExecutionRuntimeTests(unittest.TestCase):
             decide_approval_request(approval_id, "approved", decided_by="test")
 
         approval = get_approval_request(approval_id)
+        expired = runtime.run_detail(pending["run"]["id"])
         self.assertEqual(approval.status, "Expired")
+        self.assertEqual(expired["run"]["status"], "Expired")
+        self.assertEqual(expired["tool_calls"][0]["status"], "Expired")
         self.assertEqual(calls, [])
         self.assertEqual(client.submissions, [])
 

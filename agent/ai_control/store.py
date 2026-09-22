@@ -721,11 +721,28 @@ def decide_approval_request(approval_id: int, decision: str, *, decided_by=None,
         raise ValueError(f"approval request is already {row.status}")
     now = datetime.datetime.now()
     if row.expires_at and now > row.expires_at:
+        error = "Foundry function-call approval window expired"
         row.status = "Expired"
         row.decided_at = now
         row.decided_by = decided_by
-        row.decision_note = note or "Foundry function-call approval window expired"
+        row.decision_note = note or error
         row.save()
+
+        tool_call = get_tool_call(row.tool_call_id)
+        update_tool_call(
+            tool_call,
+            status="Expired",
+            result={"ok": False, "error": error, "approval_id": row.id},
+            error=error,
+            ended=True,
+        )
+        execution = get_execution(row.execution_id)
+        update_execution(
+            execution,
+            status="Expired",
+            result={"phase": "expired", "error": error, "approval_id": row.id},
+            ended=True,
+        )
         raise ValueError("approval request has expired; re-run the agent task")
     row.status = "Approved" if normalized == "approved" else "Rejected"
     row.decided_by = decided_by
