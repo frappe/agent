@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent · AI Control Center</title>
+  <link rel="stylesheet" href="/static/ai_control/app.css">
+</head>
+<body data-page="{{ active_page|default('dashboard') }}" data-agent="{{ active_agent|default('') }}">
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div><strong>Agent</strong><span>AI Control Center</span></div>
+    </div>
+
+    <nav class="nav">
+      <a href="/ai/" data-page="dashboard"><span class="nav-icon">◫</span><span>لوحة التحكم</span></a>
+      <div class="nav-label">Foundry</div>
+      <a href="/ai/agents" data-page="agents"><span class="nav-icon">◎</span><span>الوكلاء</span></a>
+      <a href="/ai/training" data-page="training"><span class="nav-icon">◈</span><span>التدريب والدردشة</span></a>
+      <a href="/ai/knowledge" data-page="knowledge"><span class="nav-icon">▤</span><span>مكتبة المعرفة</span></a>
+      <div class="nav-label">Runtime</div>
+      <a href="/ai/configurations" data-page="configurations"><span class="nav-icon">⚙</span><span>التكوينات</span></a>
+      <a href="/ai/production-tools" data-page="production-tools"><span class="nav-icon">⌘</span><span>أدوات الإنتاج</span></a>
+      <a href="/ai/integrations" data-page="integrations"><span class="nav-icon">⌁</span><span>التكاملات</span></a>
+      <a href="/ai/a2a" data-page="a2a"><span class="nav-icon">⇄</span><span>شبكة A2A</span></a>
+      <div class="nav-label">Operations</div>
+      <a href="/ai/topology" data-page="topology"><span class="nav-icon">⌬</span><span>الخريطة التشغيلية</span></a>
+      <a href="/ai/runs" data-page="runs"><span class="nav-icon">↻</span><span>التشغيل والتدقيق</span></a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="environment-dot"></div>
+      <div><strong>Production Control</strong><span id="foundryProject">Foundry not synced</span></div>
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow" id="eyebrow">AI OPERATIONS</div>
+        <h1 id="pageTitle">لوحة التحكم</h1>
+        <p id="pageSubtitle">إدارة الوكلاء والمعرفة والأدوات من مكان واحد.</p>
+      </div>
+      <div class="top-actions" id="topActions">
+        <button class="btn ghost" id="refreshBtn">تحديث</button>
+      </div>
+    </header>
+
+    <div id="pageRoot" class="page-root">
+      <div class="loading-state"><span class="spinner"></span> جاري تحميل البيئة…</div>
+    </div>
+  </main>
+</div>
+
+<dialog id="sessionDialog" class="dialog">
+  <form id="sessionForm">
+    <div class="dialog-head"><div><span class="eyebrow">TRAINING</span><h2>جلسة تدريب جديدة</h2></div><button type="button" class="icon-btn" data-close="sessionDialog">×</button></div>
+    <div class="form-grid">
+      <label class="field"><span>الوكيل</span><select name="agent_name" id="sessionAgent" required></select></label>
+      <label class="field"><span>عنوان الجلسة</span><input name="title" placeholder="تدريب الصيانة - ملفات التشغيل"></label>
+    </div>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close="sessionDialog">إلغاء</button><button class="btn primary" type="submit">إنشاء وفتح</button></div>
+  </form>
+</dialog>
+
+<dialog id="configurationDialog" class="dialog wide">
+  <form id="configurationForm">
+    <div class="dialog-head"><div><span class="eyebrow">CONFIGURATION</span><h2>تكوين جديد</h2></div><button type="button" class="icon-btn" data-close="configurationDialog">×</button></div>
+    <div class="form-grid cols-2">
+      <label class="field"><span>الاسم</span><input name="name" required></label>
+      <label class="field"><span>النوع</span><select name="config_type"><option value="runtime">Runtime</option><option value="model">Model</option><option value="behavior">Behavior</option><option value="knowledge">Knowledge</option><option value="tools">Tools</option><option value="safety">Safety</option></select></label>
+      <label class="field"><span>النطاق</span><select name="scope_type"><option value="global">Global</option><option value="agent">Agent</option><option value="tool">Tool</option><option value="integration">Integration</option></select></label>
+      <label class="field"><span>المرجع</span><input name="scope_ref" placeholder="az-agent-core"></label>
+      <label class="field full"><span>Secret reference</span><input name="secret_ref" placeholder="Reference only"></label>
+      <label class="field full"><span>Configuration JSON</span><textarea name="config" rows="12">{}</textarea></label>
+    </div>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close="configurationDialog">إلغاء</button><button class="btn primary" type="submit">حفظ</button></div>
+  </form>
+</dialog>
+
+<dialog id="integrationDialog" class="dialog wide">
+  <form id="integrationForm">
+    <div class="dialog-head"><div><span class="eyebrow">INTEGRATION</span><h2>تكامل جديد</h2></div><button type="button" class="icon-btn" data-close="integrationDialog">×</button></div>
+    <div class="form-grid cols-2">
+      <label class="field"><span>الاسم</span><input name="name" required></label>
+      <label class="field"><span>النوع</span><select name="type"><option value="mcp">MCP</option><option value="a2a">A2A</option><option value="api">API / OpenAPI</option><option value="webhook">Webhook</option><option value="ai_tool">AI Tool</option></select></label>
+      <label class="field"><span>Project</span><input name="project" placeholder="az-ai-gateway"></label>
+      <label class="field"><span>Authentication</span><select name="auth_type"><option value="none">None</option><option value="managed_identity">Managed Identity</option><option value="api_key">API Key reference</option><option value="oauth">OAuth / Entra ID</option></select></label>
+      <label class="field full"><span>Endpoint</span><input name="endpoint" placeholder="https://..."></label>
+      <label class="field full"><span>Secret reference</span><input name="secret_ref"></label>
+      <label class="field full"><span>Configuration JSON</span><textarea name="config" rows="10">{}</textarea></label>
+    </div>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close="integrationDialog">إلغاء</button><button class="btn primary" type="submit">حفظ</button></div>
+  </form>
+</dialog>
+
+<dialog id="knowledgePreviewDialog" class="dialog preview-dialog">
+  <div class="dialog-head"><div><span class="eyebrow">KNOWLEDGE PREVIEW</span><h2 id="knowledgePreviewTitle">معاينة المحتوى</h2></div><button type="button" class="icon-btn" data-close="knowledgePreviewDialog">×</button></div>
+  <pre id="knowledgePreviewContent" class="document-preview"></pre>
+</dialog>
+
+<div id="toastHost" class="toast-host"></div>
+<script src="/static/ai_control/app.js"></script>
+</body>
+</html>

@@ -115,7 +115,7 @@ map $upstream_http_access_control_allow_origin $access_control_allow_origin {
 
 map $upstream_http_access_control_allow_headers $access_control_allow_headers {
 	default $upstream_http_access_control_allow_headers;
-	"" "'Origin, Content-Type, Accept";
+	"" "Origin, Content-Type, Accept";
 }
 
 map $upstream_http_access_control_allow_credentials $access_control_allow_credentials {
@@ -125,7 +125,7 @@ map $upstream_http_access_control_allow_credentials $access_control_allow_creden
 
 map $upstream_http_access_control_allow_methods $access_control_allow_methods {
 	default $upstream_http_access_control_allow_methods;
-	"" "'GET, POST, OPTIONS";
+	"" "GET, POST, OPTIONS";
 }
 
 proxy_cache_path /tmp/cache keys_zone=proxy_cache_zone:10m loader_threshold=300 loader_files=200 max_size=200m;

@@ -1,0 +1,123 @@
+name: AI Foundry Runtime Tests
+
+on:
+  push:
+    branches:
+      - foundry-agent-runtime
+  pull_request:
+    branches:
+      - version-16
+    paths:
+      - "agent/ai_control/**"
+      - "agent/tests/test_ai_foundry_runtime_contract_static.py"
+      - "agent/tests/test_ai_protocol_auth.py"
+      - "agent/patches/**"
+      - "agent/patches.txt"
+      - "requirements-ai.txt"
+      - ".github/workflows/ai-foundry-runtime.yml"
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    name: Foundry runtime contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Compile AI runtime
+        run: |
+          python -m compileall -q agent/ai_control
+          python -m compileall -q agent/patches/expand_ai_control_center_foundry_runtime_v4.py
+          python -m compileall -q agent/tests/test_ai_foundry_runtime_contract_static.py
+          python -m compileall -q agent/tests/test_ai_foundry_runtime_functional.py
+          python -m compileall -q agent/tests/test_ai_protocol_auth.py
+
+      - name: Check AI Control JavaScript syntax
+        run: node --check agent/static/ai_control/app.js
+
+      - name: Lint new Foundry runtime files
+        run: |
+          ruff check             agent/ai_control/execution.py             agent/tests/test_ai_foundry_runtime_contract_static.py             agent/tests/test_ai_foundry_runtime_functional.py             agent/tests/test_ai_protocol_auth.py             agent/patches/expand_ai_control_center_foundry_runtime_v4.py
+
+      - name: Run Foundry static contracts
+        run: |
+          python agent/tests/test_ai_foundry_runtime_contract_static.py -v
+
+      - name: Verify no stub implementations remain
+        run: |
+          ! grep -R "MCP runtime client is not enabled in this patch" agent/ai_control
+          ! grep -R "AI Tool execution requires a linked Foundry tool/toolbox" agent/ai_control
+
+
+
+  sdk-compatibility:
+    name: Foundry SDK compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install current Foundry and MCP SDKs
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ai.txt
+
+      - name: Verify SDK imports
+        run: |
+          python - <<'PY'
+          from azure.ai.projects import AIProjectClient
+          from azure.ai.projects.models import FunctionTool
+          from mcp import Client
+          from mcp.client.streamable_http import streamable_http_client
+          import httpx2
+
+          tool = FunctionTool(
+              name="agent_tool_1_health",
+              description="Health probe",
+              parameters={
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": False,
+              },
+              strict=True,
+          )
+          assert tool.name == "agent_tool_1_health"
+          assert tool.type == "function"
+          print("SDK_IMPORTS_AND_FUNCTION_TOOL_OK")
+          PY
+
+
+  runtime-behavior:
+    name: Foundry runtime behavior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Agent test runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run Foundry behavior and authentication tests
+        run: |
+          python -m unittest \
+            agent.tests.test_ai_foundry_runtime_functional \
+            agent.tests.test_ai_protocol_auth \
+            -v

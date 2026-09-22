@@ -16,6 +16,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
 
+from agent.ai_control import ai_control
 from agent.backup_log import InvalidRange, parse_range
 from agent.base import AgentException
 from agent.builder import ImageBuilder, PatchImageBuilder
@@ -54,6 +55,10 @@ if TYPE_CHECKING:
 
 
 application = Flask(__name__)
+
+# Agent AI Control Center: graphical control plane for Foundry assets and integrations.
+application.register_blueprint(ai_control)
+
 
 SENSITIVE_CONFIG_KEYS = {
     "access_token",
@@ -100,7 +105,7 @@ log.handlers = []
 
 @application.before_request
 def validate_access_token():
-    exempt_endpoints = ["get_metrics"]
+    exempt_endpoints = ["get_metrics", "ai_control.channel_openapi"]
     if request.endpoint in exempt_endpoints:
         return None
 
@@ -347,6 +352,7 @@ def update_nginx_ip_access():
     job = Server().update_nginx_access(
         ip_accept=data.get("ip_accept", []),
         ip_drop=data.get("ip_drop", []),
+        proxy_ip=data.get("proxy_ip"),
     )
     return {"job": job}
 
