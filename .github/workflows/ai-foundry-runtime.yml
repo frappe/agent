@@ -82,5 +82,18 @@ jobs:
           from mcp import Client
           from mcp.client.streamable_http import streamable_http_client
           import httpx2
-          print("SDK_IMPORTS_OK")
+
+          tool = FunctionTool(
+              name="agent_tool_1_health",
+              description="Health probe",
+              parameters={
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": False,
+              },
+              strict=True,
+          )
+          assert tool.name == "agent_tool_1_health"
+          assert tool.type == "function"
+          print("SDK_IMPORTS_AND_FUNCTION_TOOL_OK")
           PY
