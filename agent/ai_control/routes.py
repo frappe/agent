@@ -7,6 +7,7 @@ from flask import Blueprint, current_app, jsonify, render_template, request
 from peewee import DoesNotExist
 
 from agent.ai_control.foundry import FoundryClient
+from agent.ai_control.execution import FoundryAgentRuntime
 from agent.ai_control.a2a_runtime import (
     send_message as send_a2a_message,
     status as a2a_status_payload,
@@ -45,6 +46,13 @@ from agent.ai_control.store import (
     get_a2a_participant,
     list_a2a_participants,
     update_a2a_participant,
+    remove_agent_tool_binding,
+    list_bound_production_tools,
+    list_approval_requests,
+    get_production_tool,
+    get_execution,
+    get_agent_tool_binding,
+    decide_approval_request,
 )
 
 ai_control = Blueprint("ai_control", __name__, url_prefix="/ai")
@@ -236,6 +244,184 @@ def sync_foundry_inventory():
         result = {"error": str(exc)}
         finish_execution(execution, "Failure", result, (time.monotonic() - started) * 1000)
         return jsonify(result), 502
+
+
+@ai_control.route("/api/foundry/agents/<string:agent_name>/chat", methods=["POST"])
+def chat_with_foundry_agent(agent_name: str):
+    payload = request.get_json(force=True) or {}
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+    execution = record_execution(
+        "chat",
+        "foundry_agent",
+        agent_name,
+        {"message": message, "conversation_id": payload.get("conversation_id")},
+        status="Running",
+    )
+    started = time.monotonic()
+    try:
+        result = FoundryClient().chat_with_agent(
+            agent_name,
+            message,
+            conversation_id=payload.get("conversation_id"),
+        )
+        finish_execution(execution, "Success", result, (time.monotonic() - started) * 1000)
+        return jsonify(result)
+    except Exception as exc:
+        result = {"error": str(exc)}
+        finish_execution(execution, "Failure", result, (time.monotonic() - started) * 1000)
+        return jsonify(result), 502
+
+
+@ai_control.route("/api/foundry/agents/<string:agent_name>/invoke", methods=["POST"])
+def invoke_foundry_agent(agent_name: str):
+    payload = request.get_json(force=True) or {}
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        return jsonify({"error": "message is required"}), 400
+    actor = request.headers.get("X-Operator") or payload.get("requested_by")
+    try:
+        result = FoundryAgentRuntime().start(
+            agent_name,
+            message,
+            conversation_id=payload.get("conversation_id"),
+            requested_by=actor,
+        )
+        code = 202 if result["run"]["status"] == "AwaitingApproval" else 200
+        return jsonify(result), code
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@ai_control.route("/api/foundry/agents/<string:agent_name>/tools", methods=["GET"])
+def foundry_agent_tools(agent_name: str):
+    try:
+        return jsonify(FoundryAgentRuntime().tool_inventory(agent_name))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@ai_control.route("/api/foundry/agents/<string:agent_name>/tools/<int:tool_id>", methods=["POST", "DELETE"])
+def foundry_agent_tool_binding(agent_name: str, tool_id: int):
+    try:
+        get_production_tool(tool_id)
+    except DoesNotExist:
+        return jsonify({"error": "Production tool not found"}), 404
+
+    if request.method == "DELETE":
+        try:
+            return jsonify(remove_agent_tool_binding(agent_name, tool_id))
+        except DoesNotExist:
+            return jsonify({"error": "Agent tool binding not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    existing = get_agent_tool_binding(agent_name, tool_id)
+    if existing:
+        return jsonify(existing.as_dict())
+    try:
+        row = create_binding(
+            {
+                "source_type": "agent",
+                "source_ref": agent_name,
+                "target_type": "production_tool",
+                "target_ref": str(tool_id),
+                "status": "Active",
+                "config": payload.get("config") or {},
+            }
+        )
+        return jsonify(row.as_dict()), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@ai_control.route("/api/foundry/agents/<string:agent_name>/tools/sync", methods=["POST"])
+def sync_foundry_agent_tools(agent_name: str):
+    execution = record_execution("sync_tools", "foundry_agent", agent_name, status="Running")
+    started = time.monotonic()
+    try:
+        result = FoundryAgentRuntime().sync_tools(agent_name)
+        finish_execution(execution, "Success", result, (time.monotonic() - started) * 1000)
+        return jsonify(result)
+    except Exception as exc:
+        result = {"error": str(exc)}
+        finish_execution(execution, "Failure", result, (time.monotonic() - started) * 1000)
+        return jsonify(result), 502
+
+
+@ai_control.route("/api/foundry/tools/<string:tool_ref>/execute", methods=["POST"])
+def execute_foundry_bound_tool(tool_ref: str):
+    payload = request.get_json(force=True) or {}
+    agent_name = str(payload.get("agent_name") or "").strip()
+    if not agent_name:
+        return jsonify({"error": "agent_name is required"}), 400
+    actor = request.headers.get("X-Operator") or payload.get("requested_by")
+    try:
+        result = FoundryAgentRuntime().execute_tool(
+            agent_name,
+            tool_ref,
+            payload.get("arguments") or {},
+            requested_by=actor,
+        )
+        code = 202 if result["run"]["status"] == "AwaitingApproval" else 200
+        return jsonify(result), code
+    except DoesNotExist:
+        return jsonify({"error": "Production tool not found"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@ai_control.route("/api/approvals", methods=["GET"])
+def approvals():
+    limit = min(max(int(request.args.get("limit", 200)), 1), 2000)
+    execution_id = request.args.get("execution_id")
+    return jsonify(
+        list_approval_requests(
+            status=request.args.get("status"),
+            execution_id=int(execution_id) if execution_id else None,
+            limit=limit,
+        )
+    )
+
+
+@ai_control.route("/api/approvals/<int:approval_id>/decision", methods=["POST"])
+def approval_decision(approval_id: int):
+    payload = request.get_json(force=True) or {}
+    actor = request.headers.get("X-Operator") or payload.get("decided_by") or "operator"
+    try:
+        approval = decide_approval_request(
+            approval_id,
+            payload.get("decision"),
+            decided_by=actor,
+            note=payload.get("note"),
+        )
+        execution = get_execution(approval.execution_id)
+        runtime = FoundryAgentRuntime()
+        if execution.resource_type == "foundry_agent_run":
+            run = runtime.resume(execution.id)
+        elif execution.resource_type == "production_tool":
+            run = runtime.resume_direct(execution.id)
+        else:
+            run = execution.as_dict()
+        return jsonify({"approval": approval.as_dict(), "execution": run})
+    except DoesNotExist:
+        return jsonify({"error": "Approval or execution not found"}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
+@ai_control.route("/api/runs/<int:execution_id>", methods=["GET"])
+def run_detail(execution_id: int):
+    try:
+        return jsonify(FoundryAgentRuntime().run_detail(execution_id))
+    except DoesNotExist:
+        return jsonify({"error": "Run not found"}), 404
 
 
 @ai_control.route("/api/foundry/agents/<string:agent_name>/enabled", methods=["POST"])
@@ -671,9 +857,18 @@ def _route_category(route: str) -> str:
     return "agent_api"
 
 
-def _route_risk(methods: list[str]) -> tuple[str, str]:
-    write = any(method in {"POST", "PUT", "PATCH", "DELETE"} for method in methods)
-    return ("review", "manual") if write else ("read", "auto")
+def _route_risk(methods: list[str], route: str = "") -> tuple[str, str]:
+    normalized = {str(method).upper() for method in methods}
+    route_lower = str(route or "").lower()
+    if not (normalized & {"POST", "PUT", "PATCH", "DELETE"}):
+        return "read", "auto"
+    high_markers = (
+        "delete", "drop", "restore", "reinstall", "restart", "migrate",
+        "deploy", "database", "bench/update", "server",
+    )
+    if "DELETE" in normalized or any(marker in route_lower for marker in high_markers):
+        return "high", "manual"
+    return "review", "confirm"
 
 
 @ai_control.route("/api/production-tools/discover", methods=["POST"])
@@ -686,7 +881,7 @@ def discover_production_tools():
         methods = sorted(set(rule.methods or []) - {"HEAD", "OPTIONS"})
         if not methods:
             continue
-        risk, approval = _route_risk(methods)
+        risk, approval = _route_risk(methods, route)
         name = f"{rule.endpoint}:{','.join(methods)}"
         row = upsert_production_tool({
             "name": name,
