@@ -246,7 +246,7 @@ class FoundryAgentRuntime:
             update_tool_call(row, status="Failure", result=result, error=str(exc), ended=True)
             return result
 
-    def _advance(  # noqa: C901
+    def _advance(
         self,
         execution,
         response: dict[str, Any],
