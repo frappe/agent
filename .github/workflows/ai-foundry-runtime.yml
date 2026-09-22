@@ -1,0 +1,45 @@
+name: AI Foundry Runtime Tests
+
+on:
+  push:
+    branches:
+      - foundry-agent-runtime
+  pull_request:
+    branches:
+      - version-16
+    paths:
+      - "agent/ai_control/**"
+      - "agent/tests/test_ai_foundry_runtime_contract_static.py"
+      - "agent/tests/test_ai_protocol_auth.py"
+      - "agent/patches/**"
+      - "agent/patches.txt"
+      - "requirements-ai.txt"
+      - ".github/workflows/ai-foundry-runtime.yml"
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    name: Foundry runtime contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Compile AI runtime
+        run: |
+          python -m compileall -q agent/ai_control
+          python -m compileall -q agent/patches/expand_ai_control_center_foundry_runtime_v4.py
+          python -m compileall -q agent/tests/test_ai_foundry_runtime_contract_static.py
+
+      - name: Run Foundry static contracts
+        run: |
+          python -m unittest -v agent.tests.test_ai_foundry_runtime_contract_static
+
+      - name: Verify no stub implementations remain
+        run: |
+          ! grep -R "MCP runtime client is not enabled in this patch" agent/ai_control
+          ! grep -R "AI Tool execution requires a linked Foundry tool/toolbox" agent/ai_control
