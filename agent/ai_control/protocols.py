@@ -10,8 +10,8 @@ from typing import Any
 
 import requests
 
-from agent.ai_control.models import AIIntegrationModel
 from agent.ai_control.foundry import FoundryClient
+from agent.ai_control.models import AIIntegrationModel
 
 
 class ProtocolTestError(RuntimeError):
@@ -112,9 +112,9 @@ def test_mcp(integration: AIIntegrationModel) -> dict[str, Any]:
 
     async def probe():
         try:
+            import httpx2
             from mcp import Client
             from mcp.client.streamable_http import streamable_http_client
-            import httpx2
         except ImportError as exc:
             raise ProtocolTestError("MCP SDK v2 is not installed; install agent[ai]") from exc
 
@@ -159,8 +159,6 @@ def test_mcp(integration: AIIntegrationModel) -> dict[str, Any]:
                 return result
 
     return _run_async(probe)
-
-
 
 
 def test_a2a(integration: AIIntegrationModel) -> dict[str, Any]:
@@ -243,8 +241,6 @@ def test_ai_tool(integration: AIIntegrationModel) -> dict[str, Any]:
     if prompt:
         result["response"] = client.invoke_agent(agent_name, prompt)
     return result
-
-
 
 
 def test_integration(integration: AIIntegrationModel) -> dict[str, Any]:

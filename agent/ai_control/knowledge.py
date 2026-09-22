@@ -7,7 +7,6 @@ import json
 import mimetypes
 import os
 import re
-import shutil
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -142,7 +141,23 @@ def _extract_xlsx(path: Path) -> tuple[str, str, dict[str, Any]]:
 
 def extract_file(path: Path) -> tuple[str, str, dict[str, Any]]:
     ext = path.suffix.lower()
-    if ext in {".txt", ".md", ".log", ".py", ".js", ".ts", ".tsx", ".jsx", ".sql", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".conf"}:
+    if ext in {
+        ".txt",
+        ".md",
+        ".log",
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".sql",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".ini",
+        ".cfg",
+        ".conf",
+    }:
         return _extract_plain_text(path)
     if ext == ".json":
         return _extract_json(path)
@@ -175,7 +190,9 @@ def clean_text(content: str) -> tuple[str, dict[str, Any]]:
     }
 
 
-def build_reference_document(row: AIKnowledgeSourceModel, clean_content: str, extraction_meta: dict[str, Any]) -> str:
+def build_reference_document(
+    row: AIKnowledgeSourceModel, clean_content: str, extraction_meta: dict[str, Any]
+) -> str:
     provenance = {
         "source_file": row.original_filename,
         "sha256": row.sha256,

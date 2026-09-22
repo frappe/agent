@@ -57,6 +57,7 @@ application = Flask(__name__)
 
 # Agent AI Control Center: graphical control plane for Foundry assets and integrations.
 from agent.ai_control import ai_control
+
 application.register_blueprint(ai_control)
 
 

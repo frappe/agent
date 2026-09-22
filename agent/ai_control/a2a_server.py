@@ -3,6 +3,7 @@
 The sidecar exposes one orchestrator Agent Card. Internal Foundry agents and
 Copilot remain virtual/trusted participants managed by Agent AI Control Center.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,7 +68,9 @@ def build_app():
                 tags=["a2a", "foundry", "copilot", "frappe", "gpt-5.6-sol"],
                 input_modes=["text/plain"],
                 output_modes=["text/plain", "application/json"],
-                examples=["Inspect the ERP state and ask the maintenance agent to assess the operational impact."],
+                examples=[
+                    "Inspect the ERP state and ask the maintenance agent to assess the operational impact."
+                ],
             )
         ],
     )
@@ -91,7 +94,9 @@ def build_app():
                 source="a2a-client",
                 context_id=task.context_id,
             )
-            output_text = result.get("output_text") or __import__("json").dumps(result, ensure_ascii=False, default=str)
+            output_text = result.get("output_text") or __import__("json").dumps(
+                result, ensure_ascii=False, default=str
+            )
             await event_queue.enqueue_event(
                 new_text_artifact_update_event(
                     task_id=task.id,

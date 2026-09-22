@@ -230,15 +230,11 @@ class FoundryClient:
         if definition is None:
             raise RuntimeError(f"Foundry agent '{agent_name}' has no version definition")
         if not hasattr(definition, "tools"):
-            raise RuntimeError(
-                f"Foundry agent '{agent_name}' definition does not support function tools"
-            )
+            raise RuntimeError(f"Foundry agent '{agent_name}' definition does not support function tools")
 
         existing = list(getattr(definition, "tools", None) or [])
         retained = [
-            tool
-            for tool in existing
-            if not str(self._tool_name(tool) or "").startswith(managed_prefix)
+            tool for tool in existing if not str(self._tool_name(tool) or "").startswith(managed_prefix)
         ]
 
         managed = []
@@ -293,7 +289,9 @@ class FoundryClient:
             "output": outputs,
             "usage": self._to_dict(getattr(response, "usage", None)),
             "status": getattr(response, "status", None),
-            "agent_session_id": model_extra.get("agent_session_id") if isinstance(model_extra, dict) else None,
+            "agent_session_id": model_extra.get("agent_session_id")
+            if isinstance(model_extra, dict)
+            else None,
         }
 
     def invoke_agent(

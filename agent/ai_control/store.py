@@ -7,6 +7,10 @@ from typing import Any
 from peewee import IntegrityError
 
 from agent.ai_control.models import (
+    A2AContextModel,
+    A2AParticipantModel,
+    A2ATaskModel,
+    AIApprovalRequestModel,
     AIBindingModel,
     AIConfigurationModel,
     AIExecutionModel,
@@ -14,11 +18,7 @@ from agent.ai_control.models import (
     AIKnowledgeSourceModel,
     AIProductionToolModel,
     AIToolCallModel,
-    AIApprovalRequestModel,
     FoundryAssetModel,
-    A2AParticipantModel,
-    A2AContextModel,
-    A2ATaskModel,
 )
 
 SUPPORTED_INTEGRATION_TYPES = {"mcp", "a2a", "api", "webhook", "ai_tool"}
@@ -71,7 +71,13 @@ def update_integration(integration_id: int, payload: dict[str, Any]) -> AIIntegr
         if integration_type not in SUPPORTED_INTEGRATION_TYPES:
             raise ValueError(f"Unsupported integration type: {integration_type}")
         row.integration_type = integration_type
-    for source, target in (("status", "status"), ("project", "project"), ("endpoint", "endpoint"), ("auth_type", "auth_type"), ("secret_ref", "secret_ref")):
+    for source, target in (
+        ("status", "status"),
+        ("project", "project"),
+        ("endpoint", "endpoint"),
+        ("auth_type", "auth_type"),
+        ("secret_ref", "secret_ref"),
+    ):
         if source in payload:
             setattr(row, target, payload[source])
     if "config" in payload:
@@ -146,7 +152,10 @@ def list_executions(limit: int = 100, resource_type: str | None = None):
 
 
 def list_bindings():
-    return [row.as_dict() for row in AIBindingModel.select().order_by(AIBindingModel.source_ref, AIBindingModel.target_ref)]
+    return [
+        row.as_dict()
+        for row in AIBindingModel.select().order_by(AIBindingModel.source_ref, AIBindingModel.target_ref)
+    ]
 
 
 def create_binding(payload: dict[str, Any]) -> AIBindingModel:
@@ -195,7 +204,9 @@ def set_knowledge_approval(knowledge_id: int, approved: bool) -> AIKnowledgeSour
 
 
 def list_configurations(scope_type: str | None = None, scope_ref: str | None = None):
-    query = AIConfigurationModel.select().order_by(AIConfigurationModel.config_type, AIConfigurationModel.name)
+    query = AIConfigurationModel.select().order_by(
+        AIConfigurationModel.config_type, AIConfigurationModel.name
+    )
     if scope_type:
         query = query.where(AIConfigurationModel.scope_type == scope_type)
     if scope_ref:
@@ -245,7 +256,9 @@ def update_configuration(config_id: int, payload: dict[str, Any]) -> AIConfigura
 
 
 def list_production_tools(status: str | None = None):
-    query = AIProductionToolModel.select().order_by(AIProductionToolModel.category, AIProductionToolModel.display_name)
+    query = AIProductionToolModel.select().order_by(
+        AIProductionToolModel.category, AIProductionToolModel.display_name
+    )
     if status:
         query = query.where(AIProductionToolModel.status == status)
     return [row.as_dict() for row in query]
@@ -294,25 +307,75 @@ def topology():
     for asset in assets:
         node_id = f"asset:{asset['type']}:{asset['name']}"
         if node_id not in seen:
-            nodes.append({"id": node_id, "kind": asset["type"], "name": asset["name"], "status": asset.get("status"), "project": asset.get("project")})
+            nodes.append(
+                {
+                    "id": node_id,
+                    "kind": asset["type"],
+                    "name": asset["name"],
+                    "status": asset.get("status"),
+                    "project": asset.get("project"),
+                }
+            )
             seen.add(node_id)
     for item in integrations:
         node_id = f"integration:{item['type']}:{item['id']}"
         if node_id not in seen:
-            nodes.append({"id": node_id, "kind": item["type"], "name": item["name"], "status": item.get("status"), "project": item.get("project")})
+            nodes.append(
+                {
+                    "id": node_id,
+                    "kind": item["type"],
+                    "name": item["name"],
+                    "status": item.get("status"),
+                    "project": item.get("project"),
+                }
+            )
             seen.add(node_id)
     for item in list_knowledge():
         node_id = f"knowledge:{item['id']}"
-        nodes.append({"id": node_id, "kind": "knowledge", "name": item["title"], "status": item["status"], "project": None})
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "knowledge",
+                "name": item["title"],
+                "status": item["status"],
+                "project": None,
+            }
+        )
     for item in list_production_tools():
         node_id = f"production_tool:{item['id']}"
-        nodes.append({"id": node_id, "kind": "production_tool", "name": item["display_name"], "status": item["status"], "project": None})
+        nodes.append(
+            {
+                "id": node_id,
+                "kind": "production_tool",
+                "name": item["display_name"],
+                "status": item["status"],
+                "project": None,
+            }
+        )
     for item in list_a2a_participants():
         node_id = f"a2a_participant:{item['name']}"
         if node_id not in seen:
-            nodes.append({"id": node_id, "kind": "a2a_participant", "name": item["name"], "status": item["status"], "project": item.get("participant_type")})
+            nodes.append(
+                {
+                    "id": node_id,
+                    "kind": "a2a_participant",
+                    "name": item["name"],
+                    "status": item["status"],
+                    "project": item.get("participant_type"),
+                }
+            )
             seen.add(node_id)
-    edges = [{"id": b["id"], "source_type": b["source_type"], "source_ref": b["source_ref"], "target_type": b["target_type"], "target_ref": b["target_ref"], "status": b["status"]} for b in bindings]
+    edges = [
+        {
+            "id": b["id"],
+            "source_type": b["source_type"],
+            "source_ref": b["source_ref"],
+            "target_type": b["target_type"],
+            "target_ref": b["target_ref"],
+            "status": b["status"],
+        }
+        for b in bindings
+    ]
     return {"nodes": nodes, "edges": edges}
 
 
@@ -320,8 +383,11 @@ def topology():
 # A2A network persistence
 # ---------------------------------------------------------------------------
 
+
 def list_a2a_participants(participant_type: str | None = None, status: str | None = None):
-    query = A2AParticipantModel.select().order_by(A2AParticipantModel.participant_type, A2AParticipantModel.name)
+    query = A2AParticipantModel.select().order_by(
+        A2AParticipantModel.participant_type, A2AParticipantModel.name
+    )
     if participant_type:
         query = query.where(A2AParticipantModel.participant_type == participant_type)
     if status:
@@ -350,7 +416,9 @@ def upsert_a2a_participant(payload: dict[str, Any]) -> A2AParticipantModel:
         "last_seen_at": payload.get("last_seen_at") or datetime.datetime.now(),
         "modified_at": datetime.datetime.now(),
     }
-    row, created = A2AParticipantModel.get_or_create(name=name, defaults={**values, "created_at": datetime.datetime.now()})
+    row, created = A2AParticipantModel.get_or_create(
+        name=name, defaults={**values, "created_at": datetime.datetime.now()}
+    )
     if not created:
         for field, value in values.items():
             setattr(row, field, value)
@@ -375,12 +443,16 @@ def update_a2a_participant(name: str, payload: dict[str, Any]) -> A2AParticipant
 
 def get_a2a_context(context_id: str, participant_name: str) -> A2AContextModel | None:
     return A2AContextModel.get_or_none(
-        (A2AContextModel.context_id == context_id) &
-        (A2AContextModel.participant_name == participant_name)
+        (A2AContextModel.context_id == context_id) & (A2AContextModel.participant_name == participant_name)
     )
 
 
-def set_a2a_context(context_id: str, participant_name: str, remote_context_id: str | None, metadata: dict[str, Any] | None = None) -> A2AContextModel:
+def set_a2a_context(
+    context_id: str,
+    participant_name: str,
+    remote_context_id: str | None,
+    metadata: dict[str, Any] | None = None,
+) -> A2AContextModel:
     row = get_a2a_context(context_id, participant_name)
     now = datetime.datetime.now()
     if row is None:
@@ -400,7 +472,14 @@ def set_a2a_context(context_id: str, participant_name: str, remote_context_id: s
     return row
 
 
-def create_a2a_task(task_id: str, context_id: str, source: str, target: str | None, input_data: dict[str, Any], state: str = "TASK_STATE_SUBMITTED") -> A2ATaskModel:
+def create_a2a_task(
+    task_id: str,
+    context_id: str,
+    source: str,
+    target: str | None,
+    input_data: dict[str, Any],
+    state: str = "TASK_STATE_SUBMITTED",
+) -> A2ATaskModel:
     now = datetime.datetime.now()
     return A2ATaskModel.create(
         task_id=task_id,
@@ -416,7 +495,15 @@ def create_a2a_task(task_id: str, context_id: str, source: str, target: str | No
     )
 
 
-def update_a2a_task(task_id: str, *, state: str | None = None, result: dict[str, Any] | None = None, trace: list[dict[str, Any]] | None = None, error: str | None = None, ended: bool = False) -> A2ATaskModel:
+def update_a2a_task(
+    task_id: str,
+    *,
+    state: str | None = None,
+    result: dict[str, Any] | None = None,
+    trace: list[dict[str, Any]] | None = None,
+    error: str | None = None,
+    ended: bool = False,
+) -> A2ATaskModel:
     row = A2ATaskModel.get(A2ATaskModel.task_id == task_id)
     if state is not None:
         row.state = state
@@ -532,7 +619,9 @@ def update_execution(row: AIExecutionModel, *, status=None, result=None, ended=F
     return row
 
 
-def create_tool_call(*, execution_id, agent_name, response_id, conversation_id, call_id, tool_id, tool_name, arguments):
+def create_tool_call(
+    *, execution_id, agent_name, response_id, conversation_id, call_id, tool_id, tool_name, arguments
+):
     return AIToolCallModel.create(
         execution_id=int(execution_id),
         agent_name=agent_name,
@@ -572,7 +661,18 @@ def list_tool_calls(execution_id=None, limit=500):
     return [row.as_dict() for row in query.limit(max(1, min(int(limit), 2000)))]
 
 
-def create_approval_request(*, execution_id, tool_call_id, agent_name, tool_name, risk_level, approval_policy, request_data, requested_by=None, expires_at=None):
+def create_approval_request(
+    *,
+    execution_id,
+    tool_call_id,
+    agent_name,
+    tool_name,
+    risk_level,
+    approval_policy,
+    request_data,
+    requested_by=None,
+    expires_at=None,
+):
     return AIApprovalRequestModel.create(
         execution_id=int(execution_id),
         tool_call_id=int(tool_call_id),

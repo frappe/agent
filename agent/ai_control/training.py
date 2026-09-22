@@ -33,7 +33,11 @@ def create_session(payload: dict[str, Any]) -> AITrainingSessionModel:
 
 
 def list_messages(session_id: int):
-    query = AITrainingMessageModel.select().where(AITrainingMessageModel.session_id == session_id).order_by(AITrainingMessageModel.id)
+    query = (
+        AITrainingMessageModel.select()
+        .where(AITrainingMessageModel.session_id == session_id)
+        .order_by(AITrainingMessageModel.id)
+    )
     return [row.as_dict() for row in query]
 
 

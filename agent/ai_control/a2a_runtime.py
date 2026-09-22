@@ -4,6 +4,7 @@ Agent owns the Foundry control plane and A2A network. GPT-5.6 Sol performs
 routing/delegation through Foundry Responses function calls. Copilot participates
 only as the Frappe/Bench specialist; it is not a generic Agent gateway.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -92,7 +93,11 @@ def _explicit_models_from_active_configurations() -> list[tuple[str, str]]:
             continue
         purpose = str(data.get("purpose") or data.get("role") or "").strip().lower()
         scope_ref = str(record.get("scope_ref") or "").strip().lower()
-        if purpose not in {"a2a", "a2a_orchestrator"} and scope_ref not in {"a2a", "a2a-orchestrator", "a2a_orchestrator"}:
+        if purpose not in {"a2a", "a2a_orchestrator"} and scope_ref not in {
+            "a2a",
+            "a2a-orchestrator",
+            "a2a_orchestrator",
+        }:
             continue
         for key in keys:
             value = str(data.get(key) or "").strip()
@@ -120,7 +125,9 @@ def resolve_orchestrator_model() -> dict[str, str]:
         )
 
     matches = [asset for asset in list_assets("model") if _asset_is_gpt56_sol(asset)]
-    deployment_names = sorted({str(asset.get("name") or "").strip() for asset in matches if asset.get("name")})
+    deployment_names = sorted(
+        {str(asset.get("name") or "").strip() for asset in matches if asset.get("name")}
+    )
     if len(deployment_names) == 1:
         return {"deployment": deployment_names[0], "source": "Foundry synchronized model inventory"}
     if not deployment_names:
@@ -159,7 +166,9 @@ def sync_participants() -> dict[str, Any]:
             {
                 "name": asset["name"],
                 "participant_type": "foundry_agent",
-                "status": "Active" if str(asset.get("status") or "").lower() not in {"disabled", "deleted", "failed"} else "Unavailable",
+                "status": "Active"
+                if str(asset.get("status") or "").lower() not in {"disabled", "deleted", "failed"}
+                else "Unavailable",
                 "source_ref": asset["name"],
                 "agent_card": _foundry_participant_card(asset),
                 "config": {"project": asset.get("project"), "foundry_asset_id": asset.get("id")},
@@ -217,7 +226,9 @@ def _safe_tool_name(name: str, used: set[str]) -> str:
     return candidate
 
 
-def participant_tools(participants: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+def participant_tools(
+    participants: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     tools: list[dict[str, Any]] = []
     mapping: dict[str, dict[str, Any]] = {}
     used: set[str] = set()
@@ -281,7 +292,9 @@ def _delegate_foundry(participant: dict[str, Any], message: str, context_id: str
     return result
 
 
-def _delegate_copilot(participant: dict[str, Any], message: str, context_id: str, task_id: str) -> dict[str, Any]:
+def _delegate_copilot(
+    participant: dict[str, Any], message: str, context_id: str, task_id: str
+) -> dict[str, Any]:
     return CopilotA2AClient().send_message(
         message=message,
         context_id=context_id,
@@ -291,7 +304,9 @@ def _delegate_copilot(participant: dict[str, Any], message: str, context_id: str
     )
 
 
-def delegate(participant: dict[str, Any], message: str, context_id: str, parent_task_id: str) -> dict[str, Any]:
+def delegate(
+    participant: dict[str, Any], message: str, context_id: str, parent_task_id: str
+) -> dict[str, Any]:
     delegation_id = str(uuid.uuid4())
     create_a2a_task(
         delegation_id,
@@ -307,13 +322,17 @@ def delegate(participant: dict[str, Any], message: str, context_id: str, parent_
         elif participant["participant_type"] == "copilot":
             result = _delegate_copilot(participant, message, context_id, delegation_id)
         elif participant["participant_type"] == "remote_a2a":
-            raise RuntimeError("remote_a2a participants require explicit trust/enablement and are not auto-routed yet")
+            raise RuntimeError(
+                "remote_a2a participants require explicit trust/enablement and are not auto-routed yet"
+            )
         else:
             raise RuntimeError(f"unsupported participant type: {participant['participant_type']}")
         update_a2a_task(delegation_id, state="TASK_STATE_COMPLETED", result=result, ended=True)
         return {"delegation_task_id": delegation_id, "participant": participant["name"], "result": result}
     except Exception as exc:
-        update_a2a_task(delegation_id, state="TASK_STATE_FAILED", error=str(exc), result={"error": str(exc)}, ended=True)
+        update_a2a_task(
+            delegation_id, state="TASK_STATE_FAILED", error=str(exc), result={"error": str(exc)}, ended=True
+        )
         raise
 
 
@@ -384,7 +403,9 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
         while True:
             step += 1
             if max_steps is not None and step > max_steps:
-                raise RuntimeError(f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}")
+                raise RuntimeError(
+                    f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}"
+                )
 
             response = FoundryClient().responses_with_tools(
                 model=model_info["deployment"],
@@ -395,7 +416,9 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
             )
             response_id = str(response.get("id") or "")
             if response_id and response_id in seen_response_ids:
-                raise RuntimeError(f"Foundry Responses returned duplicate response id {response_id}; orchestration stopped")
+                raise RuntimeError(
+                    f"Foundry Responses returned duplicate response id {response_id}; orchestration stopped"
+                )
             if response_id:
                 seen_response_ids.add(response_id)
 
@@ -421,7 +444,9 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
                     "usage": response.get("usage"),
                     "trace": trace,
                 }
-                update_a2a_task(root_task_id, state="TASK_STATE_COMPLETED", result=result, trace=trace, ended=True)
+                update_a2a_task(
+                    root_task_id, state="TASK_STATE_COMPLETED", result=result, trace=trace, ended=True
+                )
                 finish_execution(execution, "Success", result, (time.monotonic() - started) * 1000)
                 return result
 
@@ -469,7 +494,9 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
             "error": str(exc),
             "trace": trace,
         }
-        update_a2a_task(root_task_id, state="TASK_STATE_FAILED", result=failure, trace=trace, error=str(exc), ended=True)
+        update_a2a_task(
+            root_task_id, state="TASK_STATE_FAILED", result=failure, trace=trace, error=str(exc), ended=True
+        )
         finish_execution(execution, "Failure", failure, (time.monotonic() - started) * 1000)
         raise
 
@@ -492,7 +519,9 @@ def status() -> dict[str, Any]:
             "host": sidecar_host,
             "port": sidecar_port,
             "public_url": public_url,
-            "agent_card": f"{public_url}/.well-known/agent-card.json" if public_url else f"http://{sidecar_host}:{sidecar_port}/.well-known/agent-card.json",
+            "agent_card": f"{public_url}/.well-known/agent-card.json"
+            if public_url
+            else f"http://{sidecar_host}:{sidecar_port}/.well-known/agent-card.json",
         },
         "orchestrator": model,
         "orchestrator_error": model_error,
