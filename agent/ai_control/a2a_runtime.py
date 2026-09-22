@@ -136,7 +136,8 @@ def resolve_orchestrator_model() -> dict[str, str]:
             "Set A2A_ORCHESTRATOR_MODEL, create an active A2A-scoped AIConfiguration, or sync Foundry models."
         )
     raise RuntimeError(
-        "Multiple synchronized deployments identify as gpt-5.6-sol; configure A2A_ORCHESTRATOR_MODEL explicitly: "
+        "Multiple synchronized deployments identify as gpt-5.6-sol; "
+        "configure A2A_ORCHESTRATOR_MODEL explicitly: "
         + ", ".join(deployment_names)
     )
 
@@ -354,7 +355,152 @@ def _configured_max_steps() -> int | None:
     return value
 
 
-def send_message(message: str, *, source: str = "user", context_id: str | None = None) -> dict[str, Any]:
+def _orchestration_instructions() -> str:
+    return (
+        "You are GPT-5.6 Sol, the orchestration core of the Alazab A2A network. "
+        "Route work only through the participant tools supplied to you. "
+        "Each participant has a strict scope. Copilot is the Frappe/ERPNext/Bench specialist. "
+        "Foundry agents handle their own declared specialties. Do not fabricate a participant result. "
+        "Delegate whenever the task requires participant-owned data or execution, inspect returned outputs, "
+        "delegate again when necessary, then produce one final answer grounded in those outputs."
+    )
+
+
+def _delegation_outputs(
+    calls: list[dict[str, Any]],
+    tool_map: dict[str, dict[str, Any]],
+    context_id: str,
+    root_task_id: str,
+    step: int,
+    trace: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    outputs: list[dict[str, Any]] = []
+    for call in calls:
+        tool_name = str(call.get("name") or "")
+        call_id = str(call.get("call_id") or "")
+        if tool_name not in tool_map:
+            raise RuntimeError(f"GPT requested unknown A2A participant tool: {tool_name}")
+        args = _json_object(call.get("arguments") or "{}")
+        delegated_message = str(args.get("message") or "").strip()
+        if not delegated_message:
+            raise ValueError(f"{tool_name} requires message")
+        participant = tool_map[tool_name]
+        delegated = delegate(participant, delegated_message, context_id, root_task_id)
+        event = {
+            "step": step,
+            "type": "delegation",
+            "tool": tool_name,
+            "call_id": call_id,
+            "participant": participant["name"],
+            "delegation_task_id": delegated["delegation_task_id"],
+            "request": delegated_message,
+            "result": delegated["result"],
+        }
+        trace.append(event)
+        append_a2a_task_trace(root_task_id, event)
+        outputs.append(
+            {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": _json(delegated),
+            }
+        )
+    return outputs
+
+
+def _run_orchestration_loop(
+    *,
+    model_info: dict[str, str],
+    tools: list[dict[str, Any]],
+    tool_map: dict[str, dict[str, Any]],
+    context_id: str,
+    root_task_id: str,
+    execution,
+    started: float,
+    text: str,
+    trace: list[dict[str, Any]],
+) -> dict[str, Any]:
+    max_steps = _configured_max_steps()
+    step = 0
+    previous_response_id: str | None = None
+    next_input: Any = text
+    seen_response_ids: set[str] = set()
+    instructions = _orchestration_instructions()
+
+    while True:
+        step += 1
+        if max_steps is not None and step > max_steps:
+            raise RuntimeError(
+                f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}"
+            )
+
+        response = FoundryClient().responses_with_tools(
+            model=model_info["deployment"],
+            input_items=next_input,
+            tools=tools,
+            instructions=instructions,
+            previous_response_id=previous_response_id,
+        )
+        response_id = str(response.get("id") or "")
+        if response_id and response_id in seen_response_ids:
+            raise RuntimeError(
+                f"Foundry Responses returned duplicate response id {response_id}; "
+                "orchestration stopped"
+            )
+        if response_id:
+            seen_response_ids.add(response_id)
+
+        event = {
+            "step": step,
+            "type": "model_response",
+            "response_id": response.get("id"),
+            "model": response.get("model"),
+            "usage": response.get("usage"),
+            "output_text": response.get("output_text"),
+        }
+        trace.append(event)
+        append_a2a_task_trace(root_task_id, event)
+
+        calls = _function_calls(response)
+        if not calls:
+            result = {
+                "task_id": root_task_id,
+                "context_id": context_id,
+                "orchestrator": model_info,
+                "response_id": response.get("id"),
+                "output_text": response.get("output_text") or "",
+                "usage": response.get("usage"),
+                "trace": trace,
+            }
+            update_a2a_task(
+                root_task_id,
+                state="TASK_STATE_COMPLETED",
+                result=result,
+                trace=trace,
+                ended=True,
+            )
+            finish_execution(execution, "Success", result, (time.monotonic() - started) * 1000)
+            return result
+
+        next_input = _delegation_outputs(
+            calls,
+            tool_map,
+            context_id,
+            root_task_id,
+            step,
+            trace,
+        )
+        previous_response_id = response.get("id")
+        if not previous_response_id:
+            raise RuntimeError("Foundry function call response did not include response id")
+
+
+def send_message(
+    message: str,
+    *,
+    source: str = "user",
+    context_id: str | None = None,
+) -> dict[str, Any]:
     text = str(message or "").strip()
     if not text:
         raise ValueError("message is required")
@@ -369,7 +515,7 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
 
     context_id = str(context_id or uuid.uuid4())
     root_task_id = str(uuid.uuid4())
-    root = create_a2a_task(
+    create_a2a_task(
         root_task_id,
         context_id,
         source=source,
@@ -385,107 +531,19 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
     )
     started = time.monotonic()
     trace: list[dict[str, Any]] = []
-    max_steps = _configured_max_steps()
-    step = 0
-    previous_response_id: str | None = None
-    next_input: Any = text
-    seen_response_ids: set[str] = set()
-
-    instructions = (
-        "You are GPT-5.6 Sol, the orchestration core of the Alazab A2A network. "
-        "Route work only through the participant tools supplied to you. Each participant has a strict scope. "
-        "Copilot is the Frappe/ERPNext/Bench specialist. Foundry agents handle their own declared specialties. "
-        "Do not fabricate a participant result. Delegate whenever the task requires participant-owned data or execution, "
-        "inspect returned outputs, delegate again when necessary, then produce one final answer grounded in those outputs."
-    )
 
     try:
-        while True:
-            step += 1
-            if max_steps is not None and step > max_steps:
-                raise RuntimeError(
-                    f"A2A orchestration reached configured A2A_ORCHESTRATOR_MAX_STEPS={max_steps}"
-                )
-
-            response = FoundryClient().responses_with_tools(
-                model=model_info["deployment"],
-                input_items=next_input,
-                tools=tools,
-                instructions=instructions,
-                previous_response_id=previous_response_id,
-            )
-            response_id = str(response.get("id") or "")
-            if response_id and response_id in seen_response_ids:
-                raise RuntimeError(
-                    f"Foundry Responses returned duplicate response id {response_id}; orchestration stopped"
-                )
-            if response_id:
-                seen_response_ids.add(response_id)
-
-            event = {
-                "step": step,
-                "type": "model_response",
-                "response_id": response.get("id"),
-                "model": response.get("model"),
-                "usage": response.get("usage"),
-                "output_text": response.get("output_text"),
-            }
-            trace.append(event)
-            append_a2a_task_trace(root_task_id, event)
-
-            calls = _function_calls(response)
-            if not calls:
-                result = {
-                    "task_id": root_task_id,
-                    "context_id": context_id,
-                    "orchestrator": model_info,
-                    "response_id": response.get("id"),
-                    "output_text": response.get("output_text") or "",
-                    "usage": response.get("usage"),
-                    "trace": trace,
-                }
-                update_a2a_task(
-                    root_task_id, state="TASK_STATE_COMPLETED", result=result, trace=trace, ended=True
-                )
-                finish_execution(execution, "Success", result, (time.monotonic() - started) * 1000)
-                return result
-
-            function_outputs = []
-            for call in calls:
-                tool_name = str(call.get("name") or "")
-                call_id = str(call.get("call_id") or "")
-                if tool_name not in tool_map:
-                    raise RuntimeError(f"GPT requested unknown A2A participant tool: {tool_name}")
-                args = _json_object(call.get("arguments") or "{}")
-                delegated_message = str(args.get("message") or "").strip()
-                if not delegated_message:
-                    raise ValueError(f"{tool_name} requires message")
-                participant = tool_map[tool_name]
-                delegated = delegate(participant, delegated_message, context_id, root_task_id)
-                delegation_event = {
-                    "step": step,
-                    "type": "delegation",
-                    "tool": tool_name,
-                    "call_id": call_id,
-                    "participant": participant["name"],
-                    "delegation_task_id": delegated["delegation_task_id"],
-                    "request": delegated_message,
-                    "result": delegated["result"],
-                }
-                trace.append(delegation_event)
-                append_a2a_task_trace(root_task_id, delegation_event)
-                function_outputs.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": call_id,
-                        "output": _json(delegated),
-                    }
-                )
-
-            previous_response_id = response.get("id")
-            if not previous_response_id:
-                raise RuntimeError("Foundry function call response did not include response id")
-            next_input = function_outputs
+        return _run_orchestration_loop(
+            model_info=model_info,
+            tools=tools,
+            tool_map=tool_map,
+            context_id=context_id,
+            root_task_id=root_task_id,
+            execution=execution,
+            started=started,
+            text=text,
+            trace=trace,
+        )
     except Exception as exc:
         failure = {
             "task_id": root_task_id,
@@ -495,7 +553,12 @@ def send_message(message: str, *, source: str = "user", context_id: str | None =
             "trace": trace,
         }
         update_a2a_task(
-            root_task_id, state="TASK_STATE_FAILED", result=failure, trace=trace, error=str(exc), ended=True
+            root_task_id,
+            state="TASK_STATE_FAILED",
+            result=failure,
+            trace=trace,
+            error=str(exc),
+            ended=True,
         )
         finish_execution(execution, "Failure", failure, (time.monotonic() - started) * 1000)
         raise

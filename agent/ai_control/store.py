@@ -298,83 +298,95 @@ def update_production_tool(tool_id: int, payload: dict[str, Any]) -> AIProductio
     return row
 
 
+def _append_topology_node(
+    nodes: list[dict[str, Any]],
+    seen: set[str],
+    node: dict[str, Any],
+) -> None:
+    if node["id"] in seen:
+        return
+    nodes.append(node)
+    seen.add(node["id"])
+
+
 def topology():
     assets = list_assets()
     integrations = list_integrations()
     bindings = list_bindings()
-    nodes = []
-    seen = set()
+    nodes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
     for asset in assets:
-        node_id = f"asset:{asset['type']}:{asset['name']}"
-        if node_id not in seen:
-            nodes.append(
-                {
-                    "id": node_id,
-                    "kind": asset["type"],
-                    "name": asset["name"],
-                    "status": asset.get("status"),
-                    "project": asset.get("project"),
-                }
-            )
-            seen.add(node_id)
-    for item in integrations:
-        node_id = f"integration:{item['type']}:{item['id']}"
-        if node_id not in seen:
-            nodes.append(
-                {
-                    "id": node_id,
-                    "kind": item["type"],
-                    "name": item["name"],
-                    "status": item.get("status"),
-                    "project": item.get("project"),
-                }
-            )
-            seen.add(node_id)
-    for item in list_knowledge():
-        node_id = f"knowledge:{item['id']}"
-        nodes.append(
+        _append_topology_node(
+            nodes,
+            seen,
             {
-                "id": node_id,
+                "id": f"asset:{asset['type']}:{asset['name']}",
+                "kind": asset["type"],
+                "name": asset["name"],
+                "status": asset.get("status"),
+                "project": asset.get("project"),
+            },
+        )
+    for item in integrations:
+        _append_topology_node(
+            nodes,
+            seen,
+            {
+                "id": f"integration:{item['type']}:{item['id']}",
+                "kind": item["type"],
+                "name": item["name"],
+                "status": item.get("status"),
+                "project": item.get("project"),
+            },
+        )
+    for item in list_knowledge():
+        _append_topology_node(
+            nodes,
+            seen,
+            {
+                "id": f"knowledge:{item['id']}",
                 "kind": "knowledge",
                 "name": item["title"],
                 "status": item["status"],
                 "project": None,
-            }
+            },
         )
     for item in list_production_tools():
-        node_id = f"production_tool:{item['id']}"
-        nodes.append(
+        _append_topology_node(
+            nodes,
+            seen,
             {
-                "id": node_id,
+                "id": f"production_tool:{item['id']}",
                 "kind": "production_tool",
                 "name": item["display_name"],
                 "status": item["status"],
                 "project": None,
-            }
+            },
         )
     for item in list_a2a_participants():
-        node_id = f"a2a_participant:{item['name']}"
-        if node_id not in seen:
-            nodes.append(
-                {
-                    "id": node_id,
-                    "kind": "a2a_participant",
-                    "name": item["name"],
-                    "status": item["status"],
-                    "project": item.get("participant_type"),
-                }
-            )
-            seen.add(node_id)
+        _append_topology_node(
+            nodes,
+            seen,
+            {
+                "id": f"a2a_participant:{item['name']}",
+                "kind": "a2a_participant",
+                "name": item["name"],
+                "status": item["status"],
+                "project": item.get("participant_type"),
+            },
+        )
+
     edges = [
         {
-            "id": b["id"],
-            "source_type": b["source_type"],
-            "source_ref": b["source_ref"],
-            "target_type": b["target_type"],
-            "target_ref": b["target_ref"],
-            "status": b["status"],
+            "id": binding["id"],
+            "source_type": binding["source_type"],
+            "source_ref": binding["source_ref"],
+            "target_type": binding["target_type"],
+            "target_ref": binding["target_ref"],
+            "status": binding["status"],
         }
-        for b in bindings
+        for binding in bindings
     ]
     return {"nodes": nodes, "edges": edges}
 

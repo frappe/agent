@@ -6,12 +6,14 @@ import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import requests
 
 from agent.ai_control.foundry import FoundryClient
-from agent.ai_control.models import AIIntegrationModel
+
+if TYPE_CHECKING:
+    from agent.ai_control.models import AIIntegrationModel
 
 
 class ProtocolTestError(RuntimeError):
@@ -105,60 +107,58 @@ def test_webhook(integration: AIIntegrationModel) -> dict[str, Any]:
     }
 
 
+def _mcp_value(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "to_dict"):
+        return value.to_dict()
+    return {"name": getattr(value, "name", str(value))}
+
+
+async def _probe_mcp(integration: AIIntegrationModel) -> dict[str, Any]:
+    try:
+        import httpx2
+        from mcp import Client
+        from mcp.client.streamable_http import streamable_http_client
+    except ImportError as exc:
+        raise ProtocolTestError("MCP SDK v2 is not installed; install agent[ai]") from exc
+
+    headers = _headers(integration)
+    config = _config(integration)
+    timeout = float(config.get("timeout_seconds") or 30)
+    started = time.monotonic()
+    async with httpx2.AsyncClient(headers=headers, timeout=timeout) as http_client:
+        transport = streamable_http_client(integration.endpoint, http_client=http_client)
+        async with Client(transport) as client:
+            listed = await client.list_tools()
+            raw_tools = getattr(listed, "tools", listed) or []
+            tools = [_mcp_value(tool) for tool in raw_tools]
+            server_info = (
+                _mcp_value(client.server_info)
+                if getattr(client, "server_info", None)
+                else None
+            )
+            result = {
+                "ok": True,
+                "elapsed_ms": round((time.monotonic() - started) * 1000, 3),
+                "protocol_version": str(getattr(client, "protocol_version", "") or ""),
+                "server_info": server_info,
+                "tool_count": len(tools),
+                "tools": tools,
+            }
+
+            test_tool = str(config.get("test_tool") or "").strip()
+            if test_tool:
+                call = await client.call_tool(test_tool, config.get("test_arguments") or {})
+                result["test_call"] = _mcp_value(call)
+            return result
+
+
 def test_mcp(integration: AIIntegrationModel) -> dict[str, Any]:
     """Connect with the official MCP Python SDK and verify tool discovery/call."""
     if not integration.endpoint:
         raise ProtocolTestError("MCP endpoint is required")
-
-    async def probe():
-        try:
-            import httpx2
-            from mcp import Client
-            from mcp.client.streamable_http import streamable_http_client
-        except ImportError as exc:
-            raise ProtocolTestError("MCP SDK v2 is not installed; install agent[ai]") from exc
-
-        headers = _headers(integration)
-        config = _config(integration)
-        timeout = float(config.get("timeout_seconds") or 30)
-        started = time.monotonic()
-        async with httpx2.AsyncClient(headers=headers, timeout=timeout) as http_client:
-            transport = streamable_http_client(integration.endpoint, http_client=http_client)
-            async with Client(transport) as client:
-                listed = await client.list_tools()
-                raw_tools = getattr(listed, "tools", listed) or []
-                tools = []
-                for tool in raw_tools:
-                    if hasattr(tool, "model_dump"):
-                        tools.append(tool.model_dump())
-                    elif hasattr(tool, "to_dict"):
-                        tools.append(tool.to_dict())
-                    else:
-                        tools.append({"name": getattr(tool, "name", str(tool))})
-
-                result = {
-                    "ok": True,
-                    "elapsed_ms": round((time.monotonic() - started) * 1000, 3),
-                    "protocol_version": str(getattr(client, "protocol_version", "") or ""),
-                    "server_info": (
-                        getattr(client.server_info, "model_dump", lambda: {})()
-                        if getattr(client, "server_info", None)
-                        else None
-                    ),
-                    "tool_count": len(tools),
-                    "tools": tools,
-                }
-
-                test_tool = str(config.get("test_tool") or "").strip()
-                if test_tool:
-                    call = await client.call_tool(test_tool, config.get("test_arguments") or {})
-                    if hasattr(call, "model_dump"):
-                        result["test_call"] = call.model_dump()
-                    else:
-                        result["test_call"] = {"result": str(call)}
-                return result
-
-    return _run_async(probe)
+    return _run_async(lambda: _probe_mcp(integration))
 
 
 def test_a2a(integration: AIIntegrationModel) -> dict[str, Any]:

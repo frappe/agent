@@ -16,6 +16,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Job as RQJob
 from rq.job import JobStatus
 
+from agent.ai_control import ai_control
 from agent.backup_log import InvalidRange, parse_range
 from agent.base import AgentException
 from agent.builder import ImageBuilder, PatchImageBuilder
@@ -56,8 +57,6 @@ if TYPE_CHECKING:
 application = Flask(__name__)
 
 # Agent AI Control Center: graphical control plane for Foundry assets and integrations.
-from agent.ai_control import ai_control
-
 application.register_blueprint(ai_control)
 
 

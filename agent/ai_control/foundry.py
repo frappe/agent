@@ -386,5 +386,8 @@ class FoundryClient:
                 "vector_stores": True,
             },
             "integration_registry_types": ["mcp", "a2a", "api", "webhook", "ai_tool"],
-            "note": "Implemented/configured metadata only. Live connectivity is established by sync/test/channel operations.",
+            "note": (
+                "Implemented/configured metadata only. Live connectivity is established "
+                "by sync/test/channel operations."
+            ),
         }

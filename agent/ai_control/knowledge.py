@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import html
@@ -52,7 +53,7 @@ def save_upload(file_storage) -> AIKnowledgeSourceModel:
 
     mime_type = file_storage.mimetype or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
     size_bytes = final_path.stat().st_size
-    row = AIKnowledgeSourceModel.create(
+    return AIKnowledgeSourceModel.create(
         title=Path(original_name).stem or original_name,
         original_filename=original_name,
         stored_filename=stored_name,
@@ -63,7 +64,6 @@ def save_upload(file_storage) -> AIKnowledgeSourceModel:
         raw_path=str(final_path),
         metadata_json=json.dumps({"upload_name": original_name}, ensure_ascii=False),
     )
-    return row
 
 
 def _extract_plain_text(path: Path) -> tuple[str, str, dict[str, Any]]:
@@ -115,7 +115,7 @@ def _extract_docx(path: Path) -> tuple[str, str, dict[str, Any]]:
     for table in document.tables:
         for row in table.rows:
             tables.append(" | ".join(cell.text for cell in row.cells))
-    content = "\n".join(paragraphs + (["", "## Tables"] + tables if tables else []))
+    content = "\n".join(paragraphs + (["", "## Tables", *tables] if tables else []))
     return content, "python-docx", {"paragraphs": len(paragraphs), "table_rows": len(tables)}
 
 
@@ -249,10 +249,8 @@ def inspect_and_process(row: AIKnowledgeSourceModel) -> AIKnowledgeSourceModel:
 
 def mark_failed(row: AIKnowledgeSourceModel, error: Exception) -> AIKnowledgeSourceModel:
     metadata = {}
-    try:
+    with contextlib.suppress(json.JSONDecodeError):
         metadata = json.loads(row.metadata_json or "{}")
-    except json.JSONDecodeError:
-        pass
     metadata["processing_error"] = str(error)
     row.metadata_json = json.dumps(metadata, ensure_ascii=False)
     row.inspection_status = "Failed"
