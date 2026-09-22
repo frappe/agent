@@ -10,7 +10,15 @@ AI = ROOT / "agent" / "ai_control"
 
 class FoundryRuntimeContractTests(unittest.TestCase):
     def test_modified_ai_modules_parse(self):
-        for name in ("foundry.py", "execution.py", "protocols.py", "models.py", "store.py", "routes.py", "mcp_server.py"):
+        for name in (
+            "foundry.py",
+            "execution.py",
+            "protocols.py",
+            "models.py",
+            "store.py",
+            "routes.py",
+            "mcp_server.py",
+        ):
             ast.parse((AI / name).read_text(encoding="utf-8"), filename=name)
 
     def test_foundry_uses_persisted_agent_responses_and_function_tools(self):
