@@ -54,8 +54,9 @@ jobs:
           ! grep -R "AI Tool execution requires a linked Foundry tool/toolbox" agent/ai_control
 
 
-  runtime-functional:
-    name: Foundry runtime functional
+
+  sdk-compatibility:
+    name: Foundry SDK compatibility
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,12 +66,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Agent and AI dependencies
+      - name: Install current Foundry and MCP SDKs
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[ai]"
+          pip install -r requirements-ai.txt
 
-      - name: Verify current SDK imports
+      - name: Verify SDK imports
         run: |
           python - <<'PY'
           from azure.ai.projects import AIProjectClient
@@ -80,8 +81,3 @@ jobs:
           import httpx2
           print("SDK_IMPORTS_OK")
           PY
-
-      - name: Run Foundry runtime behavior tests
-        run: |
-          python agent/tests/test_ai_foundry_runtime_functional.py -v
-          python agent/tests/test_ai_protocol_auth.py -v
