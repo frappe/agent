@@ -16,18 +16,33 @@ jobs:
         with:
           python-version: "3.14"
 
-      - name: Install uv
-        run: pip install uv
-
-      - name: Resolve latest MariaDB binlog indexer on Python 3.14
+      - name: Install compatibility candidates
         run: |
-          uv pip install --system "mariadb-binlog-indexer"
+          python -m pip install --upgrade pip
+          pip install "duckdb==1.5.5"
+          pip install --no-deps "mariadb-binlog-indexer==0.0.20"
 
-      - name: Verify installed metadata
+      - name: Verify package metadata and imports
         run: |
           python - <<'PY'
-          from importlib.metadata import version
+          from importlib.metadata import distribution, version
           import duckdb
+          dist = distribution("mariadb-binlog-indexer")
           print("mariadb-binlog-indexer", version("mariadb-binlog-indexer"))
+          print("Requires-Dist:")
+          for req in dist.requires or []:
+              print(" -", req)
           print("duckdb", duckdb.__version__)
+          candidates = [
+              "mariadb_binlog_indexer",
+              "binlog_indexer",
+          ]
+          imported = []
+          for name in candidates:
+              try:
+                  __import__(name)
+                  imported.append(name)
+              except ModuleNotFoundError:
+                  pass
+          print("imported", imported)
           PY
