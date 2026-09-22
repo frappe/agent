@@ -29,11 +29,20 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Ruff
+        run: pip install ruff
+
       - name: Compile AI runtime
         run: |
           python -m compileall -q agent/ai_control
           python -m compileall -q agent/patches/expand_ai_control_center_foundry_runtime_v4.py
           python -m compileall -q agent/tests/test_ai_foundry_runtime_contract_static.py
+          python -m compileall -q agent/tests/test_ai_foundry_runtime_functional.py
+          python -m compileall -q agent/tests/test_ai_protocol_auth.py
+
+      - name: Lint new Foundry runtime files
+        run: |
+          ruff check             agent/ai_control/execution.py             agent/tests/test_ai_foundry_runtime_contract_static.py             agent/tests/test_ai_foundry_runtime_functional.py             agent/tests/test_ai_protocol_auth.py             agent/patches/expand_ai_control_center_foundry_runtime_v4.py
 
       - name: Run Foundry static contracts
         run: |
