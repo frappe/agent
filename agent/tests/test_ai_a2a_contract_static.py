@@ -12,7 +12,7 @@ class A2AContractStaticTests(unittest.TestCase):
         source = (AI / "models.py").read_text(encoding="utf-8")
         for name in ("A2AParticipantModel", "A2AContextModel", "A2ATaskModel"):
             self.assertIn(f"class {name}", source)
-            table_list = source[source.index("AI_CONTROL_TABLES ="):]
+            table_list = source[source.index("AI_CONTROL_TABLES =") :]
             self.assertIn(name, table_list)
 
     def test_agent_routes_use_a2a_not_generic_copilot_gateway(self):
@@ -54,8 +54,8 @@ class A2AContractStaticTests(unittest.TestCase):
     def test_a2a_sidecar_is_v1_and_local_by_default(self):
         source = (AI / "a2a_server.py").read_text(encoding="utf-8")
         requirements = (AGENT_ROOT / "requirements-a2a.txt").read_text(encoding="utf-8")
-        self.assertIn('A2A_RUNTIME_HOST', source)
-        self.assertIn('127.0.0.1', source)
+        self.assertIn("A2A_RUNTIME_HOST", source)
+        self.assertIn("127.0.0.1", source)
         self.assertIn('protocol_version="1.0"', source)
         self.assertIn("create_agent_card_routes", source)
         self.assertIn("create_jsonrpc_routes", source)
@@ -69,7 +69,6 @@ class A2AContractStaticTests(unittest.TestCase):
         self.assertIn("شبكة A2A", html)
         self.assertNotIn("قنوات ChatGPT", html)
         self.assertNotIn("channelsPage", js)
-
 
     def test_a2a_integration_tester_uses_standard_agent_card_discovery(self):
         source = (AI / "protocols.py").read_text(encoding="utf-8")
