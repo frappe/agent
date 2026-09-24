@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 import requests
 
+from agent.bench import Bench
 from agent.utils import download_file
 
 BODY = b"x" * (256 * 1024)
@@ -52,3 +53,24 @@ class TestDownloadFile(unittest.TestCase):
         path = download_file(f"{self.base_url}/backup.sql.gz", self.directory)
         with open(path, "rb") as f:
             self.assertEqual(f.read(), BODY)
+
+    def test_download_reports_progress_while_running_and_the_full_size_at_the_end(self):
+        reports = []
+        with patch("agent.utils.DOWNLOAD_PROGRESS_INTERVAL", 0):
+            download_file(
+                f"{self.base_url}/backup.sql.gz", self.directory, lambda *args: reports.append(args)
+            )
+        self.assertGreater(len(reports), 2)
+        self.assertEqual(reports[-1], (len(BODY), len(BODY)))
+
+    def test_bench_download_publishes_one_progress_line_per_file(self):
+        bench = Bench.__new__(Bench)
+        lines = []
+        with patch.object(Bench, "publish_data") as publish_data:
+            bench.download_with_progress(f"{self.base_url}/backup.sql.gz", self.directory, "Database", lines)
+            bench.download_with_progress("", self.directory, "Private files", lines)
+            bench.download_with_progress(f"{self.base_url}/public.tar", self.directory, "Public files", lines)
+        self.assertEqual(
+            publish_data.call_args.args[0],
+            "Database: 256.00KB of 256.00KB\nPublic files: 256.00KB of 256.00KB",
+        )

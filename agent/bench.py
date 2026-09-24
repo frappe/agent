@@ -26,7 +26,7 @@ from agent.base import AgentException, Base
 from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, end_execution, get_execution_result, get_size
+from agent.utils import download_file, end_execution, format_size, get_execution_result, get_size
 
 if TYPE_CHECKING:
     from agent.server import Server
@@ -460,15 +460,29 @@ class Bench(Base):
         if not os.path.exists(download_directory):
             os.mkdir(download_directory)
         directory = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}", dir=download_directory)
-        database_file = download_file(database_url, prefix=directory) if database_url else ""
-        private_file = download_file(private_url, prefix=directory) if private_url else ""
-        public_file = download_file(public_url, prefix=directory) if public_url else ""
+        self.data = {}  # Publish the progress, not the result of the previous command
+        lines = []
+        database_file = self.download_with_progress(database_url, directory, "Database", lines)
+        private_file = self.download_with_progress(private_url, directory, "Private files", lines)
+        public_file = self.download_with_progress(public_url, directory, "Public files", lines)
         return {
             "directory": directory,
             "database": database_file,
             "private": private_file,
             "public": public_file,
         }
+
+    def download_with_progress(self, url, directory, label, lines):
+        """Download url and show one line of progress per file in the step output"""
+        if not url:
+            return ""
+        lines.append(label)
+
+        def publish(downloaded, total):
+            lines[-1] = f"{label}: {format_size(downloaded)} of {format_size(total) if total else 'unknown'}"
+            self.publish_data("\n".join(lines))
+
+        return download_file(url, prefix=directory, on_progress=publish)
 
     @step("Delete Downloaded Backup Files")
     def delete_downloaded_files(self, backup_files_directory):

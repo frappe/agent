@@ -7,6 +7,7 @@ import secrets
 import shutil
 import struct
 import subprocess
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from math import ceil
@@ -59,10 +60,14 @@ def to_bytes(size_str: str) -> float:
 
 # Connect, then read: a stalled transfer raises instead of waiting for the RQ job timeout
 DOWNLOAD_TIMEOUT = (10, 60)
+DOWNLOAD_PROGRESS_INTERVAL = 2  # seconds between progress reports
 
 
-def download_file(url, prefix):
-    """Download file locally under path prefix and return local path"""
+def download_file(url, prefix, on_progress=None):
+    """Download file locally under path prefix and return local path.
+
+    on_progress(downloaded, total) gets called every few seconds and once at the end.
+    """
     basename = os.path.basename(urlparse(url).path)
     ext = ""
     for known in (".sql.gz", ".tar.gz", ".tgz", ".sql", ".gz", ".tar"):
@@ -78,9 +83,16 @@ def download_file(url, prefix):
         total_size = int(r.headers.get("content-length", 0))
         chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
+        downloaded, last_report = 0, time.monotonic()
         with open(local_filename, "wb") as f:
             for chunk in r.iter_content(chunk_size=chunk_size):
                 f.write(chunk)
+                downloaded += len(chunk)
+                if on_progress and time.monotonic() - last_report >= DOWNLOAD_PROGRESS_INTERVAL:
+                    on_progress(downloaded, total_size)
+                    last_report = time.monotonic()
+        if on_progress:
+            on_progress(downloaded, total_size)
 
     return local_filename
 
