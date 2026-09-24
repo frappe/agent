@@ -7,6 +7,7 @@ import secrets
 import shutil
 import struct
 import subprocess
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from math import ceil
@@ -48,6 +49,19 @@ def format_size(bytes_val):
     return f"{bytes_val}B"
 
 
+def format_progress(downloaded, total, elapsed, width=30):
+    """Progress in the format of pv: 1.20GB 0:07:10 [2.80MB/s] [=====>    ] 72% ETA 0:02:47"""
+    rate = int(downloaded / elapsed) if elapsed else 0
+    text = f"{format_size(downloaded)} {timedelta(seconds=int(elapsed))} [{format_size(rate)}/s]"
+    if not total:
+        return text
+    done = min(downloaded / total, 1)
+    filled = int(width * done)
+    bar = ("=" * filled + ">")[:width].ljust(width)
+    eta = timedelta(seconds=int((total - downloaded) / rate)) if rate else "?"
+    return f"{text} [{bar}] {int(done * 100)}% ETA {eta}"
+
+
 def to_bytes(size_str: str) -> float:
     size_str = size_str.strip().upper()
     units = [("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1)]
@@ -57,8 +71,16 @@ def to_bytes(size_str: str) -> float:
     return 0
 
 
-def download_file(url, prefix):
-    """Download file locally under path prefix and return local path"""
+# Connect, then read: a stalled transfer raises instead of waiting for the RQ job timeout
+DOWNLOAD_TIMEOUT = (10, 60)
+DOWNLOAD_PROGRESS_INTERVAL = 2  # seconds between progress reports
+
+
+def download_file(url, prefix, on_progress=None):
+    """Download file locally under path prefix and return local path.
+
+    on_progress(downloaded, total) gets called every few seconds and once at the end.
+    """
     basename = os.path.basename(urlparse(url).path)
     ext = ""
     for known in (".sql.gz", ".tar.gz", ".tgz", ".sql", ".gz", ".tar"):
@@ -70,13 +92,20 @@ def download_file(url, prefix):
     filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
-    with requests.get(url, stream=True) as r:
+    with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as r:
         total_size = int(r.headers.get("content-length", 0))
         chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
+        downloaded, last_report = 0, time.monotonic()
         with open(local_filename, "wb") as f:
             for chunk in r.iter_content(chunk_size=chunk_size):
                 f.write(chunk)
+                downloaded += len(chunk)
+                if on_progress and time.monotonic() - last_report >= DOWNLOAD_PROGRESS_INTERVAL:
+                    on_progress(downloaded, total_size)
+                    last_report = time.monotonic()
+        if on_progress:
+            on_progress(downloaded, total_size)
 
     return local_filename
 
