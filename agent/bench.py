@@ -26,14 +26,7 @@ from agent.base import AgentException, Base
 from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import (
-    compute_file_hash,
-    download_file,
-    end_execution,
-    format_progress,
-    get_execution_result,
-    get_size,
-)
+from agent.utils import download_file, end_execution, format_progress, get_execution_result, get_size
 
 if TYPE_CHECKING:
     from agent.server import Server
@@ -477,7 +470,7 @@ class Bench(Base):
             "database": database_file,
             "private": private_file,
             "public": public_file,
-            "output": "\n".join(lines),  # Keep the progress and checksums after the step ends
+            "output": "\n".join(lines),  # Keep the progress after the step ends
         }
 
     def download_with_progress(self, url, directory, label, lines):
@@ -492,10 +485,7 @@ class Bench(Base):
             lines[-1] = f"{label}: {format_progress(downloaded, total, elapsed)}"
             self.publish_data("\n".join(lines))
 
-        path = download_file(url, prefix=directory, on_progress=publish)
-        lines.append(f"> SHA256 Checksum - {compute_file_hash(path)}")
-        self.publish_data("\n".join(lines))
-        return path
+        return download_file(url, prefix=directory, on_progress=publish)
 
     @step("Delete Downloaded Backup Files")
     def delete_downloaded_files(self, backup_files_directory):

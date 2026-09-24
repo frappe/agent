@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import tempfile
 import threading
 import time
@@ -64,19 +63,16 @@ class TestDownloadFile(unittest.TestCase):
         self.assertGreater(len(reports), 2)
         self.assertEqual(reports[-1], (len(BODY), len(BODY)))
 
-    def test_bench_download_publishes_progress_and_checksum_of_each_file(self):
+    def test_bench_download_publishes_one_progress_line_per_file(self):
         bench = Bench.__new__(Bench)
         lines = []
         with patch.object(Bench, "publish_data") as publish_data:
             bench.download_with_progress(f"{self.base_url}/backup.sql.gz", self.directory, "Database", lines)
             bench.download_with_progress("", self.directory, "Private files", lines)
             bench.download_with_progress(f"{self.base_url}/public.tar", self.directory, "Public files", lines)
-        database, database_sum, public, public_sum = publish_data.call_args.args[0].split("\n")
-        checksum = f"> SHA256 Checksum - {hashlib.sha256(BODY).hexdigest()}"
+        database, public = publish_data.call_args.args[0].split("\n")
         self.assertRegex(database, r"^Database: 256\.00KB .* 100% ETA 0:00:00$")
-        self.assertEqual(database_sum, checksum)
         self.assertRegex(public, r"^Public files: 256\.00KB .* 100% ETA 0:00:00$")
-        self.assertEqual(public_sum, checksum)
 
 
 class TestFormatProgress(unittest.TestCase):
