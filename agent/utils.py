@@ -49,6 +49,19 @@ def format_size(bytes_val):
     return f"{bytes_val}B"
 
 
+def format_progress(downloaded, total, elapsed, width=30):
+    """Progress in the format of pv: 1.20GB 0:07:10 [2.80MB/s] [=====>    ] 72% ETA 0:02:47"""
+    rate = int(downloaded / elapsed) if elapsed else 0
+    text = f"{format_size(downloaded)} {timedelta(seconds=int(elapsed))} [{format_size(rate)}/s]"
+    if not total:
+        return text
+    done = min(downloaded / total, 1)
+    filled = int(width * done)
+    bar = ("=" * filled + ">")[:width].ljust(width)
+    eta = timedelta(seconds=int((total - downloaded) / rate)) if rate else "?"
+    return f"{text} [{bar}] {int(done * 100)}% ETA {eta}"
+
+
 def to_bytes(size_str: str) -> float:
     size_str = size_str.strip().upper()
     units = [("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1)]

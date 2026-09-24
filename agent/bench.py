@@ -26,7 +26,7 @@ from agent.base import AgentException, Base
 from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
 from agent.site import Site
-from agent.utils import download_file, end_execution, format_size, get_execution_result, get_size
+from agent.utils import download_file, end_execution, format_progress, get_execution_result, get_size
 
 if TYPE_CHECKING:
     from agent.server import Server
@@ -477,9 +477,11 @@ class Bench(Base):
         if not url:
             return ""
         lines.append(label)
+        start = datetime.now()
 
         def publish(downloaded, total):
-            lines[-1] = f"{label}: {format_size(downloaded)} of {format_size(total) if total else 'unknown'}"
+            elapsed = (datetime.now() - start).total_seconds()
+            lines[-1] = f"{label}: {format_progress(downloaded, total, elapsed)}"
             self.publish_data("\n".join(lines))
 
         return download_file(url, prefix=directory, on_progress=publish)

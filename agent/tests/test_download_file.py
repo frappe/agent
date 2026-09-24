@@ -10,7 +10,7 @@ from unittest.mock import patch
 import requests
 
 from agent.bench import Bench
-from agent.utils import download_file
+from agent.utils import download_file, format_progress
 
 BODY = b"x" * (256 * 1024)
 
@@ -70,7 +70,20 @@ class TestDownloadFile(unittest.TestCase):
             bench.download_with_progress(f"{self.base_url}/backup.sql.gz", self.directory, "Database", lines)
             bench.download_with_progress("", self.directory, "Private files", lines)
             bench.download_with_progress(f"{self.base_url}/public.tar", self.directory, "Public files", lines)
+        database, public = publish_data.call_args.args[0].split("\n")
+        self.assertRegex(database, r"^Database: 256\.00KB .* 100% ETA 0:00:00$")
+        self.assertRegex(public, r"^Public files: 256\.00KB .* 100% ETA 0:00:00$")
+
+
+class TestFormatProgress(unittest.TestCase):
+    def test_progress_shows_size_time_rate_bar_percent_and_eta_like_pv(self):
         self.assertEqual(
-            publish_data.call_args.args[0],
-            "Database: 256.00KB of 256.00KB\nPublic files: 256.00KB of 256.00KB",
+            format_progress(750 * 1024**2, 1000 * 1024**2, 250, width=10),
+            "750.00MB 0:04:10 [3.00MB/s] [=======>  ] 75% ETA 0:01:23",
         )
+
+    def test_progress_without_content_length_has_no_bar(self):
+        self.assertEqual(format_progress(5 * 1024**2, 0, 5), "5.00MB 0:00:05 [1.00MB/s]")
+
+    def test_progress_before_first_byte_does_not_divide_by_zero(self):
+        self.assertTrue(format_progress(0, 1024, 0).endswith("0% ETA ?"))
