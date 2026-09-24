@@ -57,6 +57,10 @@ def to_bytes(size_str: str) -> float:
     return 0
 
 
+# Connect, then read: a stalled transfer raises instead of waiting for the RQ job timeout
+DOWNLOAD_TIMEOUT = (10, 60)
+
+
 def download_file(url, prefix):
     """Download file locally under path prefix and return local path"""
     basename = os.path.basename(urlparse(url).path)
@@ -70,7 +74,7 @@ def download_file(url, prefix):
     filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
-    with requests.get(url, stream=True) as r:
+    with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as r:
         total_size = int(r.headers.get("content-length", 0))
         chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
