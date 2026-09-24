@@ -36,6 +36,7 @@ from agent.server import Server
 from agent.snapshot_recovery import SnapshotRecovery
 from agent.ssh import SSHProxy
 from agent.utils import check_installed_pyspy
+from agent.workload import InvalidWorkload, Workload
 
 if TYPE_CHECKING:
     from datetime import datetime, timedelta
@@ -232,6 +233,41 @@ def patch_build_image():
     )
     job = builder.run_patch_build()
     return {"job": job}
+
+
+@application.route("/workloads", methods=["POST"])
+def deploy_workload():
+    data = request.json or {}
+    try:
+        job = Workload(Server()).prepare_deploy(data.get("config", {}), data.get("environment", {}))
+    except InvalidWorkload as error:
+        return {"message": str(error)}, 400
+    return {"job": job}
+
+
+@application.route("/workloads/<string:name>/status", methods=["GET"])
+def workload_status(name: str):
+    try:
+        return Workload(Server()).status(name)
+    except InvalidWorkload as error:
+        return {"message": str(error)}, 400
+
+
+@application.route("/workloads/<string:name>/logs", methods=["GET"])
+def workload_logs(name: str):
+    try:
+        lines = request.args.get("lines", 200, type=int)
+        return Workload(Server()).logs(name, lines)
+    except InvalidWorkload as error:
+        return {"message": str(error)}, 400
+
+
+@application.route("/workloads/<string:name>/rollback", methods=["POST"])
+def rollback_workload(name: str):
+    try:
+        return {"job": Workload(Server()).rollback(name)}
+    except InvalidWorkload as error:
+        return {"message": str(error)}, 400
 
 
 @application.route("/server")
