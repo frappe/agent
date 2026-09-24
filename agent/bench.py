@@ -462,9 +462,13 @@ class Bench(Base):
         directory = tempfile.mkdtemp(prefix="agent-upload-", suffix=f"-{name}", dir=download_directory)
         self.data = {}  # Publish the progress, not the result of the previous command
         lines = []
-        database_file = self.download_with_progress(database_url, directory, "Database", lines)
-        private_file = self.download_with_progress(private_url, directory, "Private files", lines)
-        public_file = self.download_with_progress(public_url, directory, "Public files", lines)
+        try:
+            database_file = self.download_with_progress(database_url, directory, "Database", lines)
+            private_file = self.download_with_progress(private_url, directory, "Private files", lines)
+            public_file = self.download_with_progress(public_url, directory, "Public files", lines)
+        except Exception:
+            shutil.rmtree(directory)  # Callers clean up only after a successful download
+            raise
         return {
             "directory": directory,
             "database": database_file,

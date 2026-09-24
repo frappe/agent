@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import threading
 import time
@@ -73,6 +74,16 @@ class TestDownloadFile(unittest.TestCase):
         database, public = publish_data.call_args.args[0].split("\n")
         self.assertRegex(database, r"^Database: 256\.00KB .* 100% ETA 0:00:00$")
         self.assertRegex(public, r"^Public files: 256\.00KB .* 100% ETA 0:00:00$")
+
+    @patch("agent.utils.DOWNLOAD_TIMEOUT", (1, 1))
+    @patch.object(Bench, "publish_data")
+    def test_bench_download_that_times_out_removes_its_partial_files(self, _publish_data):
+        bench = Bench.__new__(Bench)
+        bench.sites_directory = self.directory
+        download_files = Bench.download_files.__wrapped__  # without @step, which needs a job record
+        with self.assertRaises(requests.ConnectionError):
+            download_files(bench, "site", f"{self.base_url}/backup.sql.gz", "", f"{self.base_url}/stall.tar")
+        self.assertEqual(os.listdir(os.path.join(self.directory, "downloads")), [])
 
 
 class TestFormatProgress(unittest.TestCase):
