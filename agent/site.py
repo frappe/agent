@@ -1002,6 +1002,11 @@ print(">>>" + frappe.session.sid + "<<<")
             return True
         return value == "1"
 
+    def streamed_backup_prefix(self, todays_dt: str) -> str:
+        # Frappe's site slug goes before the marker, so its "*-{slug}-database.sql.gz"
+        # glob for recent backups never matches one of these FIFOs.
+        return f"{todays_dt}-{self.name.replace('.', '_')}-%stream%"
+
     @job("Backup Site", priority="backup")
     def backup_job(  # noqa: C901
         self,
@@ -1038,10 +1043,11 @@ print(">>>" + frappe.session.sid + "<<<")
                     {"traceback": "Streaming backup requires rclone, but it was not found on PATH."}
                 )
             todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-            public_file = todays_dt + "-%stream%-files.tar"
-            db_file = todays_dt + "-%stream%-database.sql.gz"
-            private_file = todays_dt + "-%stream%-private-files.tar"
-            config_file = todays_dt + "-%stream%-site_config_backup.json"
+            file_prefix = self.streamed_backup_prefix(todays_dt)
+            public_file = file_prefix + "-files.tar"
+            db_file = file_prefix + "-database.sql.gz"
+            private_file = file_prefix + "-private-files.tar"
+            config_file = file_prefix + "-site_config_backup.json"
 
             files_to_stream = [config_file, db_file]
             if with_files:

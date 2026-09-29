@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import random
@@ -374,6 +375,17 @@ class TestSite(unittest.TestCase):
 
         self.assertTrue(os.path.exists(os.path.join(self.sites_directory, new_name)))
         self.assertFalse(os.path.exists(os.path.join(self.sites_directory, old_name)))
+
+    def test_streamed_backup_names_carry_site_slug_and_stay_out_of_frappe_recent_backup_glob(self):
+        site_name = "streamed.site.test"
+        self._create_test_site(site_name)
+        with patch.object(Site, "config"):
+            site = Site(site_name, self._get_test_bench())
+
+        db_file = site.streamed_backup_prefix("20260929_101500") + "-database.sql.gz"
+
+        self.assertEqual(db_file, "20260929_101500-streamed_site_test-%stream%-database.sql.gz")
+        self.assertFalse(fnmatch.fnmatch(db_file, "*-streamed_site_test-database.sql.gz"))
 
     @unittest.skip("fails with 'Server' has no attr 'job'")
     def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
