@@ -10,7 +10,6 @@ import tempfile
 import time
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, List, TypedDict
@@ -19,7 +18,7 @@ import docker
 import jinja2
 import semantic_version as sv
 
-from agent.base import Base
+from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
 from agent.build_utils.validations import check_python_syntax, get_package_manager_files
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
@@ -563,7 +562,7 @@ class ImageBuilder(Base, JobMixin):
 
         self.no_cache = no_cache
         self.no_push = no_push
-        self.last_published = datetime.now()
+        self.publish_output = Throttle(self.publish_data, PUBLISH_INTERVAL_SECONDS)
         self.build_failed = False
         self.build_token = build_token
         self.secret_path = None
@@ -657,8 +656,8 @@ class ImageBuilder(Base, JobMixin):
     def _publish_docker_build_output(self, result):
         for line in result:
             self.output["build"].append(line)
-            self._publish_throttled_output(False)
-        self._publish_throttled_output(True)
+            self.publish_output(self.output)
+        self.publish_data(self.output)
 
     def _wait_for_registry_recovery(self):
         """Wait for registry to recover after restart"""
@@ -689,13 +688,13 @@ class ImageBuilder(Base, JobMixin):
 
             except RegistryDownException as e:
                 if attempt == max_retries - 1:
-                    self._publish_throttled_output(True)
+                    self.publish_data(self.output)
                     raise Exception("Failed to push image after multiple attempts") from e
 
                 self._wait_for_registry_recovery()
 
             except Exception:
-                self._publish_throttled_output(True)
+                self.publish_data(self.output)
                 raise
 
         return None
@@ -714,19 +713,7 @@ class ImageBuilder(Base, JobMixin):
             auth_config=auth_config,
         ):
             self.output["push"].append(line)
-            self._publish_throttled_output(False)
-
-    def _publish_throttled_output(self, flush: bool):
-        if flush:
-            self.publish_data(self.output)
-            return
-
-        now = datetime.now()
-        if (now - self.last_published).total_seconds() <= 1:
-            return
-
-        self.last_published = now
-        self.publish_data(self.output)
+            self.publish_output(self.output)
 
     def _get_image_name(self):
         return f"{self.image_repository}:{self.image_tag}"
@@ -753,7 +740,7 @@ class ImageBuilder(Base, JobMixin):
         input_file.close()
 
         return_code = process.wait()
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
 
         self.build_failed = return_code != 0
         self.data.update({"build_failed": self.build_failed})
@@ -793,7 +780,7 @@ class PatchImageBuilder(Base, JobMixin):
         self.patch_build_app_instructions = patch_build_app_instructions
         self.container_name = f"patch-build-{build_name}"
         self.output: Output = {"build": [], "push": []}
-        self.last_published = datetime.now()
+        self.publish_output = Throttle(self.publish_data, PUBLISH_INTERVAL_SECONDS)
 
     def _get_image_name(self) -> str:
         return f"{self.image_repository}:{self.image_tag}"
@@ -826,7 +813,7 @@ class PatchImageBuilder(Base, JobMixin):
     def _pull_app_updates(self):
         for patch_build_app_info in self.patch_build_app_instructions:
             self._pull_app(patch_build_app_info)
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
         return self.output["build"]
 
     def _pull_app(self, patch_build_app_info: PatchBuildAppInfo):
@@ -875,20 +862,8 @@ class PatchImageBuilder(Base, JobMixin):
         output = result.get("output", "") if isinstance(result, dict) else ""
         if publish:
             self.output["build"].append(output)
-            self._publish_throttled_output(False)
+            self.publish_output(self.output)
         return output
-
-    def _publish_throttled_output(self, flush: bool) -> None:
-        if flush:
-            self.publish_data(self.output)
-            return
-
-        now = datetime.now()
-        if (now - self.last_published).total_seconds() <= 1:
-            return
-
-        self.last_published = now
-        self.publish_data(self.output)
 
     @step("Commit Image")
     def _commit_patch_image(self):
@@ -913,9 +888,9 @@ class PatchImageBuilder(Base, JobMixin):
             auth_config=auth_config,
         ):
             self.output["push"].append(line)
-            self._publish_throttled_output(False)
+            self.publish_output(self.output)
 
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
         return self.output["push"]
 
     def _cleanup_container(self):
