@@ -27,17 +27,19 @@ if TYPE_CHECKING:
 PUBLISH_INTERVAL_SECONDS = 2
 
 
-def throttle(function: Callable, seconds: float) -> Callable:
-    last_call = -seconds
+class Throttle:
+    """Calls function at most once every `seconds`. A class, not a closure, so RQ can pickle its owner."""
 
-    def throttled(*args):
-        nonlocal last_call
-        if time.monotonic() - last_call < seconds:
+    def __init__(self, function: Callable, seconds: float):
+        self.function = function
+        self.seconds = seconds
+        self.last_call = -seconds
+
+    def __call__(self, *args):
+        if time.monotonic() - self.last_call < self.seconds:
             return
-        last_call = time.monotonic()
-        function(*args)
-
-    return throttled
+        self.last_call = time.monotonic()
+        self.function(*args)
 
 
 class Base:
@@ -152,7 +154,7 @@ class Base:
         lines = []
         prev_char = None
         # Each publish rewrites the whole output in Redis and its AOF
-        publish_lines = throttle(self.publish_lines, PUBLISH_INTERVAL_SECONDS)
+        publish_lines = Throttle(self.publish_lines, PUBLISH_INTERVAL_SECONDS)
         # This is equivalent of remove_crs
         # Make sure output matches what'll be shown in the terminal
         # This won't work for top, htop etc, but good enough to handle progress bars

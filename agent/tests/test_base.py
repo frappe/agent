@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import io
+import pickle
 import unittest
 from unittest.mock import MagicMock, patch
 
-from agent.base import Base
+from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
 
 
 class FinishedProcess:
@@ -44,3 +45,13 @@ class TestParseOutput(unittest.TestCase):
 
         # a (first), b skipped at +1s, c at +2s, then the final output
         self.assertEqual(self.base.update_redis.call_count, 3)
+
+
+class TestThrottle(unittest.TestCase):
+    def test_object_holding_a_throttle_can_be_pickled_for_rq(self):
+        base = Base()
+        base.publish_output = Throttle(base.publish_data, PUBLISH_INTERVAL_SECONDS)
+
+        restored = pickle.loads(pickle.dumps(base))
+
+        self.assertEqual(restored.publish_output.seconds, PUBLISH_INTERVAL_SECONDS)
