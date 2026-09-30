@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import traceback
 from contextlib import suppress
 from datetime import datetime
@@ -19,9 +20,24 @@ from agent.job import connection
 from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Callable
 
     from agent.job import Job, Step
+
+PUBLISH_INTERVAL_SECONDS = 2
+
+
+def throttle(function: Callable, seconds: float) -> Callable:
+    last_call = -seconds
+
+    def throttled(*args):
+        nonlocal last_call
+        if time.monotonic() - last_call < seconds:
+            return
+        last_call = time.monotonic()
+        function(*args)
+
+    return throttled
 
 
 class Base:
@@ -135,6 +151,8 @@ class Base:
         line = b""
         lines = []
         prev_char = None
+        # Each publish rewrites the whole output in Redis and its AOF
+        publish_lines = throttle(self.publish_lines, PUBLISH_INTERVAL_SECONDS)
         # This is equivalent of remove_crs
         # Make sure output matches what'll be shown in the terminal
         # This won't work for top, htop etc, but good enough to handle progress bars
@@ -147,9 +165,9 @@ class Base:
             if char == b"\n":
                 lines.append(line.decode(errors="replace"))
                 line = b""
-                self.publish_lines(lines)
+                publish_lines(lines)
             elif prev_char == b"\r":
-                self.publish_lines([*lines, line.decode(errors="replace")])
+                publish_lines([*lines, line.decode(errors="replace")])
                 line = b""
                 line += char
             else:
