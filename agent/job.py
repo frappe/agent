@@ -138,6 +138,10 @@ class Job(Action):
         )
         self.model.agent_job_id = agent_job_id
 
+    def enqueue_failure(self):
+        self.model.start = self.model.enqueue
+        self.failure({"traceback": traceback.format_exc()})
+
     @save
     def cancel(self):
         self.job.cancel()
@@ -277,16 +281,21 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
         agent_job_timeout = _requested_job_timeout()
         instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
         final_timeout = resolve_job_timeout(agent_job_timeout, timeout, _configured_job_timeout)
-        queue(priority).enqueue_call(
-            wrapped,
-            args=args,
-            kwargs=kwargs,
-            timeout=final_timeout,
-            result_ttl=24 * 3600,
-            job_id=str(instance.job_record.model.id),
-            on_success=on_success or callback,
-            on_failure=on_failure or callback,
-        )
+        try:
+            queue(priority).enqueue_call(
+                wrapped,
+                args=args,
+                kwargs=kwargs,
+                timeout=final_timeout,
+                result_ttl=24 * 3600,
+                job_id=str(instance.job_record.model.id),
+                on_success=on_success or callback,
+                on_failure=on_failure or callback,
+            )
+        except Exception:
+            # Without this the row stays Pending with no RQ job to run it
+            instance.job_record.enqueue_failure()
+            raise
         return instance.job_record.model.id
 
     return wrapper
