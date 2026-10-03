@@ -131,6 +131,7 @@ class Site(Base):
         try:
             return self.bench_execute(
                 "--force restore "
+                "--verbose "
                 f"--mariadb-root-username {temp_user} "
                 f"--mariadb-root-password {temp_password} "
                 f"--admin-password {admin_password} "
