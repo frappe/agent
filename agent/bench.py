@@ -56,9 +56,6 @@ class Bench(Base):
         self.apps_file = os.path.join(self.directory, "sites", "apps.txt")
         self.bench_config_file = os.path.join(self.directory, "config.json")
         self.config_file = os.path.join(self.directory, "sites", "common_site_config.json")
-        self.host = self.config.get("db_host", "localhost")
-        self.db_port = self.config.get("db_port", 3306)
-        self.docker_image = self.bench_config.get("docker_image")
         self.mounts = mounts
         if not (
             os.path.isdir(self.directory)
@@ -67,6 +64,18 @@ class Bench(Base):
             and os.path.exists(self.bench_config_file)
         ):
             raise Exception
+
+    @property
+    def host(self):
+        return self.common_site_config.get("db_host", "localhost")
+
+    @property
+    def db_port(self):
+        return self.common_site_config.get("db_port", 3306)
+
+    @property
+    def docker_image(self):
+        return self.bench_config.get("docker_image")
 
     @step("Deploy Bench")
     def deploy(self):
