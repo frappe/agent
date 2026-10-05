@@ -28,7 +28,10 @@ PUBLISH_INTERVAL_SECONDS = 2
 
 
 class Throttle:
-    """Calls function at most once every `seconds`. A class, not a closure, so RQ can pickle its owner."""
+    """Calls function at most once every `seconds`, dropping calls made in between.
+
+    A class, not a closure, so RQ can pickle its owner.
+    """
 
     def __init__(self, function: Callable, seconds: float):
         self.function = function
