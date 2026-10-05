@@ -773,6 +773,13 @@ def backup_site(bench, site):
     return {"job": job}
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/fix_global_search", methods=["POST"])
+@validate_bench_and_site
+def fix_global_search(bench, site):
+    job = Server().benches[bench].sites[site].fix_global_search()
+    return {"job": job}
+
+
 @application.route(
     "/benches/<string:bench>/sites/<string:site>/database/schema",
     methods=["POST"],
