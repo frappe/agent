@@ -733,6 +733,7 @@ class Bench(Base):
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
                 "custom_workers": self.common_site_config.get("workers", {}),
                 "custom_workers_group": self._get_custom_workers_group(),
+                "is_flow_server_enabled": self.common_site_config.get("flow_server_manager") == "supervisor",
                 "host_server": self.server.config["name"],
             },
             supervisor_config,
