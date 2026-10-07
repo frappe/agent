@@ -67,19 +67,19 @@ class TestRestoreSiteTables(unittest.TestCase):
         )
         return Site("site.test", bench)
 
-    def _restored_value(self) -> str:
-        query = f"SELECT custom_post FROM {DB_NAME}.tabEncounter WHERE name = 'ENC-1'"
+    def _restored_rows(self) -> str:
+        query = f"SELECT name, QUOTE(custom_post) FROM {DB_NAME}.tabEncounter"
         root_password = self.db.db_root_password
         output = self.db.execute_cmd(f'mysql -h 127.0.0.1 -uroot -p{root_password} -sN -e "{query}"')
         return output.strip()
 
     def test_restore_site_tables_restores_rows_that_fail_json_check_constraint(self):
         Site.restore_site_tables.__wrapped__(self.site)
-        self.assertEqual(self._restored_value(), "")
+        self.assertEqual(self._restored_rows(), "ENC-1\t''")
 
     def test_restore_touched_tables_restores_rows_that_fail_json_check_constraint(self):
         with patch.object(Site, "tables_to_restore", ["tabEncounter"]), patch.object(
             Site, "drop_new_tables", return_value={}
         ):
             self.site._restore_touched_tables()
-        self.assertEqual(self._restored_value(), "")
+        self.assertEqual(self._restored_rows(), "ENC-1\t''")
