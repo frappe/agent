@@ -857,20 +857,19 @@ class Site(Base):
     @job("Fix global search")
     def fix_global_search(self):
         self.truncate_global_search()
-        self.rebuild_global_search()
+        self.rebuild_global_search_step()
 
     @step("Truncate Global Search Table")
     def truncate_global_search(self):
-        return self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        # TRUNCATE recreates a crashed MyISAM table from its definition, even when REPAIR fails
+        result = self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        if not result["success"]:
+            raise AgentException({"traceback": f"Failed to truncate __global_search: {result['data']}"})
+        return result
 
     @step("Rebuild global search")
     def rebuild_global_search_step(self):
-        import json
-
-        """Execute bench rebuild-global-search command."""
-        result = self.bench_execute("rebuild-global-search")
-
-        return {"output": json.dumps(result)}
+        return self.bench_execute("rebuild-global-search")
 
     def fetch_site_status(self):
         data = {

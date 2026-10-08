@@ -739,3 +739,28 @@ class TestSite(unittest.TestCase):
             },
             cors_origins=cors_origins,
         )
+
+
+class TestFixGlobalSearch(unittest.TestCase):
+    def _site(self, sql_result):
+        site = Site.__new__(Site)
+        site.run_sql_query = lambda *args, **kwargs: sql_result
+        return site
+
+    def test_truncate_raises_when_query_fails(self):
+        site = self._site({"success": False, "data": "Table is marked as crashed"})
+        with self.assertRaises(AgentException):
+            Site.truncate_global_search.__wrapped__(site)
+
+    def test_truncate_returns_result_on_success(self):
+        result = {"success": True, "data": []}
+        site = self._site(result)
+        self.assertEqual(Site.truncate_global_search.__wrapped__(site), result)
+
+    def test_job_truncates_then_rebuilds(self):
+        site = Site.__new__(Site)
+        calls = []
+        site.truncate_global_search = lambda: calls.append("truncate")
+        site.rebuild_global_search_step = lambda: calls.append("rebuild")
+        Site.fix_global_search.__wrapped__(site)
+        self.assertEqual(calls, ["truncate", "rebuild"])
