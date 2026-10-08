@@ -76,6 +76,7 @@ class Server(Base):
         self.nginx_directory = self.config["nginx_directory"]
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
+        self.dhparam_file = os.path.join(self.directory, "repo", "agent", "tls", "ffdhe2048.pem")
 
     @property
     def press_url(self):
@@ -1232,6 +1233,7 @@ class Server(Base):
             {
                 "proxy_ip": self.config.get("proxy_ip"),
                 "tls_protocols": self.config.get("tls_protocols"),
+                "dhparam_file": self.dhparam_file,
                 "nginx_vts_module_enabled": self.config.get("nginx_vts_module_enabled", False),
                 "ip_whitelist": self.config.get("ip_whitelist", []),
                 "conf_directory": os.path.join(self.config.get("benches_directory"), "*", "nginx.conf"),
