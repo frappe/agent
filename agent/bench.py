@@ -569,6 +569,7 @@ class Bench(Base):
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
+            "dhparam_file": self.server.dhparam_file,
             "code_server": codeserver,
             "cors_origins": cors_origins,
         }

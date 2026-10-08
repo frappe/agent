@@ -248,6 +248,7 @@ class TestSite(unittest.TestCase):
             "error_pages_directory": os.path.join(self.test_dir, "errors"),
             "nginx_directory": os.path.join(self.test_dir, "nginx"),
             "tls_protocols": None,
+            "dhparam_file": os.path.join(self.test_dir, "ffdhe2048.pem"),
             "code_server": {},
             "cors_origins": cors_origins,
         }
@@ -530,6 +531,12 @@ class TestSite(unittest.TestCase):
             r"add_header Vary \$cors_vary_test_bench always;\s+"
             r"return 204;",
         )
+
+    def test_rendered_standalone_bench_nginx_sets_dhparam_so_dhe_only_clients_can_connect(self):
+        rendered = self._render_bench_nginx([], standalone=True)
+
+        dhparam_file = os.path.join(self.test_dir, "ffdhe2048.pem")
+        self.assertIn(f"ssl_dhparam {dhparam_file};", rendered)
 
     def test_rendered_bench_nginx_omits_cors_when_no_origins(self):
         rendered = self._render_bench_nginx([])
