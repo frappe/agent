@@ -8,8 +8,9 @@ import shutil
 import string
 import unittest
 import warnings
+from contextlib import ExitStack
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -376,6 +377,67 @@ class TestSite(unittest.TestCase):
 
         self.assertTrue(os.path.exists(os.path.join(self.sites_directory, new_name)))
         self.assertFalse(os.path.exists(os.path.join(self.sites_directory, old_name)))
+
+    LEFTOVER_DIRECTORY_OUTPUT = (
+        "pymysql.err.OperationalError: (1010, 'Error dropping database "
+        "(can\\'t rmdir \\'./_0123abcd\\', errno: 39 \"Directory not empty\")')"
+    )
+
+    def _archive_with_drop_site_failure(self, site_name, output, force):
+        bench = self._get_test_bench()
+        self._create_test_site(site_name)
+        executed = []
+
+        def execute(command, *args, **kwargs):
+            executed.append(command)
+            return {"output": "%\n10.0.0.5\n" if "SELECT Host" in command else ""}
+
+        with ExitStack() as stack:
+            valid_sites = stack.enter_context(patch.object(Bench, "valid_sites", new_callable=PropertyMock))
+            valid_sites.return_value = {site_name: SimpleNamespace(database="_0123abcd")}
+            credentials = ("_0123abcd", "u", "p")
+            stack.enter_context(patch.object(Bench, "create_mariadb_user", return_value=credentials))
+            drop_mariadb_user = stack.enter_context(patch.object(Bench, "drop_mariadb_user"))
+            stack.enter_context(
+                patch.object(Bench, "docker_execute", side_effect=AgentException({"output": output}))
+            )
+            stack.enter_context(patch.object(Bench, "execute", side_effect=execute))
+            try:
+                return Bench.bench_archive_site.__wrapped__(bench, site_name, "root-pw", force), executed
+            finally:
+                drop_mariadb_user.assert_called_once()
+
+    def test_forced_archive_finishes_when_database_directory_has_leftover_files(self):
+        site_name = "leftover.site.test"
+        # An earlier archive of the same name gets frappe drop-site's numeric suffix
+        os.makedirs(os.path.join(self.sites_directory, "archived", site_name))
+
+        result, executed = self._archive_with_drop_site_failure(
+            site_name, self.LEFTOVER_DIRECTORY_OUTPUT, force=True
+        )
+
+        archived = os.path.join(self.sites_directory, "archived", f"{site_name}1")
+        self.assertEqual(result, {"archived_site_directory": archived})
+        self.assertTrue(os.path.isdir(archived))
+        self.assertFalse(os.path.exists(os.path.join(self.sites_directory, site_name)))
+        drops = [c for c in executed if "DROP USER" in c]
+        self.assertEqual(len(drops), 2)
+        self.assertIn("'_0123abcd'@'%'", drops[0])
+        self.assertIn("'_0123abcd'@'10.0.0.5'", drops[1])
+
+    def test_archive_still_fails_on_leftover_database_directory_without_force(self):
+        site_name = "leftover.site.test"
+        with self.assertRaises(AgentException):
+            self._archive_with_drop_site_failure(site_name, self.LEFTOVER_DIRECTORY_OUTPUT, force=False)
+        self.assertTrue(os.path.isdir(os.path.join(self.sites_directory, site_name)))
+
+    def test_forced_archive_still_fails_on_other_drop_site_errors(self):
+        site_name = "other-error.site.test"
+        with self.assertRaises(AgentException):
+            self._archive_with_drop_site_failure(
+                site_name, 'pymysql.err.OperationalError: (2003, "Can\'t connect")', force=True
+            )
+        self.assertTrue(os.path.isdir(os.path.join(self.sites_directory, site_name)))
 
     def test_streamed_backup_names_carry_site_slug_and_stay_out_of_frappe_recent_backup_glob(self):
         site_name = "streamed.site.test"

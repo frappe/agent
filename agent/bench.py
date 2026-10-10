@@ -451,8 +451,34 @@ class Bench(Base):
                 f"--root-login {temp_user} --root-password {temp_password} "
                 f"--archived-sites-path archived {name}"
             )
+        except AgentException as e:
+            if not (force and _is_leftover_database_directory_error(e.data.get("output", ""), site_database)):
+                raise
+            return self._finish_archive_with_leftover_database_directory(
+                name, mariadb_root_password, site_database
+            )
         finally:
             self.drop_mariadb_user(name, mariadb_root_password, site_database)
+
+    def _finish_archive_with_leftover_database_directory(self, name, mariadb_root_password, database):
+        """Do what drop-site skipped after DROP DATABASE had already removed every table."""
+        mysql = f"mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password}"
+        hosts = self.execute(f"{mysql} -N -B -e \"SELECT Host FROM mysql.user WHERE User = '{database}'\"")
+        for host in hosts["output"].split():
+            self.execute(f"{mysql} -e \"DROP USER IF EXISTS '{database}'@'{host}'\"")
+        return {"archived_site_directory": self._move_site_to_archived(name)}
+
+    def _move_site_to_archived(self, name) -> str:
+        # Same destination and name-collision suffix as frappe's drop-site
+        archived_directory = os.path.join(self.sites_directory, "archived")
+        os.makedirs(archived_directory, exist_ok=True)
+        target = os.path.join(archived_directory, name)
+        count = 0
+        while os.path.exists(target + (str(count) if count else "")):
+            count += 1
+        target += str(count) if count else ""
+        shutil.move(os.path.join(self.sites_directory, name), target)
+        return target
 
     @step("Download Backup Files")
     def download_files(self, name, database_url, public_url, private_url):
@@ -1405,6 +1431,11 @@ def get_site_from_name(name: str, new_name: str, bench: Bench):
 def _touch_currentsite_file(bench: Bench):
     file = os.path.join(bench.sites_directory, "currentsite.txt")
     open(file, "w").close()
+
+
+def _is_leftover_database_directory_error(output: str, database: str) -> bool:
+    # MariaDB 1010 with ENOTEMPTY: tables are dropped, stray files (e.g. MyISAM *.BAK) block the rmdir
+    return "(1010, " in output and "errno: 39" in output and f"./{database}" in output
 
 
 def _inactive_scheduler_sites(bench: Bench):
