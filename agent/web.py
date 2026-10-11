@@ -609,6 +609,7 @@ def new_site_from_backup(bench):
             data.get("public"),
             data.get("private"),
             data.get("skip_failing_patches", False),
+            data.get("skip_migrate", False),
         )
     )
     return {"job": job}
