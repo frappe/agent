@@ -8,6 +8,7 @@ import shutil
 import string
 import unittest
 import warnings
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -376,6 +377,30 @@ class TestSite(unittest.TestCase):
 
         self.assertTrue(os.path.exists(os.path.join(self.sites_directory, new_name)))
         self.assertFalse(os.path.exists(os.path.join(self.sites_directory, old_name)))
+
+    def _restore_from_backup(self, **kwargs):
+        bench = self._get_test_bench()
+        files = {"directory": "downloads", "database": "db.sql.gz", "public": "", "private": ""}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(Bench, "download_files", return_value=files))
+            for method in ("bench_new_site", "delete_downloaded_files", "setup_nginx"):
+                stack.enter_context(patch.object(Bench, method))
+            stack.enter_context(patch.object(Server, "reload_nginx"))
+            site_class = stack.enter_context(patch("agent.bench.Site"))
+            Bench.new_site_from_backup.__wrapped__(
+                bench, "site.test", {}, ["frappe"], "root", "admin", None, "db-url", None, None, **kwargs
+            )
+        return site_class.return_value
+
+    def test_new_site_from_backup_migrates_by_default(self):
+        site = self._restore_from_backup(skip_failing_patches=True)
+        site.migrate.assert_called_once_with(skip_failing_patches=True)
+
+    def test_new_site_from_backup_skips_migrate_when_asked(self):
+        site = self._restore_from_backup(skip_failing_patches=True, skip_migrate=True)
+        site.migrate.assert_not_called()
+        site.set_admin_password.assert_called_once_with("admin")
+        site.enable_scheduler.assert_called_once()
 
     def test_streamed_backup_names_carry_site_slug_and_stay_out_of_frappe_recent_backup_glob(self):
         site_name = "streamed.site.test"
