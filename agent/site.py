@@ -5,11 +5,12 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from shlex import quote
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
@@ -25,6 +26,36 @@ if TYPE_CHECKING:
     from agent.bench import Bench
 
 LIB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib")
+BYPASS_UNLINK_SHIM = "bypass_unlink.so"
+# Checked in order: "files.tar" would otherwise also match private file archives
+LOCAL_BACKUP_TYPES = (
+    (("database.sql.gz", "database-enc.sql.gz", "database.sql"), "Database"),
+    (("private-files.tar", "private-files-enc.tar", "private-files.tgz"), "Private Files"),
+    (("files.tar", "files-enc.tar", "files.tgz"), "Public Files"),
+    (("site_config_backup.json", "site_config_backup-enc.json"), "Site Config"),
+)
+
+
+def validate_local_backup_names(files: list[str]):
+    if not isinstance(files, list) or not files:
+        raise AgentException({"error": "files must be a non-empty list of file names"})
+
+    for file in files:
+        if (
+            not isinstance(file, str)
+            or file in ("", ".", "..")
+            or "/" in file
+            or "\0" in file
+            or file == BYPASS_UNLINK_SHIM
+        ):
+            raise AgentException({"error": f"Invalid backup file name: {file!r}"})
+
+
+def get_local_backup_type(file: str) -> str:
+    for suffixes, backup_type in LOCAL_BACKUP_TYPES:
+        if file.endswith(suffixes):
+            return backup_type
+    return "Other"
 
 
 class Site(Base):
@@ -1633,6 +1664,83 @@ print(">>>" + frappe.session.sid + "<<<")
             backup["url"] = f"https://{self.name}/backups/{file}"
 
         return backups
+
+    @contextlib.contextmanager
+    def open_local_backups_directory(self):
+        """Yields a fd for private/backups, or None if it doesn't exist"""
+        # O_NOFOLLOW on each component, so a symlinked private/ or backups/ can't
+        # point listing or deletion at a directory outside this site
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        fds = []
+        try:
+            try:
+                fds.append(os.open(self.directory, os.O_RDONLY | os.O_DIRECTORY))
+                for component in ("private", "backups"):
+                    fds.append(os.open(component, flags, dir_fd=fds[-1]))
+            except FileNotFoundError:
+                fds.append(None)
+            except OSError as e:
+                raise AgentException({"error": f"private/backups of {self.name} is not a directory"}) from e
+            yield fds[-1]
+        finally:
+            for fd in fds:
+                if fd is not None:
+                    os.close(fd)
+
+    def list_local_backups(self) -> list[dict]:
+        """Regular files in private/backups, newest first"""
+        backups = []
+        with self.open_local_backups_directory() as directory_fd:
+            if directory_fd is None:
+                return backups
+
+            with os.scandir(directory_fd) as entries:
+                for entry in entries:
+                    # Skips the FIFOs and shim of an in-flight streamed backup
+                    if not entry.is_file(follow_symlinks=False) or entry.name == BYPASS_UNLINK_SHIM:
+                        continue
+                    file_stat = entry.stat(follow_symlinks=False)
+                    backups.append(
+                        {
+                            "file": entry.name,
+                            "type": get_local_backup_type(entry.name),
+                            "size": file_stat.st_size,
+                            "modified": file_stat.st_mtime,
+                        }
+                    )
+
+        backups.sort(key=lambda backup: backup["modified"], reverse=True)
+        for backup in backups:
+            backup["modified"] = datetime.fromtimestamp(backup["modified"], tz=timezone.utc).isoformat()
+        return backups
+
+    def delete_local_backups(self, files: list[str]) -> dict:
+        """Deletes the named regular files from private/backups"""
+        validate_local_backup_names(files)
+        deleted, missing = [], []
+        with self.open_local_backups_directory() as directory_fd:
+            if directory_fd is None:
+                return {"deleted": deleted, "missing": list(dict.fromkeys(files))}
+
+            to_delete = []
+            for file in dict.fromkeys(files):
+                try:
+                    file_stat = os.stat(file, dir_fd=directory_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    missing.append(file)
+                    continue
+                if not stat.S_ISREG(file_stat.st_mode):
+                    raise AgentException({"error": f"{file} is not a regular file"})
+                to_delete.append(file)
+
+            for file in to_delete:
+                try:
+                    os.unlink(file, dir_fd=directory_fd)
+                    deleted.append(file)
+                except FileNotFoundError:
+                    missing.append(file)
+
+        return {"deleted": deleted, "missing": missing}
 
     def get_usage(self):
         """Returns Usage in bytes"""

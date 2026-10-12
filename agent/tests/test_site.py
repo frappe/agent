@@ -19,7 +19,7 @@ from testcontainers.nginx import NginxContainer
 from agent.base import AgentException
 from agent.bench import Bench, _get_cors_origins, _normalize_cors_origins
 from agent.server import Server
-from agent.site import Site
+from agent.site import BYPASS_UNLINK_SHIM, Site, get_local_backup_type
 
 NGINX_FUZZ_ALPHABET = string.ascii_letters + string.digits + ":;/?.-_[]@{}\"'\\\n\r\t *,$"
 CORS_NGINX_HYPOTHESIS_CASES = 512
@@ -412,6 +412,136 @@ class TestSite(unittest.TestCase):
 
         self.assertEqual(db_file, "20260929_101500-streamed_site_test-%stream%-database.sql.gz")
         self.assertFalse(fnmatch.fnmatch(db_file, "*-streamed_site_test-database.sql.gz"))
+
+    def _get_site_with_local_backups(self, files: dict[str, int]) -> Site:
+        """Creates a site whose private/backups holds `files` (name -> mtime)"""
+        site_name = "backups.site.test"
+        self._create_test_site(site_name)
+        backups_dir = os.path.join(self.sites_directory, site_name, "private", "backups")
+        os.makedirs(backups_dir)
+        for file, mtime in files.items():
+            path = os.path.join(backups_dir, file)
+            with open(path, "w") as f:
+                f.write(file)
+            os.utime(path, (mtime, mtime))
+        with patch.object(Site, "config"):
+            return Site(site_name, self._get_test_bench())
+
+    def _local_backups_dir(self, site: Site) -> str:
+        return os.path.join(site.directory, "private", "backups")
+
+    def test_list_local_backups_returns_regular_files_newest_first(self):
+        site = self._get_site_with_local_backups(
+            {
+                "20261010_000000-site-database.sql.gz": 1_000,
+                "20261011_000000-site-private-files.tar": 3_000,
+                "20261011_000000-site-files.tar": 2_000,
+            }
+        )
+
+        backups = site.list_local_backups()
+
+        self.assertEqual(
+            [(b["file"], b["type"]) for b in backups],
+            [
+                ("20261011_000000-site-private-files.tar", "Private Files"),
+                ("20261011_000000-site-files.tar", "Public Files"),
+                ("20261010_000000-site-database.sql.gz", "Database"),
+            ],
+        )
+        self.assertEqual(backups[0]["size"], len("20261011_000000-site-private-files.tar"))
+        self.assertEqual(backups[0]["modified"], "1970-01-01T00:50:00+00:00")
+
+    def test_list_local_backups_skips_fifos_shim_symlinks_and_directories(self):
+        site = self._get_site_with_local_backups({"db.sql.gz": 1_000, BYPASS_UNLINK_SHIM: 1_000})
+        backups_dir = self._local_backups_dir(site)
+        os.mkfifo(os.path.join(backups_dir, "20261011-site-%stream%-database.sql.gz"))
+        os.symlink(os.path.abspath(site.config_file), os.path.join(backups_dir, "link.json"))
+        os.makedirs(os.path.join(backups_dir, "nested"))
+
+        self.assertEqual([b["file"] for b in site.list_local_backups()], ["db.sql.gz"])
+
+    def test_list_local_backups_is_empty_without_backups_directory(self):
+        site_name = "no-backups.site.test"
+        self._create_test_site(site_name)
+        with patch.object(Site, "config"):
+            site = Site(site_name, self._get_test_bench())
+
+        self.assertEqual(site.list_local_backups(), [])
+
+    def test_local_backups_refuse_a_symlinked_backups_directory(self):
+        site = self._get_site_with_local_backups({})
+        backups_dir = self._local_backups_dir(site)
+        outside = os.path.join(self.test_dir, "outside")
+        os.makedirs(outside)
+        victim = os.path.join(outside, "victim.sql.gz")
+        with open(victim, "w") as f:
+            f.write("victim")
+        os.rmdir(backups_dir)
+        os.symlink(os.path.abspath(outside), backups_dir)
+
+        with self.assertRaises(AgentException):
+            site.list_local_backups()
+        with self.assertRaises(AgentException):
+            site.delete_local_backups(["victim.sql.gz"])
+        self.assertTrue(os.path.exists(victim))
+
+    def test_delete_local_backups_deletes_only_named_files(self):
+        site = self._get_site_with_local_backups({"old.sql.gz": 1_000, "new.sql.gz": 2_000})
+
+        result = site.delete_local_backups(["old.sql.gz", "gone.sql.gz", "old.sql.gz"])
+
+        self.assertEqual(result, {"deleted": ["old.sql.gz"], "missing": ["gone.sql.gz"]})
+        self.assertEqual(os.listdir(self._local_backups_dir(site)), ["new.sql.gz"])
+
+    def test_delete_local_backups_rejects_paths_and_deletes_nothing(self):
+        site = self._get_site_with_local_backups({"db.sql.gz": 1_000})
+
+        for files in (
+            [],
+            None,
+            "db.sql.gz",
+            ["db.sql.gz", "../site_config.json"],
+            ["db.sql.gz", ".."],
+            ["db.sql.gz", "."],
+            ["db.sql.gz", ""],
+            ["db.sql.gz", "nested/db.sql.gz"],
+            ["db.sql.gz", "db\0.sql.gz"],
+            ["db.sql.gz", 1],
+            ["db.sql.gz", BYPASS_UNLINK_SHIM],
+        ):
+            with self.subTest(files=files), self.assertRaises(AgentException):
+                site.delete_local_backups(files)
+
+        self.assertTrue(os.path.exists(site.config_file))
+        self.assertEqual(os.listdir(self._local_backups_dir(site)), ["db.sql.gz"])
+
+    def test_delete_local_backups_refuses_symlinks_and_fifos(self):
+        site = self._get_site_with_local_backups({"db.sql.gz": 1_000})
+        backups_dir = self._local_backups_dir(site)
+        os.symlink(os.path.abspath(site.config_file), os.path.join(backups_dir, "link.json"))
+        os.mkfifo(os.path.join(backups_dir, "stream.sql.gz"))
+
+        for name in ("link.json", "stream.sql.gz"):
+            with self.subTest(name=name), self.assertRaises(AgentException):
+                site.delete_local_backups(["db.sql.gz", name])
+
+        self.assertTrue(os.path.exists(site.config_file))
+        self.assertEqual(sorted(os.listdir(backups_dir)), ["db.sql.gz", "link.json", "stream.sql.gz"])
+
+    def test_get_local_backup_type(self):
+        for file, backup_type in (
+            ("x-site-database.sql.gz", "Database"),
+            ("x-site-database-enc.sql.gz", "Database"),
+            ("x-site-private-files.tar", "Private Files"),
+            ("x-site-private-files-enc.tar", "Private Files"),
+            ("x-site-files.tar", "Public Files"),
+            ("x-site-files-enc.tar", "Public Files"),
+            ("x-site-site_config_backup.json", "Site Config"),
+            ("notes.txt", "Other"),
+        ):
+            with self.subTest(file=file):
+                self.assertEqual(get_local_backup_type(file), backup_type)
 
     @unittest.skip("fails with 'Server' has no attr 'job'")
     def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
