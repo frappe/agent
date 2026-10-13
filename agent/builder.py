@@ -160,7 +160,7 @@ class ContextManager(Base, JobMixin):
 
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
-        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc", "get_cached_app.py"]:
             shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
 
         shutil.copytree(

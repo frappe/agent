@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from types import SimpleNamespace
+
+import agent
 
 
 class TestCheckVersion(unittest.TestCase):
@@ -44,3 +49,14 @@ class TestStampStepEnd(unittest.TestCase):
 
         for line in ["#12 CACHED\n", "#12 [stage-1 4/9] RUN bench build\n", "#12 0.512 DONE in 3s\n"]:
             self.assertEqual(stamp_step_end(line), line)
+
+
+class TestBuildContext(unittest.TestCase):
+    def test_build_context_includes_the_asset_store_script(self):
+        from agent.builder import ContextManager
+
+        build_config_path = os.path.join(os.path.dirname(agent.__file__), "build_configs")
+        with tempfile.TemporaryDirectory() as build_directory:
+            context = SimpleNamespace(build_config_path=build_config_path, build_directory=build_directory)
+            ContextManager._copy_build_config_files(context)
+            self.assertTrue(os.path.isfile(os.path.join(build_directory, "get_cached_app.py")))
