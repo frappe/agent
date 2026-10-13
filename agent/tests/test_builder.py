@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
+import tempfile
 import unittest
+from types import SimpleNamespace
+
+import agent
 
 
 class TestCheckVersion(unittest.TestCase):
@@ -30,3 +35,14 @@ class TestCheckVersion(unittest.TestCase):
         for actual, expected, want in cases:
             with self.subTest(actual=actual, expected=expected):
                 self.assertEqual(ValidationManager.check_version(actual, expected), want)
+
+
+class TestBuildContext(unittest.TestCase):
+    def test_build_context_includes_the_asset_store_script(self):
+        from agent.builder import ContextManager
+
+        build_config_path = os.path.join(os.path.dirname(agent.__file__), "build_configs")
+        with tempfile.TemporaryDirectory() as build_directory:
+            context = SimpleNamespace(build_config_path=build_config_path, build_directory=build_directory)
+            ContextManager._copy_build_config_files(context)
+            self.assertTrue(os.path.isfile(os.path.join(build_directory, "get_cached_app.py")))
