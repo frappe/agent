@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -10,7 +11,7 @@ import time
 import contextlib
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, List, TypedDict
@@ -32,6 +33,18 @@ if TYPE_CHECKING:
 
     OutputKey = Literal["build", "push"]
     Output = Dict[OutputKey, List[str]]
+
+
+DONE_LINE_RX = re.compile(r"#\d+ DONE \d+\.\d+s")
+
+
+def stamp_step_end(line: str) -> str:
+    """Append the UTC time to a BuildKit step's DONE line, so Press can record when the step ended."""
+    stripped = line.rstrip("\n")
+    if not DONE_LINE_RX.fullmatch(stripped):
+        return line
+    ended_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"{stripped} {ended_at}\n"
 
 
 class AppInfo(TypedDict):
@@ -656,7 +669,7 @@ class ImageBuilder(Base, JobMixin):
 
     def _publish_docker_build_output(self, result):
         for line in result:
-            self.output["build"].append(line)
+            self.output["build"].append(stamp_step_end(line))
             self._publish_throttled_output(False)
         self._publish_throttled_output(True)
 
