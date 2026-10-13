@@ -106,9 +106,15 @@ def _update_assets_json(app: str) -> None:
 
 
 def tar_and_compress_folder(folder_path: str, output_filename: str) -> str:
-    """Tars and compresses the given folder into a .tar.gz file."""
+    """Tars and compresses the given folder into a .tar.gz file, without its node_modules."""
+    # bench links the app's node_modules into its assets; get-app installs it anyway
+    node_modules = f"{os.path.basename(folder_path)}/node_modules"
+
+    def skip_node_modules(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+        return None if member.name == node_modules else member
+
     with tarfile.open(output_filename, "w:gz", dereference=True) as tar:
-        tar.add(folder_path, arcname=os.path.basename(folder_path), recursive=True)
+        tar.add(folder_path, arcname=os.path.basename(folder_path), recursive=True, filter=skip_node_modules)
     return output_filename
 
 
@@ -125,6 +131,14 @@ def build_assets(app: str) -> str:
     assets_path = os.path.join(os.getcwd(), "sites", "assets", app)
     print(f"Build Command Completed. Return Code: {completed_process.returncode}.")
     return assets_path
+
+
+def link_node_modules(bench_path: str, app_name: str, app_public_path: str) -> None:
+    """Link the app's node_modules into its assets like bench build does, as the tarball leaves it out."""
+    node_modules = os.path.join(bench_path, "apps", app_name, "node_modules")
+    link = os.path.join(app_public_path, "node_modules")
+    if os.path.isdir(node_modules) and not os.path.lexists(link):
+        os.symlink(node_modules, link)
 
 
 def extract_and_link_assets(app_name: str, file_stream: BytesIO):
@@ -156,6 +170,7 @@ def extract_and_link_assets(app_name: str, file_stream: BytesIO):
 
     # 4. Restore symlink since we deploy with cp -LR
     os.symlink(app_public_path, assets_path)
+    link_node_modules(bench_path, app_name, app_public_path)
 
     print(f"Assets moved to {app_public_path} and symlink restored at {assets_path}")
 
