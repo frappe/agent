@@ -257,14 +257,17 @@ class ContextManager(Base, JobMixin):
         packages = []
         for app in pmf:
             pyproject = pmf[app]["pyproject"] or {}
-            deps = pyproject.get("deploy", {}).get("dependencies", {})
-            pkgs = deps.get("apt", {}).get("packages", [])
+            # Legacy key, not valid per PEP 518 (only [tool.*] is open to tools)
+            legacy_pkgs = (
+                pyproject.get("deploy", {}).get("dependencies", {}).get("apt", {}).get("packages", [])
+            )
+            tool_pkgs = pyproject.get("tool", {}).get("frappe-cloud", {}).get("apt-dependencies", [])
 
-            for p in pkgs:
+            for p in [*legacy_pkgs, *tool_pkgs]:
                 p = p.strip()
                 packages.append(p)
 
-        return packages
+        return list(dict.fromkeys(packages))
 
     def _inject_additional_packages(self, packages: list[str]):
         """This hack simply injects the additional packages discovered post cloning"""
