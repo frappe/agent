@@ -854,6 +854,23 @@ class Site(Base):
     def resume_scheduler(self):
         return self.bench_execute("scheduler resume")
 
+    @job("Fix global search")
+    def fix_global_search(self):
+        self.truncate_global_search()
+        self.rebuild_global_search_step()
+
+    @step("Truncate Global Search Table")
+    def truncate_global_search(self):
+        # TRUNCATE recreates a crashed MyISAM table from its definition, even when REPAIR fails
+        result = self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        if not result["success"]:
+            raise AgentException({"traceback": f"Failed to truncate __global_search: {result['data']}"})
+        return result
+
+    @step("Rebuild global search")
+    def rebuild_global_search_step(self):
+        return self.bench_execute("rebuild-global-search")
+
     def fetch_site_status(self):
         data = {
             "scheduler": True,
