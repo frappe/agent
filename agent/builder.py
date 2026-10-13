@@ -588,14 +588,14 @@ class ImageBuilder(Base, JobMixin):
     @job("Run Remote Builder")
     def run_remote_builder(self):
         self.context_manager.clone_repositories()
-        self.context_manager.prepare_build_context()
-        self.validation_manager.validate(
-            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
-            build_directory=self.build_directory,
-        )
-        context_tar_filepath = self.tar_build_context()
-
+        context_tar_filepath = None
         try:
+            self.context_manager.prepare_build_context()
+            self.validation_manager.validate(
+                apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+                build_directory=self.build_directory,
+            )
+            context_tar_filepath = self.tar_build_context()
             return self._build_and_push(context_tar_filepath)
         finally:
             self._cleanup_context(context_tar_filepath)
@@ -762,11 +762,11 @@ class ImageBuilder(Base, JobMixin):
             os.remove(self.secret_path)
 
     @step("Cleanup Context")
-    def _cleanup_context(self, context_tar_filepath: str):
+    def _cleanup_context(self, context_tar_filepath: str | None):
         if os.path.exists(self.build_directory):
             shutil.rmtree(self.build_directory, ignore_errors=True)
 
-        if os.path.exists(context_tar_filepath):
+        if context_tar_filepath and os.path.exists(context_tar_filepath):
             os.remove(context_tar_filepath)
 
         return {"cleanup": True}
