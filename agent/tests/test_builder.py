@@ -221,12 +221,23 @@ class TestGetCachedApp(unittest.TestCase):
         self.assertEqual(os.readlink(self.assets), self.public)
         self.assertEqual(os.readlink(os.path.join(self.public, "node_modules")), self.app_node_modules)
 
+    def test_truncated_stored_assets_are_refused(self):
+        tarball = self.make_tarball({"builder/frontend/index.html": "stored" * 10000})
+        with open(tarball, "r+b") as f:
+            f.truncate(os.path.getsize(tarball) // 2)
+
+        with self.assertRaises(self.script.UNUSABLE_ARCHIVE_ERRORS):
+            self.extract(tarball)
+
+        with open(os.path.join(self.public, "frontend", "index.html")) as f:
+            self.assertEqual(f.read(), "old")
+
     def test_stored_assets_that_write_outside_their_folder_are_refused(self):
         tarball = self.make_tarball(
             {"builder/frontend/index.html": "stored", "../../apps/builder/hooks.py": "x"}
         )
 
-        with self.assertRaises((tarfile.TarError, RuntimeError)):
+        with self.assertRaises(self.script.UNUSABLE_ARCHIVE_ERRORS):
             self.extract(tarball)
 
         with open(os.path.join(self.public, "frontend", "index.html")) as f:
