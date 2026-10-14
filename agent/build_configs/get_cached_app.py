@@ -1,7 +1,8 @@
-"""Install an app in an image build, reusing its built assets from Press's asset store.
+"""Install an app in an image build, reusing its built assets if the agent found them in the store.
 
-Press signs a download URL if the app's assets for this commit are stored, else an upload URL.
-Usage: get_cached_app.py <app> <commit hash> <build token> <press url>
+The agent downloads stored assets into the build context before the build and uploads new ones
+from the finished image, so nothing in the build ever gets access to the store.
+Usage: get_cached_app.py <app> <commit hash>
 """
 
 from __future__ import annotations
@@ -12,34 +13,12 @@ import shutil
 import subprocess
 import sys
 import tarfile
-from io import BytesIO
+import tempfile
 
-import requests
 from bench.cli import change_working_directory
 
-APP_NAME, APP_HASH, BUILD_TOKEN, SITE_URL = sys.argv[1:5]
-
-
-def get_asset_urls() -> dict[str, str]:
-    response = requests.get(
-        f"{SITE_URL}/api/method/press.api.assets.get_asset_urls",
-        params={"app": APP_NAME, "hash": APP_HASH},
-        headers={"build-token": BUILD_TOKEN},
-        timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()["message"]
-
-
-def download_assets(url: str) -> BytesIO:
-    response = requests.get(url, timeout=600)
-    response.raise_for_status()
-    return BytesIO(response.content)
-
-
-def upload_assets(url: str, tar_file: str) -> None:
-    with open(tar_file, "rb") as f:
-        requests.put(url, data=f, timeout=600).raise_for_status()
+APP_NAME, APP_HASH = sys.argv[1:3]
+STORED_ASSETS = f"/home/frappe/context/stored_assets/{APP_NAME}/assets.tar.gz"
 
 
 def _write_assets(file: os.DirEntry, assets_file: str, relative_path: str):
@@ -105,19 +84,6 @@ def _update_assets_json(app: str) -> None:
     _write_js_and_css_assets(app, dist_folder)
 
 
-def tar_and_compress_folder(folder_path: str, output_filename: str) -> str:
-    """Tars and compresses the given folder into a .tar.gz file, without its node_modules."""
-    # bench links the app's node_modules into its assets; get-app installs it anyway
-    node_modules = f"{os.path.basename(folder_path)}/node_modules"
-
-    def skip_node_modules(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
-        return None if member.name == node_modules else member
-
-    with tarfile.open(output_filename, "w:gz", dereference=True) as tar:
-        tar.add(folder_path, arcname=os.path.basename(folder_path), recursive=True, filter=skip_node_modules)
-    return output_filename
-
-
 def build_assets(app: str) -> str:
     """Build assets for the app using the app name and return the path to assets"""
     change_working_directory()
@@ -141,34 +107,34 @@ def link_node_modules(bench_path: str, app_name: str, app_public_path: str) -> N
         os.symlink(node_modules, link)
 
 
-def extract_and_link_assets(app_name: str, file_stream: BytesIO):
-    """
-    Extracts assets to sites/assets, moves them to the app source, and restores the symlink.
-    """
+def extract_assets(app_name: str, tar_path: str) -> None:
+    """Replace the app's public folder with the stored one, and restore the links bench build makes."""
+    if not hasattr(tarfile, "data_filter"):
+        raise RuntimeError("this Python can't extract archives safely")
+
     change_working_directory()
     bench_path = os.getcwd()
-
     app_public_path = os.path.join(bench_path, "apps", app_name, app_name, "public")
     assets_path = os.path.join(bench_path, "sites", "assets", app_name)
 
-    # 1. Remove existing symlink/dir so tar can extract a fresh physical directory
-    if os.path.exists(assets_path):
+    with tempfile.TemporaryDirectory(dir=os.path.join(bench_path, "sites")) as extract_path:
+        # The data filter refuses paths and links that point outside extract_path
+        with tarfile.open(tar_path, mode="r:gz") as tar:
+            tar.extractall(path=extract_path, filter="data")
+
+        extracted = os.path.join(extract_path, app_name)
+        if not os.path.isdir(extracted):
+            raise RuntimeError(f"stored assets have no {app_name} folder")
+
         if os.path.islink(assets_path):
             os.unlink(assets_path)
-        else:
+        elif os.path.exists(assets_path):
             shutil.rmtree(assets_path)
+        if os.path.exists(app_public_path):
+            shutil.rmtree(app_public_path)
+        shutil.move(extracted, app_public_path)
 
-    # 2. Extract into sites/assets
-    with tarfile.open(fileobj=file_stream, mode="r:*") as tar:
-        tar.extractall(path=os.path.join(bench_path, "sites", "assets"), filter="fully_trusted")
-
-    # 3. Move to app public
-    if os.path.exists(app_public_path):
-        shutil.rmtree(app_public_path)
-
-    shutil.move(assets_path, app_public_path)
-
-    # 4. Restore symlink since we deploy with cp -LR
+    # Restore symlink since we deploy with cp -LR
     os.symlink(app_public_path, assets_path)
     link_node_modules(bench_path, app_name, app_public_path)
 
@@ -176,7 +142,7 @@ def extract_and_link_assets(app_name: str, file_stream: BytesIO):
 
 
 def main():
-    """Get cached app assets or build and upload them"""
+    """Use the app's stored assets if the agent put them in the build context, else build them"""
     env = os.environ.copy()
     env["FRAPPE_DOCKER_BUILD"] = "True"
     app_path = f"file:///home/frappe/context/apps/{APP_NAME}"
@@ -185,29 +151,17 @@ def main():
     subprocess.run(["bench", "get-app", app_path, "--skip-assets"], check=True, env=env)
 
     asset_filename = f"{APP_NAME}.{APP_HASH}.tar.gz"
-    urls = get_asset_urls()
-    if download_url := urls.get("download_url"):
+    if os.path.isfile(STORED_ASSETS):
         print(f"Assets {asset_filename} found in store. Extracting and setting up...")
-        extract_and_link_assets(APP_NAME, download_assets(download_url))
-        _update_assets_json(APP_NAME)
-        return
+        try:
+            extract_assets(APP_NAME, STORED_ASSETS)
+            _update_assets_json(APP_NAME)
+            return
+        except (OSError, RuntimeError, tarfile.TarError) as e:
+            print(f"Stored assets could not be used: {e}")
 
     print(f"Assets {asset_filename} not found in store. Building...")
-    assets_folder = build_assets(APP_NAME)
-    if not os.path.isdir(assets_folder):
-        print(f"No assets found for app {APP_NAME} at {assets_folder}.")
-        return
-
-    # Sign again: the build can outlast the URL, and another build may have stored these assets
-    if not (upload_url := get_asset_urls().get("upload_url")):
-        return
-
-    print("Uploading assets to store...")
-    tar_file = tar_and_compress_folder(assets_folder, asset_filename)
-    try:
-        upload_assets(upload_url, tar_file)
-    finally:
-        os.remove(tar_file)
+    build_assets(APP_NAME)
 
 
 if __name__ == "__main__":
