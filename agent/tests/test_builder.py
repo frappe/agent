@@ -30,3 +30,17 @@ class TestCheckVersion(unittest.TestCase):
         for actual, expected, want in cases:
             with self.subTest(actual=actual, expected=expected):
                 self.assertEqual(ValidationManager.check_version(actual, expected), want)
+
+
+class TestStampStepEnd(unittest.TestCase):
+    def test_done_line_gets_the_utc_time_the_step_ended(self):
+        from agent.builder import stamp_step_end
+
+        stamped = stamp_step_end("#12 DONE 3.2s\n")
+        self.assertRegex(stamped, r"^#12 DONE 3\.2s \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\n$")
+
+    def test_other_build_lines_are_left_unchanged(self):
+        from agent.builder import stamp_step_end
+
+        for line in ["#12 CACHED\n", "#12 [stage-1 4/9] RUN bench build\n", "#12 0.512 DONE in 3s\n"]:
+            self.assertEqual(stamp_step_end(line), line)
