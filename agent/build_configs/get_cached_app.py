@@ -14,11 +14,14 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import zlib
 
 from bench.cli import change_working_directory
 
 APP_NAME, APP_HASH = sys.argv[1:3]
 STORED_ASSETS = f"/home/frappe/context/stored_assets/{APP_NAME}/assets.tar.gz"
+# A truncated or corrupt tarball raises these; the build then builds the assets itself
+UNUSABLE_ARCHIVE_ERRORS = (OSError, EOFError, RuntimeError, tarfile.TarError, zlib.error)
 
 
 def _write_assets(file: os.DirEntry, assets_file: str, relative_path: str):
@@ -157,7 +160,7 @@ def main():
             extract_assets(APP_NAME, STORED_ASSETS)
             _update_assets_json(APP_NAME)
             return
-        except (OSError, RuntimeError, tarfile.TarError) as e:
+        except UNUSABLE_ARCHIVE_ERRORS as e:
             print(f"Stored assets could not be used: {e}")
 
     print(f"Assets {asset_filename} not found in store. Building...")
