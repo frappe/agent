@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import shlex
 import shutil
@@ -7,7 +8,6 @@ import subprocess
 import tarfile
 import tempfile
 import time
-import contextlib
 import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -921,6 +921,8 @@ class PatchImageBuilder(Base, JobMixin):
     def _cleanup_container(self):
         with contextlib.suppress(Exception):
             self.execute(f"docker rm -f {self.container_name}")
+
+
 def get_clone_directory():
     path = os.path.join(os.getcwd(), ".clones")
     if not os.path.exists(path):
