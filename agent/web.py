@@ -757,6 +757,19 @@ def fetch_site_analytics(bench, site):
     return {"data": Server().benches[bench].sites[site].fetch_site_analytics()}
 
 
+@application.route("/benches/<string:bench>/sites/<string:site>/backups/local", methods=["GET"])
+@validate_bench_and_site
+def list_local_backups(bench, site):
+    return {"data": Server().benches[bench].sites[site].list_local_backups()}
+
+
+@application.route("/benches/<string:bench>/sites/<string:site>/backups/local", methods=["DELETE"])
+@validate_bench_and_site
+def delete_local_backups(bench, site):
+    data = request.json or {}
+    return {"data": Server().benches[bench].sites[site].delete_local_backups(data.get("files"))}
+
+
 @application.route("/benches/<string:bench>/sites/<string:site>/backup", methods=["POST"])
 @validate_bench_and_site
 def backup_site(bench, site):
