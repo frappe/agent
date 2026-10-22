@@ -33,6 +33,14 @@ map $upstream_status $gunicorn_internal_server_error_page_{{ bench_name_slug }} 
 	default '<h1><p>Internal Server Error</p></h1>';
 }
 
+# frappe's own rate limiter (site config `rate_limit`, from the plan) answers with a bare
+# text/plain "Too Many Requests". swap only that for our page, same trick as above: 429s
+# from app code (json, `@rate_limit`, custom limiters) keep their body and headers
+map "$upstream_status:$upstream_http_content_type" $exceeded_page_{{ bench_name_slug }} {
+	"~^429:text/plain" '<style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style><iframe src="/exceeded.html"></iframe>';
+	default 'Too Many Requests';
+}
+
 {% if cors_origins %}
 map "$host:$http_origin" $cors_origin_{{ bench_name_slug }} {
 	default "";
@@ -174,6 +182,11 @@ server {
 
 		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
 		sub_filter '<h1><p>Internal Server Error</p></h1>' $gunicorn_internal_server_error_page_{{ bench_name_slug }};
+		sub_filter 'Too Many Requests' $exceeded_page_{{ bench_name_slug }};
+		sub_filter_types text/plain;
+		# ponytail: flips every text/plain 429, not only frappe's. a plain-text app 429
+		# then renders as html with its body intact
+		more_set_headers -s 429 -t text/plain "Content-Type: text/html; charset=utf-8";
 
 		proxy_pass  http://{{ bench_name }}-web-server;
 	}
@@ -185,11 +198,8 @@ server {
 		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
 	}
 
-	proxy_intercept_errors on;
-	error_page 429 /exceeded.html;
-	location /exceeded.html {
+	location = /exceeded.html {
 		root {{ error_pages_directory }};
-		internal;
 	}
 
 	# optimizations
@@ -346,6 +356,11 @@ server {
 
 		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
 		sub_filter '<h1><p>Internal Server Error</p></h1>' $gunicorn_internal_server_error_page_{{ bench_name_slug }};
+		sub_filter 'Too Many Requests' $exceeded_page_{{ bench_name_slug }};
+		sub_filter_types text/plain;
+		# ponytail: flips every text/plain 429, not only frappe's. a plain-text app 429
+		# then renders as html with its body intact
+		more_set_headers -s 429 -t text/plain "Content-Type: text/html; charset=utf-8";
 
 		proxy_pass  http://{{ bench_name }}-web-server;
 	}
@@ -355,6 +370,10 @@ server {
 		# one static page is shared by every bench on the server, so the link to this
 		# bench's web.error.log can only be completed here
 		sub_filter '__BENCH_NAME__' '{{ bench_name }}';
+	}
+
+	location = /exceeded.html {
+		root {{ error_pages_directory }};
 	}
 
 	# optimizations
