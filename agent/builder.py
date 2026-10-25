@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import shlex
@@ -327,6 +328,22 @@ class ContextManager(Base, JobMixin):
         with open(dockerfile_path, "w") as f:
             f.write(content)
 
+    def _set_flow_server_manager(self):
+        """Have the bench's supervisor run the Flow server when Frappe declares it"""
+        frappe_path = os.path.join(self.build_directory, "apps", "frappe")
+        pyproject = get_package_manager_files({"frappe": frappe_path})["frappe"]["pyproject"] or {}
+        if "flow_server" not in pyproject.get("tool", {}).get("pilot", {}).get("processes", {}):
+            return
+
+        config_path = os.path.join(self.build_directory, "common_site_config.json")
+        with open(config_path, "r") as f:
+            config = json.load(f)
+
+        config["flow_server_manager"] = "supervisor"
+
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=4)
+
     @step("Prepare Build Context")
     def prepare_build_context(self):
         """Clone the apps passed from build instructions and return the build context directory path"""
@@ -358,6 +375,7 @@ class ContextManager(Base, JobMixin):
 
         additional_packages = self._parse_additional_packages()
         self._inject_additional_packages(additional_packages)
+        self._set_flow_server_manager()
 
 
 @dataclass

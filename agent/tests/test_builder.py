@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import shutil
 import sys
@@ -67,6 +68,28 @@ class TestBuildContext(unittest.TestCase):
             context = SimpleNamespace(build_config_path=build_config_path, build_directory=build_directory)
             ContextManager._copy_build_config_files(context)
             self.assertTrue(os.path.isfile(os.path.join(build_directory, "get_cached_app.py")))
+
+    def test_image_has_supervisor_run_the_flow_server_frappe_declares(self):
+        from agent.builder import ContextManager
+
+        build_config_path = os.path.join(os.path.dirname(agent.__file__), "build_configs")
+        declared = '[tool.pilot.processes.flow_server]\nfrappe_command = ["flow-server", "serve"]\n'
+        for pyproject, manager in [(declared, "supervisor"), ('[project]\nname = "frappe"\n', None)]:
+            with self.subTest(manager=manager), tempfile.TemporaryDirectory() as build_directory:
+                context = SimpleNamespace(
+                    build_config_path=build_config_path, build_directory=build_directory
+                )
+                ContextManager._copy_build_config_files(context)
+                os.makedirs(os.path.join(build_directory, "apps", "frappe"))
+                with open(os.path.join(build_directory, "apps", "frappe", "pyproject.toml"), "w") as f:
+                    f.write(pyproject)
+
+                ContextManager._set_flow_server_manager(context)
+
+                with open(os.path.join(build_directory, "common_site_config.json")) as f:
+                    config = json.load(f)
+                self.assertEqual(config.get("flow_server_manager"), manager)
+                self.assertEqual(config["webserver_port"], 8000)
 
 
 class TestStoredAssetsInBuildContext(unittest.TestCase):
