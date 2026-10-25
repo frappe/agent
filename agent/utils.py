@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import hashlib
 import os
 import re
@@ -89,7 +90,8 @@ def get_size(folder, ignore_dirs=None):
     """
     command = ["du", "-sb"]
     for ignored in ignore_dirs or []:
-        command += ["--exclude", ignored]
+        # A full-path pattern; a bare name would also match nested folders
+        command += ["--exclude", glob.escape(os.path.join(folder, ignored))]
     command.append(folder)
 
     output = subprocess.check_output(command, text=True)
