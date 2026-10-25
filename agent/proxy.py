@@ -39,6 +39,7 @@ class Proxy(Server):
         self.upstreams_directory = os.path.join(self.nginx_directory, "upstreams")
         self.hosts_directory = os.path.join(self.nginx_directory, "hosts")
         self.error_pages_directory = os.path.join(self.directory, "repo", "agent", "pages")
+        self.dhparam_file = os.path.join(self.directory, "repo", "agent", "tls", "ffdhe2048.pem")
         self._proxy_config_modification_lock = None
         self.job = None
         self.step = None
@@ -350,6 +351,7 @@ class Proxy(Server):
                 "nginx_directory": config["nginx_directory"],
                 "error_pages_directory": self.error_pages_directory,
                 "tls_protocols": config.get("tls_protocols"),
+                "dhparam_file": self.dhparam_file,
             }
 
         self._render_template(

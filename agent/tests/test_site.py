@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import random
@@ -7,6 +8,7 @@ import shutil
 import string
 import unittest
 import warnings
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -248,6 +250,7 @@ class TestSite(unittest.TestCase):
             "error_pages_directory": os.path.join(self.test_dir, "errors"),
             "nginx_directory": os.path.join(self.test_dir, "nginx"),
             "tls_protocols": None,
+            "dhparam_file": os.path.join(self.test_dir, "ffdhe2048.pem"),
             "code_server": {},
             "cors_origins": cors_origins,
         }
@@ -374,6 +377,41 @@ class TestSite(unittest.TestCase):
 
         self.assertTrue(os.path.exists(os.path.join(self.sites_directory, new_name)))
         self.assertFalse(os.path.exists(os.path.join(self.sites_directory, old_name)))
+
+    def _restore_from_backup(self, **kwargs):
+        bench = self._get_test_bench()
+        files = {"directory": "downloads", "database": "db.sql.gz", "public": "", "private": ""}
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(Bench, "download_files", return_value=files))
+            for method in ("bench_new_site", "delete_downloaded_files", "setup_nginx"):
+                stack.enter_context(patch.object(Bench, method))
+            stack.enter_context(patch.object(Server, "reload_nginx"))
+            site_class = stack.enter_context(patch("agent.bench.Site"))
+            Bench.new_site_from_backup.__wrapped__(
+                bench, "site.test", {}, ["frappe"], "root", "admin", None, "db-url", None, None, **kwargs
+            )
+        return site_class.return_value
+
+    def test_new_site_from_backup_migrates_by_default(self):
+        site = self._restore_from_backup(skip_failing_patches=True)
+        site.migrate.assert_called_once_with(skip_failing_patches=True)
+
+    def test_new_site_from_backup_skips_migrate_when_asked(self):
+        site = self._restore_from_backup(skip_failing_patches=True, skip_migrate=True)
+        site.migrate.assert_not_called()
+        site.set_admin_password.assert_called_once_with("admin")
+        site.enable_scheduler.assert_called_once()
+
+    def test_streamed_backup_names_carry_site_slug_and_stay_out_of_frappe_recent_backup_glob(self):
+        site_name = "streamed.site.test"
+        self._create_test_site(site_name)
+        with patch.object(Site, "config"):
+            site = Site(site_name, self._get_test_bench())
+
+        db_file = site.streamed_backup_prefix("20260929_101500") + "-database.sql.gz"
+
+        self.assertEqual(db_file, "20260929_101500-streamed_site_test-%stream%-database.sql.gz")
+        self.assertFalse(fnmatch.fnmatch(db_file, "*-streamed_site_test-database.sql.gz"))
 
     @unittest.skip("fails with 'Server' has no attr 'job'")
     def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
@@ -530,6 +568,12 @@ class TestSite(unittest.TestCase):
             r"add_header Vary \$cors_vary_test_bench always;\s+"
             r"return 204;",
         )
+
+    def test_rendered_standalone_bench_nginx_sets_dhparam_so_dhe_only_clients_can_connect(self):
+        rendered = self._render_bench_nginx([], standalone=True)
+
+        dhparam_file = os.path.join(self.test_dir, "ffdhe2048.pem")
+        self.assertIn(f"ssl_dhparam {dhparam_file};", rendered)
 
     def test_rendered_bench_nginx_omits_cors_when_no_origins(self):
         rendered = self._render_bench_nginx([])
@@ -732,3 +776,28 @@ class TestSite(unittest.TestCase):
             },
             cors_origins=cors_origins,
         )
+
+
+class TestFixGlobalSearch(unittest.TestCase):
+    def _site(self, sql_result):
+        site = Site.__new__(Site)
+        site.run_sql_query = lambda *args, **kwargs: sql_result
+        return site
+
+    def test_truncate_raises_when_query_fails(self):
+        site = self._site({"success": False, "data": "Table is marked as crashed"})
+        with self.assertRaises(AgentException):
+            Site.truncate_global_search.__wrapped__(site)
+
+    def test_truncate_returns_result_on_success(self):
+        result = {"success": True, "data": []}
+        site = self._site(result)
+        self.assertEqual(Site.truncate_global_search.__wrapped__(site), result)
+
+    def test_job_truncates_then_rebuilds(self):
+        site = Site.__new__(Site)
+        calls = []
+        site.truncate_global_search = lambda: calls.append("truncate")
+        site.rebuild_global_search_step = lambda: calls.append("rebuild")
+        Site.fix_global_search.__wrapped__(site)
+        self.assertEqual(calls, ["truncate", "rebuild"])

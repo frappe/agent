@@ -459,15 +459,18 @@ class Site(Base):
         data = {"tables": {}}
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
-            output = self.execute(
-                "set -o pipefail && "
-                f"gunzip -c '{backup_file_path}' | "
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
-                f"{self.database}",
-                executable="/bin/bash",
-            )
-            data["tables"][backup_file] = output
+            data["tables"][backup_file] = self._load_table_dump(backup_file_path)
         return data
+
+    def _load_table_dump(self, backup_file):
+        # Put back the rows the table had, even ones its JSON CHECK rejects
+        return self.execute(
+            "set -o pipefail && "
+            f"gunzip -c '{backup_file}' | "
+            f"{db_client_cli()} --init-command='SET SESSION check_constraint_checks=0' "
+            f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} {self.database}",
+            executable="/bin/bash",
+        )
 
     @step("Update ERPNext Configuration")
     def update_erpnext_config(self, value):
@@ -818,14 +821,7 @@ class Site(Base):
         for table in self.tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
-                output = self.execute(
-                    "set -o pipefail && "
-                    f"gunzip -c '{backup_file}' | "
-                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
-                    f"{self.database}",
-                    executable="/bin/bash",
-                )
-                data["restored"][table] = output
+                data["restored"][table] = self._load_table_dump(backup_file)
 
         dropped_tables = self.drop_new_tables()
         data.update(dropped_tables)
@@ -857,20 +853,19 @@ class Site(Base):
     @job("Fix global search")
     def fix_global_search(self):
         self.truncate_global_search()
-        self.rebuild_global_search()
+        self.rebuild_global_search_step()
 
     @step("Truncate Global Search Table")
     def truncate_global_search(self):
-        return self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        # TRUNCATE recreates a crashed MyISAM table from its definition, even when REPAIR fails
+        result = self.run_sql_query("TRUNCATE TABLE __global_search", commit=True, as_dict=False)
+        if not result["success"]:
+            raise AgentException({"traceback": f"Failed to truncate __global_search: {result['data']}"})
+        return result
 
     @step("Rebuild global search")
     def rebuild_global_search_step(self):
-        import json
-
-        """Execute bench rebuild-global-search command."""
-        result = self.bench_execute("rebuild-global-search")
-
-        return {"output": json.dumps(result)}
+        return self.bench_execute("rebuild-global-search")
 
     def fetch_site_status(self):
         data = {
@@ -893,11 +888,11 @@ class Site(Base):
     def get_timezone(self):
         return self.timezone
 
-    def fetch_site_info(self):
+    def fetch_site_info(self, database_only=False):
         return {
             "config": self.config,
             "timezone": self.get_timezone(),
-            "usage": self.get_usage(),
+            "usage": self.get_usage(database_only=database_only),
         }
 
     def fetch_site_analytics(self):
@@ -1002,6 +997,11 @@ print(">>>" + frappe.session.sid + "<<<")
             return True
         return value == "1"
 
+    def streamed_backup_prefix(self, todays_dt: str) -> str:
+        # Frappe's site slug goes before the marker, so its "*-{slug}-database.sql.gz"
+        # glob for recent backups never matches one of these FIFOs.
+        return f"{todays_dt}-{self.name.replace('.', '_')}-%stream%"
+
     @job("Backup Site", priority="backup")
     def backup_job(  # noqa: C901
         self,
@@ -1038,10 +1038,11 @@ print(">>>" + frappe.session.sid + "<<<")
                     {"traceback": "Streaming backup requires rclone, but it was not found on PATH."}
                 )
             todays_dt = datetime.now().strftime("%Y%m%d_%H%M%S")
-            public_file = todays_dt + "-%stream%-files.tar"
-            db_file = todays_dt + "-%stream%-database.sql.gz"
-            private_file = todays_dt + "-%stream%-private-files.tar"
-            config_file = todays_dt + "-%stream%-site_config_backup.json"
+            file_prefix = self.streamed_backup_prefix(todays_dt)
+            public_file = file_prefix + "-files.tar"
+            db_file = file_prefix + "-database.sql.gz"
+            private_file = file_prefix + "-private-files.tar"
+            config_file = file_prefix + "-site_config_backup.json"
 
             files_to_stream = [config_file, db_file]
             if with_files:
@@ -1628,8 +1629,12 @@ print(">>>" + frappe.session.sid + "<<<")
 
         return backups
 
-    def get_usage(self):
+    def get_usage(self, database_only=False):
         """Returns Usage in bytes"""
+        if database_only:
+            # Only the database size is needed; skip the file-size walk.
+            return {"database": b2mb(self.get_database_size())}
+
         backup_directory = os.path.join(self.directory, "private", "backups")
         public_directory = os.path.join(self.directory, "public")
         private_directory = os.path.join(self.directory, "private")
