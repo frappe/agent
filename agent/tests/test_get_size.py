@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from agent.utils import get_size
 
@@ -31,3 +32,8 @@ class TestGetSize(unittest.TestCase):
 
         self.assertEqual(total - without_backups, top_level_backups)
         self.assertGreaterEqual(without_backups, 350)
+
+    def test_du_is_given_a_timeout_so_a_hung_mount_cannot_block_forever(self):
+        with patch("agent.utils.subprocess.check_output", return_value="0\t.") as check_output:
+            get_size(self.folder, timeout=5)
+        self.assertEqual(check_output.call_args.kwargs["timeout"], 5)

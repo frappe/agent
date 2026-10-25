@@ -16,6 +16,9 @@ from urllib.parse import urlparse
 
 import requests
 
+# ponytail: one ceiling for web and jobs; it only stops a hung mount, a big tree finishes well under it
+GET_SIZE_TIMEOUT = 15 * 60
+
 if TYPE_CHECKING:
     from typing import Literal, TypedDict
 
@@ -82,7 +85,7 @@ def download_file(url, prefix):
     return local_filename
 
 
-def get_size(folder, ignore_dirs=None):
+def get_size(folder, ignore_dirs=None, timeout=GET_SIZE_TIMEOUT):
     """Returns the apparent size of the folder in bytes, ignoring symlinks.
 
     Uses `du -sb` (apparent size, matching the old walk). ignore_dirs is
@@ -94,7 +97,7 @@ def get_size(folder, ignore_dirs=None):
         command += ["--exclude", glob.escape(os.path.join(folder, ignored))]
     command.append(folder)
 
-    output = subprocess.check_output(command, text=True)
+    output = subprocess.check_output(command, text=True, timeout=timeout)
     return int(output.split(maxsplit=1)[0])
 
 
