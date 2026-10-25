@@ -54,7 +54,8 @@ server {
 		set $upstream_host $1;
 		set $upstream_path $2$3;
 
-		proxy_pass https://$upstream_host/$upstream_path;
+		# With variables, proxy_pass sends only the built URI; add the query string back
+		proxy_pass https://$upstream_host/$upstream_path$is_args$args;
 		proxy_ssl_server_name on;
 		proxy_ssl_protocols TLSv1.3;
 		proxy_set_header Host $host;
