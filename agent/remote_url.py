@@ -101,6 +101,6 @@ class _PinnedIPAdapter(HTTPAdapter):
     def get_connection(self, url, proxies=None):
         pool = super().get_connection(url, proxies)
         if self.is_https and isinstance(pool, HTTPSConnectionPool):
-            pool.assert_hostname = self.hostname
+            # urllib3 sends this name for SNI and checks the certificate against it
             pool.conn_kw["server_hostname"] = self.hostname
         return pool
