@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from agent.remote_url import open_remote_url
+
 # ponytail: one ceiling for web and jobs; it only stops a hung mount, a big tree finishes well under it
 GET_SIZE_TIMEOUT = 15 * 60
 
@@ -74,7 +76,7 @@ def download_file(url, prefix):
     filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
-    with requests.get(url, stream=True) as r:
+    with open_remote_url(url) as r:
         total_size = int(r.headers.get("content-length", 0))
         chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
