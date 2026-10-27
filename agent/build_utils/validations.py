@@ -124,7 +124,7 @@ def get_package_manager_files(repo_path_map: dict[str, str]) -> PackageManagerFi
     return pfiles_map
 
 
-def check_python_syntax(dirpath: str) -> str:
+def check_python_syntax(dirpath: str, python_validation_image: str | None = None) -> str:
     """
     Script `compileall` will compile all the Python files
     in the given directory.
@@ -140,12 +140,23 @@ def check_python_syntax(dirpath: str) -> str:
     # Bytecode records its source path, which differs per build, so keep it out of the
     # build context: a changed file there stops Docker from reusing the app's build step
     with tempfile.TemporaryDirectory() as pycache_prefix:
-        proc = subprocess.run(
-            shlex.split(command),
-            text=True,
-            capture_output=True,
-            env={**os.environ, "PYTHONPYCACHEPREFIX": pycache_prefix},
-        )
+        try:
+            proc = subprocess.run(
+                shlex.split(command),
+                text=True,
+                capture_output=True,
+                env={**os.environ, "PYTHONPYCACHEPREFIX": pycache_prefix},
+            )
+        except FileNotFoundError:
+            if (
+                os.path.basename(_python) != "python3.14"
+                or os.environ.get("PRESS_AGENT_BUILD_ONLY") != "1"
+                or not python_validation_image
+            ):
+                raise
+            return _check_python_syntax_in_build_container(
+                dirpath, pycache_prefix, python_validation_image
+            )
     if proc.returncode == 0:
         return ""
 
@@ -153,6 +164,47 @@ def check_python_syntax(dirpath: str) -> str:
         return proc.stderr
 
     return proc.stdout
+
+
+def _check_python_syntax_in_build_container(
+    dirpath: str, pycache_prefix: str, image: str
+) -> str:
+    """Run Python 3.14 validation only through the explicitly isolated build daemon."""
+    import docker
+    from docker.errors import ContainerError, ImageNotFound
+
+    from agent.build_only import require_build_only_docker
+
+    # This validates the socket inode and daemon data-root and fails closed; never
+    # let Docker SDK defaults redirect validation to the host Docker daemon.
+    require_build_only_docker()
+    client = docker.from_env(timeout=5 * 60)
+    try:
+        try:
+            client.images.get(image)
+        except ImageNotFound:
+            client.images.pull(image)
+
+        try:
+            client.containers.run(
+                image,
+                ["python3.14", "-m", "compileall", "-q", "-o", "0", "/src"],
+                volumes={
+                    os.path.abspath(dirpath): {"bind": "/src", "mode": "ro"},
+                    os.path.abspath(pycache_prefix): {"bind": "/pycache", "mode": "rw"},
+                },
+                environment={"PYTHONPYCACHEPREFIX": "/pycache"},
+                network_disabled=True,
+                read_only=True,
+                remove=True,
+            )
+        except ContainerError as error:
+            output = error.stderr or error.stdout or b"Python 3.14 syntax validation failed"
+            return output.decode(errors="replace") if isinstance(output, bytes) else output
+    finally:
+        client.close()
+
+    return ""
 
 
 def get_python_path(dirpath: str) -> str:

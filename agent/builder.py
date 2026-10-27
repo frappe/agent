@@ -406,8 +406,12 @@ class ValidationManager(Base, JobMixin):
 
     def _validate_repositories(self):
         invalid_releases = []
+        bench_version = self.get_dependency_version("bench")
+        validation_image = f"frappe/bench:v{bench_version}"
         for app, pm in self.pmf.items():
-            invalidation_reason = check_python_syntax(pm["repo_path"])
+            invalidation_reason = check_python_syntax(
+                pm["repo_path"], python_validation_image=validation_image
+            )
 
             if invalidation_reason:
                 app_info = next((info for info in self.clone_instructions if info["app"] == app), None)
