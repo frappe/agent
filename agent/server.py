@@ -1285,7 +1285,14 @@ class Server(Base):
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
             "is_standalone": self.config.get("standalone", False),
+            "build_only": self.config.get("build_only", False),
+            "docker_host": self.config.get("docker_host"),
+            "docker_root": self.config.get("docker_root"),
+            "tls_cert_file": self.config.get("tls_cert_file"),
+            "tls_key_file": self.config.get("tls_key_file"),
         }
+        if data["build_only"]:
+            data["backup_workers"] = 0
         if self.config.get("name").startswith("n") and not self.config.get("name").startswith("nat"):
             data["is_proxy_server"] = True
 

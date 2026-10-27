@@ -22,6 +22,7 @@ import requests
 import semantic_version as sv
 
 from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
+from agent.build_only import require_build_only_docker
 from agent.build_utils.validations import check_python_syntax, get_package_manager_files
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
@@ -650,6 +651,7 @@ class ImageBuilder(Base, JobMixin):
 
     def _upload_built_assets(self):
         """Upload the assets this build made from the finished image, never from inside the build."""
+        require_build_only_docker()
         uploads = [asset for asset in self.asset_store if asset.get("upload_url")]
         if not uploads:
             return
@@ -684,6 +686,7 @@ class ImageBuilder(Base, JobMixin):
     def _build_image(self, context_tar_filepath: str):
         # Note: build command and environment are different from when
         # build runs on the press server.
+        require_build_only_docker()
         command = self._get_build_command()
         environment = self._get_build_environment()
         result = self._run(
@@ -740,6 +743,7 @@ class ImageBuilder(Base, JobMixin):
 
     @step("Push Docker Image")
     def _push_docker_image(self):
+        require_build_only_docker()
         max_retries = 3
         environment = os.environ.copy()
         client = docker.from_env(environment=environment, timeout=5 * 60)
@@ -863,6 +867,7 @@ class PatchImageBuilder(Base, JobMixin):
     @job("Run Patch Build")
     def run_patch_build(self):
         try:
+            require_build_only_docker()
             self._start_base_container()
             self._pull_app_updates()
             self._commit_patch_image()
@@ -875,6 +880,7 @@ class PatchImageBuilder(Base, JobMixin):
     @step("Start Base Container")
     def _start_base_container(self):
         """Docker login and pull base image"""
+        require_build_only_docker()
         self.execute(
             f"docker login "
             f"-u {self.registry['username']} "
@@ -933,6 +939,7 @@ class PatchImageBuilder(Base, JobMixin):
 
     def _docker_exec(self, command: str, publish: bool = True) -> str:
         """Execute a command inside the running container and return the output"""
+        require_build_only_docker()
         result = self.execute(f"docker exec {self.container_name} bash -c {shlex.quote(command)}")
         output = result.get("output", "") if isinstance(result, dict) else ""
         if publish:
@@ -942,12 +949,14 @@ class PatchImageBuilder(Base, JobMixin):
 
     @step("Commit Image")
     def _commit_patch_image(self):
+        require_build_only_docker()
         self.execute(
             f"docker commit --change='CMD [\"supervisord\"]' {self.container_name} {self._get_image_name()}"
         )
 
     @step("Push Docker Image")
     def _push_patch_image(self):
+        require_build_only_docker()
         environment = os.environ.copy()
         client = docker.from_env(environment=environment, timeout=5 * 60)
         auth_config = {
