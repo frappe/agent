@@ -8,12 +8,19 @@ from unittest.mock import Mock, patch
 from agent.build_only import (
 	is_build_only_request,
 	require_build_only_docker,
+	validate_build_only_bind_address,
 	validate_docker_daemon,
 	validate_docker_target,
 )
 
 
 class TestBuildOnlyAccess(unittest.TestCase):
+	def test_build_only_bind_requires_specific_tailnet_address(self):
+		for address in (None, "0.0.0.0", "::", "127.0.0.1", "192.0.2.1", "100.128.0.1"):
+			with self.subTest(address=address), self.assertRaises(ValueError):
+				validate_build_only_bind_address(address)
+		self.assertEqual(validate_build_only_bind_address("100.106.180.55"), "100.106.180.55")
+
 	def test_only_read_and_build_routes_are_allowed(self):
 		self.assertTrue(is_build_only_request("ping", "GET"))
 		self.assertTrue(is_build_only_request("get_version", "GET"))

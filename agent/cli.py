@@ -83,6 +83,7 @@ def ping_server(password: str):
 @click.option("--build-only", is_flag=True, default=False)
 @click.option("--docker-host", required=False, type=str)
 @click.option("--docker-root", required=False, type=str)
+@click.option("--web-bind-address", required=False, type=str)
 def config(
     name,
     user,
@@ -99,6 +100,7 @@ def config(
     build_only=False,
     docker_host=None,
     docker_root=None,
+    web_bind_address=None,
 ):
     if not (1 <= web_port <= 65535 and 1 <= redis_port <= 65535):
         raise click.BadParameter("Web and Redis ports must be between 1 and 65535.")
@@ -125,18 +127,23 @@ def config(
         config["sentry_dsn"] = sentry_dsn
 
     if build_only:
-        from agent.build_only import validate_docker_daemon
+        from agent.build_only import validate_build_only_bind_address, validate_docker_daemon
 
         if not tls_cert_file or not tls_key_file:
             raise click.ClickException("Build-only mode requires an HTTPS certificate and key.")
         valid, message = validate_docker_daemon(docker_host, docker_root)
         if not valid:
             raise click.ClickException(message)
+        try:
+            bind_address = validate_build_only_bind_address(web_bind_address)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
         config.update(
             {
                 "build_only": True,
                 "docker_host": docker_host,
                 "docker_root": docker_root,
+                "web_bind_address": bind_address,
                 "tls_cert_file": tls_cert_file,
                 "tls_key_file": tls_key_file,
             }

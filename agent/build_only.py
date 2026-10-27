@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 import posixpath
 import stat
@@ -13,6 +14,22 @@ BUILD_ONLY_ENDPOINTS = {
     ("jobs", "GET"),
     ("cancel_job", "POST"),
 }
+
+
+def validate_build_only_bind_address(address: str | None) -> str:
+    """Accept only a specific IPv4 address from Tailscale's CGNAT range."""
+    try:
+        parsed = ipaddress.ip_address(address or "")
+    except ValueError as exc:
+        raise ValueError("Build-only mode requires a specific Tailnet IPv4 bind address.") from exc
+    if (
+        parsed.version != 4
+        or parsed.is_unspecified
+        or parsed.is_loopback
+        or parsed not in ipaddress.ip_network("100.64.0.0/10")
+    ):
+        raise ValueError("Build-only mode must bind to a specific Tailscale IPv4 address.")
+    return str(parsed)
 
 
 def is_build_only_request(endpoint: str | None, method: str) -> bool:

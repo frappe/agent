@@ -1288,6 +1288,7 @@ class Server(Base):
             "build_only": self.config.get("build_only", False),
             "docker_host": self.config.get("docker_host"),
             "docker_root": self.config.get("docker_root"),
+            "web_bind_address": self.config.get("web_bind_address", "127.0.0.1"),
             "tls_cert_file": self.config.get("tls_cert_file"),
             "tls_key_file": self.config.get("tls_key_file"),
         }

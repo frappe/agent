@@ -1,6 +1,6 @@
 [program:web]
 {% if build_only %}
-command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind 0.0.0.0:{{ web_port }} --certfile {{ tls_cert_file }} --keyfile {{ tls_key_file }} --workers {{ gunicorn_workers }} agent.web:application"
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind {{ web_bind_address }}:{{ web_port }} --certfile {{ tls_cert_file }} --keyfile {{ tls_key_file }} --workers {{ gunicorn_workers }} agent.web:application"
 environment=PYTHONUNBUFFERED=1, PRESS_AGENT_BUILD_ONLY=1, DOCKER_HOST="{{ docker_host }}", BUILD_DOCKER_ROOT="{{ docker_root }}"
 {% else %}
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application"
