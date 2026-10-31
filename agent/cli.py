@@ -256,6 +256,30 @@ def proxysql(password):
     Server().setup_proxysql(password)
 
 
+@setup.command()
+def agent_db_cleanup():
+    from crontab import CronTab
+
+    script_directory = os.path.dirname(__file__)
+    agent_directory = os.path.dirname(os.path.dirname(script_directory))
+
+    cron = CronTab(user=True)
+
+    command = (
+        f"cd {agent_directory} && "
+        f"{agent_directory}/env/bin/python "
+        f"{agent_directory}/repo/agent/cleanup_job.py"
+    )
+
+    cron.remove_all(command=command)
+
+    job = cron.new(command=command)
+    job.hour.on(2)
+    job.minute.on(0)
+
+    cron.write()
+
+
 @cli.group()
 def run():
     pass
