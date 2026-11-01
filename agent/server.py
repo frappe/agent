@@ -665,7 +665,7 @@ class Server(Base):
         site = Site(name, source)
         self.move_site(site, target)
 
-        source.setup_nginx()
+        source.setup_nginx(ignore_missing_site_configs=True)
         target.setup_nginx_target()
         self.reload_nginx()
 
@@ -687,7 +687,7 @@ class Server(Base):
         site = Site(name, source)
         self.move_site(site, target)
 
-        source.setup_nginx()
+        source.setup_nginx(ignore_missing_site_configs=True)
         target.setup_nginx_target()
         self.reload_nginx()
 
