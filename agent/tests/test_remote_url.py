@@ -204,6 +204,43 @@ class TestDownloadFile(unittest.TestCase):
                 download_file("https://files.example.com/backup.sql.gz", prefix=self.directory)
             send.assert_not_called()
 
+    def test_download_allows_a_trusted_private_host(self):
+        send, hosts = fake_responses((200, None))
+        with patch.dict(
+            os.environ, {"AGENT_TRUSTED_PRIVATE_HOSTS": " S3.internal.example , other.example"}
+        ), patch("agent.remote_url.socket.getaddrinfo", return_value=resolve_to("10.0.0.5")), patch(
+            "requests.adapters.HTTPAdapter.send", send
+        ):
+            path = download_file("https://s3.internal.example/bucket/backup.sql.gz", prefix=self.directory)
+
+        self.assertEqual(hosts, ["s3.internal.example"])
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"backup")
+
+    def test_download_still_refuses_other_private_hosts_when_some_are_trusted(self):
+        with patch.dict(os.environ, {"AGENT_TRUSTED_PRIVATE_HOSTS": "s3.internal.example"}):
+            for host in ("files.internal.example", "internal.example", "s3.internal.example.attacker.com"):
+                with self.subTest(host=host), patch(
+                    "agent.remote_url.socket.getaddrinfo", return_value=resolve_to("10.0.0.5")
+                ), patch("requests.adapters.HTTPAdapter.send") as send, self.assertRaisesRegex(
+                    RemoteURLError, "not public"
+                ):
+                    download_file(f"https://{host}/backup.sql.gz", prefix=self.directory)
+                send.assert_not_called()
+
+    def test_download_checks_redirects_from_a_trusted_private_host(self):
+        send, hosts = fake_responses((302, "http://files.internal.example/backup.sql.gz"), (200, None))
+        with patch.dict(os.environ, {"AGENT_TRUSTED_PRIVATE_HOSTS": "s3.internal.example"}), patch(
+            "agent.remote_url.socket.getaddrinfo",
+            resolve_by_host({"s3.internal.example": "10.0.0.5", "files.internal.example": "10.0.0.6"}),
+        ), patch("requests.adapters.HTTPAdapter.send", send), self.assertRaisesRegex(
+            RemoteURLError, "not public"
+        ):
+            download_file("https://s3.internal.example/bucket/backup.sql.gz", prefix=self.directory)
+
+        self.assertEqual(hosts, ["s3.internal.example"])
+        self.assertEqual(os.listdir(self.directory), [])
+
     def test_download_refuses_host_that_does_not_resolve(self):
         with patch(
             "agent.remote_url.socket.getaddrinfo", side_effect=socket.gaierror
