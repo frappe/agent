@@ -44,6 +44,32 @@ class TestCheckVersion(unittest.TestCase):
                 self.assertEqual(ValidationManager.check_version(actual, expected), want)
 
 
+class TestParseAdditionalPackages(unittest.TestCase):
+    def test_reads_legacy_and_tool_frappe_cloud_keys(self):
+        from agent.builder import ContextManager
+
+        pyproject = """
+[tool.frappe-cloud]
+apt-dependencies = ["poppler-utils", "libmagic1"]
+
+[deploy.dependencies.apt]
+packages = ["libmagic1", " ffmpeg "]
+"""
+        with tempfile.TemporaryDirectory() as build_directory:
+            app_path = os.path.join(build_directory, "apps", "my_app")
+            os.makedirs(app_path)
+            with open(os.path.join(app_path, "pyproject.toml"), "w") as f:
+                f.write(pyproject)
+
+            context = SimpleNamespace(
+                build_directory=build_directory,
+                clone_instructions=[{"app": "my_app"}],
+            )
+            packages = ContextManager._parse_additional_packages(context)
+
+        self.assertEqual(packages, ["libmagic1", "ffmpeg", "poppler-utils"])
+
+
 class TestStampStepEnd(unittest.TestCase):
     def test_done_line_gets_the_utc_time_the_step_ended(self):
         from agent.builder import stamp_step_end
