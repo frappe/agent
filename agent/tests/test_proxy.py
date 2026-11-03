@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -54,6 +55,7 @@ class TestProxy(unittest.TestCase):
             proxy = Proxy()
         proxy.hosts_directory = self.hosts_directory
         proxy.nginx_directory = os.path.join(self.test_dir, "nginx")
+        proxy.dhparam_file = os.path.join(self.test_dir, "ffdhe2048.pem")
         proxy._proxy_config_modification_lock = None
         return proxy
 
@@ -255,8 +257,8 @@ class TestProxy(unittest.TestCase):
         with open(redirect_file) as r:
             self.assertDictEqual(json.load(r), original_dict)
 
-    def test_generated_proxy_config_recovers_real_client_ip_from_cloudflare(self):
-        """Test proxy.conf trusts Cloudflare ranges for realip before any server block."""
+    def _render_proxy_config(self):
+        """Generate proxy.conf for one site upstream and return its contents."""
         proxy = self._get_fake_proxy()
         proxy.upstreams_directory = self.upstreams_directory
         proxy.error_pages_directory = os.path.join(self.test_dir, "pages")
@@ -272,12 +274,30 @@ class TestProxy(unittest.TestCase):
             proxy._generate_proxy_config()
 
         with open(os.path.join(proxy.nginx_directory, "proxy.conf")) as f:
-            rendered = f.read()
+            return f.read()
+
+    def test_generated_proxy_config_recovers_real_client_ip_from_cloudflare(self):
+        """Test proxy.conf trusts Cloudflare ranges for realip before any server block."""
+        rendered = self._render_proxy_config()
 
         self.assertIn("real_ip_header CF-Connecting-IP;", rendered)
         first_server_block = rendered.index("server {")
         self.assertLess(rendered.index("set_real_ip_from 173.245.48.0/20;"), first_server_block)
         self.assertLess(rendered.index("set_real_ip_from 2400:cb00::/32;"), first_server_block)
+
+    def test_generated_proxy_config_sets_dhparam_so_dhe_only_clients_can_connect(self):
+        """Test proxy.conf loads the dhparam file, without which nginx drops DHE suites."""
+        rendered = self._render_proxy_config()
+
+        dhparam_file = os.path.join(self.test_dir, "ffdhe2048.pem")
+        self.assertIn(f"ssl_dhparam {dhparam_file};", rendered)
+
+    def test_shipped_dhparam_file_is_the_ffdhe2048_group(self):
+        """Test agent ships Mozilla's ffdhe2048 group, the one ssl_dhparam points to."""
+        dhparam_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tls", "ffdhe2048.pem")
+        command = ["openssl", "dhparam", "-in", dhparam_file, "-text", "-noout"]
+        output = subprocess.check_output(command, text=True)
+        self.assertIn("GROUP: ffdhe2048", output)
 
     def test_rename_does_not_update_partial_strings(self):
         """Test rename doesn't update part of other custom domains."""

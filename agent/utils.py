@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import hashlib
 import os
 import re
@@ -14,6 +15,11 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
+
+from agent.remote_url import open_remote_url
+
+# ponytail: one ceiling for web and jobs; it only stops a hung mount, a big tree finishes well under it
+GET_SIZE_TIMEOUT = 15 * 60
 
 if TYPE_CHECKING:
     from typing import Literal, TypedDict
@@ -70,7 +76,7 @@ def download_file(url, prefix):
     filename = secrets.token_urlsafe(16) + ext
     local_filename = os.path.join(prefix, filename)
 
-    with requests.get(url, stream=True) as r:
+    with open_remote_url(url) as r:
         total_size = int(r.headers.get("content-length", 0))
         chunk_size = 1024 * 1024 if total_size > (100 * 1024 * 1024) else 8192
         r.raise_for_status()
@@ -81,26 +87,20 @@ def download_file(url, prefix):
     return local_filename
 
 
-def get_size(folder, ignore_dirs=None):
-    """Returns the size of the folder in bytes. Ignores symlinks"""
-    total_size = os.path.getsize(folder)
+def get_size(folder, ignore_dirs=None, timeout=GET_SIZE_TIMEOUT):
+    """Returns the apparent size of the folder in bytes, ignoring symlinks.
 
-    if ignore_dirs is None:
-        ignore_dirs = []
+    Uses `du -sb` (apparent size, matching the old walk). ignore_dirs is
+    applied at the top level only, as before.
+    """
+    command = ["du", "-sb"]
+    for ignored in ignore_dirs or []:
+        # A full-path pattern; a bare name would also match nested folders
+        command += ["--exclude", glob.escape(os.path.join(folder, ignored))]
+    command.append(folder)
 
-    for item in os.listdir(folder):
-        itempath = os.path.join(folder, item)
-
-        if item in ignore_dirs:
-            continue
-
-        if not os.path.islink(itempath):
-            if os.path.isfile(itempath):
-                total_size += os.path.getsize(itempath)
-            elif os.path.isdir(itempath):
-                total_size += get_size(itempath)
-
-    return total_size
+    output = subprocess.check_output(command, text=True, timeout=timeout)
+    return int(output.split(maxsplit=1)[0])
 
 
 def is_registry_healthy(url: str, username: str, password: str) -> bool:

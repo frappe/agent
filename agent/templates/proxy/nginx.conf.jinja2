@@ -155,6 +155,7 @@ server {
 
 	ssl_protocols {{ tls_protocols or 'TLSv1.2 TLSv1.3' }};
 	ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+	ssl_dhparam {{ dhparam_file }};
 	ssl_prefer_server_ciphers off;
 
 	ssl_stapling on;
@@ -228,6 +229,7 @@ server {
 		proxy_set_header X-Real-IP $remote_addr;
 		proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_set_header X-Client-Port $remote_port;
+		proxy_set_header X-Request-Start "t=${msec}";
 		proxy_set_header X-Forwarded-Proto $scheme;
 		{% if host_options.codeserver %}
 		proxy_set_header Connection "upgrade";

@@ -412,6 +412,7 @@ class Bench(Base):
         public,
         private,
         skip_failing_patches,
+        skip_migrate=False,
     ):
         files = self.download_files(name, database, public, private)
         self.bench_new_site(name, mariadb_root_password, admin_password)
@@ -431,7 +432,8 @@ class Bench(Base):
         finally:
             self.delete_downloaded_files(files["directory"])
         site.uninstall_unavailable_apps(apps)
-        site.migrate(skip_failing_patches=skip_failing_patches)
+        if not skip_migrate:
+            site.migrate(skip_failing_patches=skip_failing_patches)
         site.set_admin_password(admin_password)
         site.enable_scheduler()
         self.setup_nginx()
@@ -569,6 +571,7 @@ class Bench(Base):
             "error_pages_directory": self.server.error_pages_directory,
             "nginx_directory": self.server.nginx_directory,
             "tls_protocols": self.server.config.get("tls_protocols"),
+            "dhparam_file": self.server.dhparam_file,
             "code_server": codeserver,
             "cors_origins": cors_origins,
         }
@@ -733,6 +736,7 @@ class Bench(Base):
                 "is_code_server_enabled": self.bench_config.get("is_code_server_enabled", False),
                 "custom_workers": self.common_site_config.get("workers", {}),
                 "custom_workers_group": self._get_custom_workers_group(),
+                "is_flow_server_enabled": self.common_site_config.get("flow_server_manager") == "supervisor",
                 "host_server": self.server.config["name"],
             },
             supervisor_config,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -10,16 +11,17 @@ import tempfile
 import time
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, List, TypedDict
 
 import docker
 import jinja2
+import requests
 import semantic_version as sv
 
-from agent.base import Base
+from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
 from agent.build_utils.validations import check_python_syntax, get_package_manager_files
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
@@ -28,10 +30,24 @@ from agent.utils import is_registry_healthy
 if TYPE_CHECKING:
     from typing import Literal
 
+    from docker.models.containers import Container
+
     from agent.build_utils.validations import PackageManagers
 
     OutputKey = Literal["build", "push"]
     Output = Dict[OutputKey, List[str]]
+
+
+DONE_LINE_RX = re.compile(r"#\d+ DONE \d+\.\d+s")
+
+
+def stamp_step_end(line: str) -> str:
+    """Append the UTC time to a BuildKit step's DONE line, so Press can record when the step ended."""
+    stripped = line.rstrip("\n")
+    if not DONE_LINE_RX.fullmatch(stripped):
+        return line
+    ended_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"{stripped} {ended_at}\n"
 
 
 class AppInfo(TypedDict):
@@ -120,6 +136,7 @@ class ContextManager(Base, JobMixin):
     )
     deploy_candidate_params: dict = field(default_factory=dict)
     ssh_keys: dict | None = None
+    asset_store: list[dict] = field(default_factory=list)
 
     def __post_init__(self):
         super().__init__()
@@ -147,7 +164,7 @@ class ContextManager(Base, JobMixin):
 
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
-        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc"]:
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc", "get_cached_app.py"]:
             shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
 
         shutil.copytree(
@@ -177,6 +194,23 @@ class ContextManager(Base, JobMixin):
 
         if self.ssh_keys:
             self._write_ssh_key_files(dest_folder)
+
+    def _add_stored_assets(self):
+        """Download the apps' stored assets into the build context, so the build never needs the store."""
+        for app_info in self.clone_instructions:
+            os.makedirs(os.path.join(self.build_directory, "stored_assets", app_info["app"]), exist_ok=True)
+
+        for asset in self.asset_store:
+            if not asset.get("download_url"):
+                continue
+
+            path = os.path.join(self.build_directory, "stored_assets", asset["app"], "assets.tar.gz")
+            try:
+                download_file(asset["download_url"], path)
+            except (requests.RequestException, OSError):
+                # The build then builds these assets itself
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(path)
 
     def _write_ssh_key_files(self, config_dir: str):
         ssh_dir = os.path.join(config_dir, "ssh")
@@ -315,6 +349,7 @@ class ContextManager(Base, JobMixin):
 
         self._copy_build_config_files()
         self._generate_build_config_files()
+        self._add_stored_assets()
 
         with open(os.path.join(self.build_directory, "Dockerfile"), "w") as dockerfile:
             dockerfile.write(self.dockerfile)
@@ -534,6 +569,7 @@ class ImageBuilder(Base, JobMixin):
         build_name: str,
         deploy_candidate_params: dict,
         ssh_keys: dict | None = None,
+        asset_store: list[dict] | None = None,
     ) -> None:
         super().__init__()
 
@@ -555,6 +591,7 @@ class ImageBuilder(Base, JobMixin):
             deploy_candidate_params=deploy_candidate_params,
             platform=platform,
             ssh_keys=ssh_keys,
+            asset_store=asset_store or [],
             _job_context=self._job_context,
         )
         self.build_directory = self.context_manager.build_directory
@@ -566,10 +603,11 @@ class ImageBuilder(Base, JobMixin):
 
         self.no_cache = no_cache
         self.no_push = no_push
-        self.last_published = datetime.now()
+        self.publish_output = Throttle(self.publish_data, PUBLISH_INTERVAL_SECONDS)
         self.build_failed = False
         self.build_token = build_token
         self.secret_path = None
+        self.asset_store = asset_store or []
 
         cwd = os.getcwd()
         self.config_file = os.path.join(cwd, "config.json")
@@ -590,24 +628,60 @@ class ImageBuilder(Base, JobMixin):
 
     @job("Run Remote Builder")
     def run_remote_builder(self):
-        self.context_manager.clone_repositories()
-        self.context_manager.prepare_build_context()
-        self.validation_manager.validate(
-            apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
-            build_directory=self.build_directory,
-        )
-        context_tar_filepath = self.tar_build_context()
-
+        context_tar_filepath = None
         try:
+            self.context_manager.clone_repositories()
+            self.context_manager.prepare_build_context()
+            self.validation_manager.validate(
+                apps=[app_info["app"] for app_info in self.context_manager.clone_instructions],
+                build_directory=self.build_directory,
+            )
+            context_tar_filepath = self.tar_build_context()
             return self._build_and_push(context_tar_filepath)
         finally:
             self._cleanup_context(context_tar_filepath)
 
     def _build_and_push(self, context_tar_filepath: str):
         self._build_image(context_tar_filepath=context_tar_filepath)
-        if not self.build_failed and not self.no_push:
+        if self.build_failed:
+            return self.data
+
+        if not self.no_push:
             self._push_docker_image()
+        self._upload_built_assets()
         return self.data
+
+    def _upload_built_assets(self):
+        """Upload the assets this build made from the finished image, never from inside the build."""
+        uploads = [asset for asset in self.asset_store if asset.get("upload_url")]
+        if not uploads:
+            return
+
+        try:
+            client = docker.from_env(timeout=5 * 60)
+            container = client.containers.create(self._get_image_name(), command="true")
+        except docker.errors.DockerException as e:
+            self.data["asset_store"] = {"error": str(e)}
+            return
+
+        results = {}
+        try:
+            for asset in uploads:
+                try:
+                    upload_app_assets(container, asset["app"], asset["upload_url"])
+                    results[asset["app"]] = "Uploaded"
+                except (
+                    docker.errors.DockerException,
+                    requests.RequestException,
+                    OSError,
+                    tarfile.TarError,
+                ) as e:
+                    results[asset["app"]] = f"Failed: {e}"
+        finally:
+            with contextlib.suppress(docker.errors.DockerException):
+                container.remove(force=True)
+
+        self.data["asset_store"] = results
 
     @step("Build Image")
     def _build_image(self, context_tar_filepath: str):
@@ -659,9 +733,9 @@ class ImageBuilder(Base, JobMixin):
 
     def _publish_docker_build_output(self, result):
         for line in result:
-            self.output["build"].append(line)
-            self._publish_throttled_output(False)
-        self._publish_throttled_output(True)
+            self.output["build"].append(stamp_step_end(line))
+            self.publish_output(self.output)
+        self.publish_data(self.output)
 
     def _wait_for_registry_recovery(self):
         """Wait for registry to recover after restart"""
@@ -692,13 +766,13 @@ class ImageBuilder(Base, JobMixin):
 
             except RegistryDownException as e:
                 if attempt == max_retries - 1:
-                    self._publish_throttled_output(True)
+                    self.publish_data(self.output)
                     raise Exception("Failed to push image after multiple attempts") from e
 
                 self._wait_for_registry_recovery()
 
             except Exception:
-                self._publish_throttled_output(True)
+                self.publish_data(self.output)
                 raise
 
         return None
@@ -717,19 +791,7 @@ class ImageBuilder(Base, JobMixin):
             auth_config=auth_config,
         ):
             self.output["push"].append(line)
-            self._publish_throttled_output(False)
-
-    def _publish_throttled_output(self, flush: bool):
-        if flush:
-            self.publish_data(self.output)
-            return
-
-        now = datetime.now()
-        if (now - self.last_published).total_seconds() <= 1:
-            return
-
-        self.last_published = now
-        self.publish_data(self.output)
+            self.publish_output(self.output)
 
     def _get_image_name(self):
         return f"{self.image_repository}:{self.image_tag}"
@@ -756,7 +818,7 @@ class ImageBuilder(Base, JobMixin):
         input_file.close()
 
         return_code = process.wait()
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
 
         self.build_failed = return_code != 0
         self.data.update({"build_failed": self.build_failed})
@@ -765,11 +827,11 @@ class ImageBuilder(Base, JobMixin):
             os.remove(self.secret_path)
 
     @step("Cleanup Context")
-    def _cleanup_context(self, context_tar_filepath: str):
+    def _cleanup_context(self, context_tar_filepath: str | None):
         if os.path.exists(self.build_directory):
             shutil.rmtree(self.build_directory, ignore_errors=True)
 
-        if os.path.exists(context_tar_filepath):
+        if context_tar_filepath and os.path.exists(context_tar_filepath):
             os.remove(context_tar_filepath)
 
         return {"cleanup": True}
@@ -796,7 +858,7 @@ class PatchImageBuilder(Base, JobMixin):
         self.patch_build_app_instructions = patch_build_app_instructions
         self.container_name = f"patch-build-{build_name}"
         self.output: Output = {"build": [], "push": []}
-        self.last_published = datetime.now()
+        self.publish_output = Throttle(self.publish_data, PUBLISH_INTERVAL_SECONDS)
 
     def _get_image_name(self) -> str:
         return f"{self.image_repository}:{self.image_tag}"
@@ -829,7 +891,7 @@ class PatchImageBuilder(Base, JobMixin):
     def _pull_app_updates(self):
         for patch_build_app_info in self.patch_build_app_instructions:
             self._pull_app(patch_build_app_info)
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
         return self.output["build"]
 
     def _pull_app(self, patch_build_app_info: PatchBuildAppInfo):
@@ -878,20 +940,8 @@ class PatchImageBuilder(Base, JobMixin):
         output = result.get("output", "") if isinstance(result, dict) else ""
         if publish:
             self.output["build"].append(output)
-            self._publish_throttled_output(False)
+            self.publish_output(self.output)
         return output
-
-    def _publish_throttled_output(self, flush: bool) -> None:
-        if flush:
-            self.publish_data(self.output)
-            return
-
-        now = datetime.now()
-        if (now - self.last_published).total_seconds() <= 1:
-            return
-
-        self.last_published = now
-        self.publish_data(self.output)
 
     @step("Commit Image")
     def _commit_patch_image(self):
@@ -916,14 +966,59 @@ class PatchImageBuilder(Base, JobMixin):
             auth_config=auth_config,
         ):
             self.output["push"].append(line)
-            self._publish_throttled_output(False)
+            self.publish_output(self.output)
 
-        self._publish_throttled_output(True)
+        self.publish_data(self.output)
         return self.output["push"]
 
     def _cleanup_container(self):
         with contextlib.suppress(Exception):
             self.execute(f"docker rm -f {self.container_name}")
+
+
+IMAGE_BENCH_PATH = "/home/frappe/frappe-bench"
+
+
+def download_file(url: str, path: str) -> None:
+    with requests.get(url, stream=True, timeout=60) as response:
+        response.raise_for_status()
+        with open(path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                f.write(chunk)
+
+
+def repack_public_folder(exported: str, tarball: str, app: str) -> None:
+    """Rename public/ to <app>/ as the build unpacks it, leaving out the node_modules bench links in."""
+
+    def rename(name: str) -> str:
+        _, _, rest = name.partition("/")
+        return f"{app}/{rest}" if rest else app
+
+    node_modules = f"{app}/node_modules"
+    with tarfile.open(exported) as source, tarfile.open(tarball, "w:gz") as target:
+        for member in source:
+            name = rename(member.name)
+            if name == node_modules or name.startswith(f"{node_modules}/"):
+                continue
+
+            member.name = name
+            if member.islnk():
+                member.linkname = rename(member.linkname)
+            target.addfile(member, source.extractfile(member) if member.isfile() else None)
+
+
+def upload_app_assets(container: Container, app: str, upload_url: str) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        exported = os.path.join(directory, "public.tar")
+        stream, _ = container.get_archive(f"{IMAGE_BENCH_PATH}/apps/{app}/{app}/public")
+        with open(exported, "wb") as f:
+            for chunk in stream:
+                f.write(chunk)
+
+        tarball = os.path.join(directory, "assets.tar.gz")
+        repack_public_folder(exported, tarball, app)
+        with open(tarball, "rb") as f:
+            requests.put(upload_url, data=f, timeout=600).raise_for_status()
 
 
 def get_clone_directory():
