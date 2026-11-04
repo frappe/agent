@@ -86,6 +86,10 @@ class Server(Base):
     def backup_workers(self) -> int:
         return self.config.get("backup_workers", 1)
 
+    @property
+    def signup_workers(self) -> int:
+        return self.config.get("signup_workers", 1)
+
     def docker_login(self, registry):
         url = shlex.quote(registry["url"])
         username = shlex.quote(registry["username"])
@@ -948,6 +952,10 @@ class Server(Base):
             worker_name = f"agent:worker_backup-{worker}"
             self.execute(f"sudo supervisorctl restart {worker_name}", non_zero_throw=False)
 
+        for worker in range(self.signup_workers):
+            worker_name = f"agent:worker_signup-{worker}"
+            self.execute(f"sudo supervisorctl restart {worker_name}", non_zero_throw=False)
+
         self.execute("sudo supervisorctl restart agent:web")
         run_patches()
 
@@ -975,7 +983,7 @@ class Server(Base):
 
         # Stop required services
         if restart_rq_workers:
-            for group in ("worker", "worker_backup"):
+            for group in ("worker", "worker_backup", "worker_signup"):
                 for worker_id in supervisor_status.get(group, {}):
                     self.execute(
                         f"sudo supervisorctl stop agent:{group}-{worker_id}",
@@ -1020,6 +1028,8 @@ class Server(Base):
                 self.execute(f"sudo supervisorctl start agent:worker-{i}")
             for i in range(self.backup_workers):
                 self.execute(f"sudo supervisorctl start agent:worker_backup-{i}", non_zero_throw=False)
+            for i in range(self.signup_workers):
+                self.execute(f"sudo supervisorctl start agent:worker_signup-{i}", non_zero_throw=False)
 
         if restart_web_workers:
             self.execute("sudo supervisorctl start agent:web")
@@ -1281,6 +1291,7 @@ class Server(Base):
             "gunicorn_workers": self.config.get("gunicorn_workers", 2),
             "workers": self.config["workers"],
             "backup_workers": self.backup_workers,
+            "signup_workers": self.signup_workers,
             "directory": self.directory,
             "user": self.config["user"],
             "sentry_dsn": self.config.get("sentry_dsn"),
