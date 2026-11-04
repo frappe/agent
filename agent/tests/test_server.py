@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from agent.base import AgentException
 from agent.server import Server
@@ -97,3 +97,24 @@ class TestServerNginxAccess(unittest.TestCase):
         config = self.server.config
         self.assertEqual(config["ip_accept"], ["183.82.5.84/32"])
         self.assertEqual(config["proxy_ip"], "10.3.1.0/24")
+
+
+@patch("agent.server.Site")
+@patch("agent.server.Bench")
+class TestRecoverFailedSiteUpdate(unittest.TestCase):
+    """A parallel recovery can move another site out of the source bench mid nginx rebuild."""
+
+    def recover(self, job, *args):
+        server = MagicMock()
+        job.__wrapped__(server, "site.frappe.cloud", "bench-new", "bench-old", True, *args)
+        return server
+
+    def test_recover_pull_skips_sites_that_left_the_source_bench(self, bench, site):
+        self.recover(Server.update_site_recover_pull_job)
+
+        bench.return_value.setup_nginx.assert_called_once_with(ignore_missing_site_configs=True)
+
+    def test_recover_migrate_skips_sites_that_left_the_source_bench(self, bench, site):
+        self.recover(Server.update_site_recover_migrate_job, None, False)
+
+        bench.return_value.setup_nginx.assert_called_once_with(ignore_missing_site_configs=True)
