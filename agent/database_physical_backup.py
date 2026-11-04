@@ -60,20 +60,23 @@ class DatabasePhysicalBackup(DatabaseServer):
     @job("Physical Backup Database", priority="low")
     def create_backup_job(self):
         self.remove_backups_metadata()
-        self.fetch_table_info()
-        self.flush_tables()
-        self.flush_changes_to_disk()
-        self.validate_exportable_files()
-        self.export_table_schemas()
-        self.collect_files_metadata()
-        self.store_backup_metadata()
-        self.create_snapshot()  # Blocking call
-        self.unlock_all_tables()
-        self.remove_backups_metadata()
+        try:
+            self.fetch_table_info()
+            self.flush_tables()
+            self.flush_changes_to_disk()
+            self.validate_exportable_files()
+            self.export_table_schemas()
+            self.collect_files_metadata()
+            self.store_backup_metadata()
+            self.create_snapshot()  # Blocking call
+            self.unlock_all_tables()
+        finally:
+            # A metadata file left in the database directory makes DROP DATABASE fail
+            self.remove_backups_metadata()
 
     def remove_backups_metadata(self):
-        with contextlib.suppress(Exception):
-            for db_name in self.databases:
+        for db_name in self.databases:
+            with contextlib.suppress(Exception):
                 os.remove(get_path_of_physical_backup_metadata(self._db_base_path, db_name))
 
     @step("Fetch Database Tables Information")
