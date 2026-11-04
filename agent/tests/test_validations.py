@@ -5,7 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from agent.build_utils.validations import check_python_syntax
 
@@ -48,3 +48,37 @@ class TestCheckPythonSyntax(unittest.TestCase):
         self.write("broken.py", "def broken(:\n")
 
         self.assertIn("broken.py", check_python_syntax(self.app))
+
+    @patch.dict(os.environ, {"PRESS_AGENT_BUILD_ONLY": "1"})
+    @patch("agent.build_only.require_build_only_docker")
+    @patch("docker.from_env")
+    @patch("agent.build_utils.validations.subprocess.run", side_effect=FileNotFoundError)
+    def test_missing_python314_uses_only_isolated_build_docker(
+        self, _run, from_env, require_build_only_docker
+    ):
+        self.write("hooks.py", "app_name = 'builder'\n")
+        self.write("pyproject.toml", '[project]\nrequires-python = ">=3.14"\n')
+        client = MagicMock()
+        from_env.return_value = client
+
+        result = check_python_syntax(self.app, "frappe/bench:v5.31.0")
+
+        self.assertEqual(result, "")
+        require_build_only_docker.assert_called_once_with()
+        from_env.assert_called_once_with(timeout=5 * 60)
+        client.containers.run.assert_called_once()
+        args, kwargs = client.containers.run.call_args
+        self.assertEqual(args[0], "frappe/bench:v5.31.0")
+        self.assertEqual(args[1][:3], ["python3.14", "-m", "compileall"])
+        self.assertTrue(kwargs["network_disabled"])
+        self.assertTrue(kwargs["read_only"])
+        self.assertEqual(kwargs["volumes"][os.path.abspath(self.app)]["mode"], "ro")
+        client.close.assert_called_once_with()
+
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("agent.build_utils.validations.subprocess.run", side_effect=FileNotFoundError)
+    def test_missing_python314_fails_closed_outside_build_only(self, _run):
+        self.write("hooks.py", "app_name = 'builder'\n")
+
+        with self.assertRaises(FileNotFoundError):
+            check_python_syntax(self.app, "frappe/bench:v5.31.0")
