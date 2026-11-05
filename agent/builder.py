@@ -164,7 +164,7 @@ class ContextManager(Base, JobMixin):
 
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
-        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc", "get_cached_app.py"]:
+        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc", "get_cached_app.py", "run_hooks.py"]:
             shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
 
         shutil.copytree(
@@ -986,40 +986,26 @@ def download_file(url: str, path: str) -> None:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
 
-
-def repack_public_folder(exported: str, tarball: str, app: str) -> None:
-    """Rename public/ to <app>/ as the build unpacks it, leaving out the node_modules bench links in."""
-
-    def rename(name: str) -> str:
-        _, _, rest = name.partition("/")
-        return f"{app}/{rest}" if rest else app
-
-    node_modules = f"{app}/node_modules"
-    with tarfile.open(exported) as source, tarfile.open(tarball, "w:gz") as target:
-        for member in source:
-            name = rename(member.name)
-            if name == node_modules or name.startswith(f"{node_modules}/"):
-                continue
-
-            member.name = name
-            if member.islnk():
-                member.linkname = rename(member.linkname)
-            target.addfile(member, source.extractfile(member) if member.isfile() else None)
-
-
 def upload_app_assets(container: Container, app: str, upload_url: str) -> None:
     with tempfile.TemporaryDirectory() as directory:
-        exported = os.path.join(directory, "public.tar")
-        stream, _ = container.get_archive(f"{IMAGE_BENCH_PATH}/apps/{app}/{app}/public")
-        with open(exported, "wb") as f:
+        # get_archive wraps the file in an (uncompressed) tar, so unwrap it first.
+        outer = os.path.join(directory, "outer.tar")
+        stream, _ = container.get_archive(f"/home/frappe/added_files_{app}.tar.gz")
+        with open(outer, "wb") as f:
             for chunk in stream:
                 f.write(chunk)
 
         tarball = os.path.join(directory, "assets.tar.gz")
-        repack_public_folder(exported, tarball, app)
+        with tarfile.open(outer) as tar:
+            with tar.extractfile(tar.getmembers()[0]) as src, open(tarball, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+
+        with tarfile.open(tarball, "r:gz") as tar:
+            if tar.next() is None:
+                return  # nothing changed
+
         with open(tarball, "rb") as f:
             requests.put(upload_url, data=f, timeout=600).raise_for_status()
-
 
 def get_clone_directory():
     path = os.path.join(os.getcwd(), ".clones")
