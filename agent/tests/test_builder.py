@@ -269,3 +269,47 @@ class TestGetCachedApp(unittest.TestCase):
         with open(os.path.join(self.public, "frontend", "index.html")) as f:
             self.assertEqual(f.read(), "old")
         self.assertFalse(os.path.exists(os.path.join(self.bench, "apps", "builder", "hooks.py")))
+
+
+class TestAppsTxt(unittest.TestCase):
+    def write_app(self, build_directory: str, app: str, files: dict[str, str]):
+        app_path = os.path.join(build_directory, "apps", app)
+        os.makedirs(app_path)
+        for name, content in files.items():
+            with open(os.path.join(app_path, name), "w") as f:
+                f.write(content)
+
+    def test_apps_txt_lists_the_package_name_of_each_app(self):
+        from agent.builder import ContextManager
+
+        with tempfile.TemporaryDirectory() as build_directory:
+            self.write_app(build_directory, "frappe", {"pyproject.toml": '[project]\nname = "frappe"\n'})
+            self.write_app(build_directory, "sheets_sync", {"pyproject.toml": '[project]\nname = "sheets"\n'})
+            self.write_app(build_directory, "cfg_app", {"setup.cfg": "[metadata]\nname = cfg_package\n"})
+            self.write_app(
+                build_directory,
+                "py_app",
+                {
+                    "pyproject.toml": "[build-system]\nrequires = []\n",
+                    "setup.py": 'app_name = "wrong"\nsetup(name="py_package", version="1.0")\n',
+                },
+            )
+            self.write_app(build_directory, "bare_app", {"setup.py": "setup()\n"})
+
+            context = SimpleNamespace(
+                build_directory=build_directory,
+                clone_instructions=[
+                    {"app": "frappe"},
+                    {"app": "sheets_sync"},
+                    {"app": "cfg_app"},
+                    {"app": "py_app"},
+                    {"app": "bare_app"},
+                ],
+            )
+            context._get_app_name = lambda app: ContextManager._get_app_name(context, app)
+            ContextManager._generate_apps_txt(context)
+
+            with open(os.path.join(build_directory, "apps.txt")) as f:
+                apps = f.read()
+
+        self.assertEqual(apps, "frappe\nsheets\ncfg_package\npy_package\nbare_app\n")
