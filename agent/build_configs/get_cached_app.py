@@ -109,40 +109,63 @@ def link_node_modules(bench_path: str, app_name: str, app_public_path: str) -> N
     if os.path.isdir(node_modules) and not os.path.lexists(link):
         os.symlink(node_modules, link)
 
-
 def extract_assets(app_name: str, tar_path: str) -> None:
-    """Replace the app's public folder with the stored one, and restore the links bench build makes."""
+    """Apply the stored changed build files over the app, and restore the links bench build makes."""
     if not hasattr(tarfile, "data_filter"):
         raise RuntimeError("this Python can't extract archives safely")
 
     change_working_directory()
     bench_path = os.getcwd()
-    app_public_path = os.path.join(bench_path, "apps", app_name, app_name, "public")
+    app_path = os.path.join(bench_path, "apps", app_name)
+    app_public_path = os.path.join(app_path, app_name, "public")
     assets_path = os.path.join(bench_path, "sites", "assets", app_name)
 
     with tempfile.TemporaryDirectory(dir=os.path.join(bench_path, "sites")) as extract_path:
-        # The data filter refuses paths and links that point outside extract_path
+        # Extract to a scratch dir first so a bad archive can't leave the app half-updated.
+        # The data filter refuses paths and links that point outside extract_path.
         with tarfile.open(tar_path, mode="r:gz") as tar:
             tar.extractall(path=extract_path, filter="data")
 
-        extracted = os.path.join(extract_path, app_name)
-        if not os.path.isdir(extracted):
-            raise RuntimeError(f"stored assets have no {app_name} folder")
-
-        if os.path.islink(assets_path):
-            os.unlink(assets_path)
-        elif os.path.exists(assets_path):
-            shutil.rmtree(assets_path)
-        if os.path.exists(app_public_path):
-            shutil.rmtree(app_public_path)
-        shutil.move(extracted, app_public_path)
+        _overlay(extract_path, app_path)
 
     # Restore symlink since we deploy with cp -LR
+    if os.path.islink(assets_path):
+        os.unlink(assets_path)
+    elif os.path.exists(assets_path):
+        shutil.rmtree(assets_path)
     os.symlink(app_public_path, assets_path)
     link_node_modules(bench_path, app_name, app_public_path)
 
-    print(f"Assets moved to {app_public_path} and symlink restored at {assets_path}")
+    print(f"Build files applied to {app_path} and symlink restored at {assets_path}")
 
+
+def _overlay(src_root: str, dest_root: str) -> None:
+    """Move everything under src_root into dest_root, replacing what's there
+    entry by entry and leaving files that aren't in src_root alone."""
+    for root, dirs, files in os.walk(src_root):
+        dest_dir = os.path.normpath(os.path.join(dest_root, os.path.relpath(root, src_root)))
+
+        for name in list(dirs):
+            src, dest = os.path.join(root, name), os.path.join(dest_dir, name)
+            if os.path.islink(src):
+                # os.walk lists symlinks to dirs as dirs; move them as links.
+                _replace(src, dest)
+                dirs.remove(name)
+            else:
+                if os.path.islink(dest) or (os.path.lexists(dest) and not os.path.isdir(dest)):
+                    os.unlink(dest)
+                os.makedirs(dest, exist_ok=True)
+
+        for name in files:
+            _replace(os.path.join(root, name), os.path.join(dest_dir, name))
+
+
+def _replace(src: str, dest: str) -> None:
+    if os.path.islink(dest) or os.path.isfile(dest):
+        os.unlink(dest)
+    elif os.path.isdir(dest):
+        shutil.rmtree(dest)
+    shutil.move(src, dest)
 
 def main():
     """Use the app's stored assets if the agent put them in the build context, else build them"""
@@ -159,13 +182,38 @@ def main():
         try:
             extract_assets(APP_NAME, STORED_ASSETS)
             _update_assets_json(APP_NAME)
+            change_working_directory()
+            subprocess.run(["bench", "compile-po-to-mo", "--app", f"{APP_NAME}"], check=True, env=env)
+            subprocess.run(["../env/bin/python", "/usr/local/bin/run_hooks.py", f"{APP_NAME}"], check=True, env=env, cwd=os.getcwd()+"/sites")
             return
         except UNUSABLE_ARCHIVE_ERRORS as e:
             print(f"Stored assets could not be used: {e}")
 
     print(f"Assets {asset_filename} not found in store. Building...")
+    subprocess.run(["touch", f"/home/frappe/time_marker_{APP_NAME}"], check=True, env=env)
     build_assets(APP_NAME)
+    change_working_directory()
+    app_dir = os.getcwd()+f"/apps/{APP_NAME}"
+    list_path = f"/home/frappe/added_files_{APP_NAME}.txt"
+    tar_path = f"/home/frappe/added_files_{APP_NAME}.tar.gz"
 
+    with open(list_path, "w") as f:
+        subprocess.run(
+            [
+                "find", ".", "-mindepth", "1",
+                "-name", "node_modules", "-prune",
+                "-o",
+                "-cnewer", f"/home/frappe/time_marker_{APP_NAME}", "-printf", "%P\n",
+            ],
+            cwd=app_dir, stdout=f, check=True,
+        )
+
+    # --no-recursion: the list already names every changed file, and the
+    # directories in it should not pull in their unchanged contents.
+    subprocess.run(
+        ["tar", "-czf", tar_path, "--no-recursion", "-C", app_dir, "-T", list_path],
+        check=True,
+    )
 
 if __name__ == "__main__":
     main()
