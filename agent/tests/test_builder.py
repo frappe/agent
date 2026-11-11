@@ -53,6 +53,7 @@ class TestBuildContext(unittest.TestCase):
             context = SimpleNamespace(build_config_path=build_config_path, build_directory=build_directory)
             ContextManager._copy_build_config_files(context)
             self.assertTrue(os.path.isfile(os.path.join(build_directory, "get_cached_app.py")))
+            self.assertTrue(os.path.isfile(os.path.join(build_directory, "run_hooks.py")))
 
 
 class TestStoredAssetsInBuildContext(unittest.TestCase):
