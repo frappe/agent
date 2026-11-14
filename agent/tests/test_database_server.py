@@ -13,6 +13,7 @@ from agent.database_server import (
     list_audit_logs,
     parse_audit_log_time_range,
 )
+from agent.exceptions import AgentException
 
 RECORD = "20250811 12:00:{second},dbserver,root,localhost,42,1337,QUERY,mydb,'select 1',0\n"
 
@@ -187,3 +188,54 @@ class TestAuditLogLock(unittest.TestCase):
             raise OSError
 
         self.acquire()
+
+
+class TestPurgeBinlog(unittest.TestCase):
+    NOTE = "Binary log 'mysql-bin.000041' is not purged because it is in use by an active XID transaction"
+
+    def setUp(self):
+        self.directory = TemporaryDirectory()
+        self.server = DatabaseServer.__new__(DatabaseServer)
+        self.server.mariadb_directory = self.directory.name
+        for name in ["mysql-bin.000041", "mysql-bin.000042", "mysql-bin.000043", "mysql-bin.index"]:
+            write(Path(self.directory.name) / name, "")
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def execute(self, method, to_binlog="mysql-bin.000043", result=None, deletes=()):
+        def execute_query(*args, **kwargs):
+            for name in deletes:
+                os.remove(Path(self.directory.name) / name)
+            return result or (True, [{"output": None}, {"output": [{"Message": self.NOTE}]}])
+
+        with patch("agent.database_server.Database") as db, patch.object(DatabaseServer, "db_port", 3306):
+            db.return_value.execute_query.side_effect = execute_query
+            self.queries = db.return_value.execute_query
+            return method(self.server, "127.0.0.1", "password", to_binlog)
+
+    def purge(self, **kwargs):
+        return self.execute(DatabaseServer._purge_binlog, **kwargs)
+
+    def test_succeeds_when_mariadb_deletes_the_older_binlogs(self):
+        self.assertTrue(self.purge(deletes=["mysql-bin.000041", "mysql-bin.000042"]))
+
+    def test_fails_when_mariadb_keeps_an_older_binlog_without_an_error(self):
+        # MariaDB stops at a binlog that crash recovery or a reader still needs, and only adds a note
+        self.assertFalse(self.purge(deletes=["mysql-bin.000042"]))
+
+    def test_fails_when_the_purge_query_fails(self):
+        self.assertFalse(self.purge(result=(False, "Target log not found in binlog index")))
+
+    def test_rejects_a_name_that_is_not_a_binlog_without_a_query(self):
+        self.assertFalse(self.purge(to_binlog="mysql-bin.000043'; DROP DATABASE mysql; --"))
+        self.queries.assert_not_called()
+
+    def test_step_fails_with_the_binlogs_left_on_disk_and_the_note_from_mariadb(self):
+        with self.assertRaises(AgentException) as context:
+            self.execute(DatabaseServer.purge_binlog_step.__wrapped__)
+
+        output = context.exception.data["output"]
+        self.assertIn("2 binlogs before mysql-bin.000043 are still on disk", output)
+        self.assertIn("from mysql-bin.000041 to mysql-bin.000042", output)
+        self.assertIn(f"MariaDB: {self.NOTE}", output)
