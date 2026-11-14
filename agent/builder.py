@@ -164,7 +164,13 @@ class ContextManager(Base, JobMixin):
 
     def _copy_build_config_files(self):
         """Copy generic build config files to the build context"""
-        for filename in ["common_site_config.json", "supervisord.conf", ".vimrc", "get_cached_app.py", "run_hooks.py"]:
+        for filename in [
+            "common_site_config.json",
+            "supervisord.conf",
+            ".vimrc",
+            "get_cached_app.py",
+            "run_hooks.py",
+        ]:
             shutil.copy(os.path.join(self.build_config_path, filename), self.build_directory)
 
         shutil.copytree(
@@ -986,6 +992,7 @@ def download_file(url: str, path: str) -> None:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
 
+
 def upload_app_assets(container: Container, app: str, upload_url: str) -> None:
     with tempfile.TemporaryDirectory() as directory:
         # get_archive wraps the file in an (uncompressed) tar, so unwrap it first.
@@ -996,9 +1003,8 @@ def upload_app_assets(container: Container, app: str, upload_url: str) -> None:
                 f.write(chunk)
 
         tarball = os.path.join(directory, "assets.tar.gz")
-        with tarfile.open(outer) as tar:
-            with tar.extractfile(tar.getmembers()[0]) as src, open(tarball, "wb") as dst:
-                shutil.copyfileobj(src, dst)
+        with tarfile.open(outer) as tar, open(tarball, "wb") as dst:
+            shutil.copyfileobj(tar.extractfile(tar.getmembers()[0]), dst)
 
         with tarfile.open(tarball, "r:gz") as tar:
             if tar.next() is None:
@@ -1006,6 +1012,7 @@ def upload_app_assets(container: Container, app: str, upload_url: str) -> None:
 
         with open(tarball, "rb") as f:
             requests.put(upload_url, data=f, timeout=600).raise_for_status()
+
 
 def get_clone_directory():
     path = os.path.join(os.getcwd(), ".clones")
