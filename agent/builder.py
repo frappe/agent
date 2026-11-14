@@ -17,6 +17,7 @@ from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, List, TypedDict
 
 import docker
+import filelock
 import jinja2
 import requests
 import semantic_version as sv
@@ -239,33 +240,37 @@ class ContextManager(Base, JobMixin):
         commit_hash = app_info["hash"]
         clone_path = os.path.join(clone_dir, source, commit_hash[:10])
 
-        if os.path.exists(clone_path):
-            return f"git clone {app_info['app']} CACHED\n"
+        # Parallel workers race on the same app+commit; hold a lock across the
+        # cache check and the clone so the loser waits or hits the cache
+        lock_path = os.path.join(clone_dir, f"{source}-{commit_hash[:10]}.lock")
+        with filelock.FileLock(lock_path, timeout=600):
+            if os.path.exists(clone_path):
+                return f"git clone {app_info['app']} CACHED\n"
 
-        os.makedirs(clone_path, exist_ok=True)
+            os.makedirs(clone_path, exist_ok=True)
 
-        commands = [
-            "git init",
-            f"git remote add origin {app_info['url']}",
-            "git config credential.helper ''",
-            f"git fetch --depth 1 origin {commit_hash}",
-            f"git checkout -B {app_info['branch']}",
-            f"git checkout {commit_hash}",
-        ]
+            commands = [
+                "git init",
+                f"git remote add origin {app_info['url']}",
+                "git config credential.helper ''",
+                f"git fetch --depth 1 origin {commit_hash}",
+                f"git checkout -B {app_info['branch']}",
+                f"git checkout {commit_hash}",
+            ]
 
-        output = f"git clone {app_info['app']}\n"
-        try:
-            for command in commands:
-                result = self._run_git_command(command, cwd=clone_path)
-                output += result + "\n"
-        except CloneError as e:
-            cleanup_parital_clones(clone_path)
-            error_output = e.data.get("output", "") if isinstance(e.data, dict) else str(e.data)
-            raise CloneError(
-                {"traceback": f"Failed to clone repository for {app_info['app']} - {error_output}"}
-            ) from None
+            output = f"git clone {app_info['app']}\n"
+            try:
+                for command in commands:
+                    result = self._run_git_command(command, cwd=clone_path)
+                    output += result + "\n"
+            except CloneError as e:
+                cleanup_parital_clones(clone_path)
+                error_output = e.data.get("output", "") if isinstance(e.data, dict) else str(e.data)
+                raise CloneError(
+                    {"traceback": f"Failed to clone repository for {app_info['app']} - {error_output}"}
+                ) from None
 
-        return output
+            return output
 
     @step("Clone Repositories")
     def clone_repositories(self):
