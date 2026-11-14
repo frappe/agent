@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import configparser
 import contextlib
 import os
 import re
@@ -22,7 +24,7 @@ import requests
 import semantic_version as sv
 
 from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
-from agent.build_utils.validations import check_python_syntax, get_package_manager_files
+from agent.build_utils.validations import check_python_syntax, get_package_manager_files, load_pyproject
 from agent.exceptions import AgentException, RegistryDownException
 from agent.job import Job, Step, job, step
 from agent.utils import is_registry_healthy
@@ -48,6 +50,19 @@ def stamp_step_end(line: str) -> str:
         return line
     ended_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return f"{stripped} {ended_at}\n"
+
+
+def get_app_name_from_setup(contents: str) -> str | None:
+    """Return the `name` argument of the `setup()` call in setup.py, the same way as bench."""
+    for node in ast.parse(contents).body:
+        if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
+            continue
+        if getattr(node.value.func, "id", None) != "setup":
+            continue
+        for keyword in node.value.keywords:
+            if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                return keyword.value.value
+    return None
 
 
 class AppInfo(TypedDict):
@@ -330,6 +345,40 @@ class ContextManager(Base, JobMixin):
         with open(dockerfile_path, "w") as f:
             f.write(content)
 
+    def _generate_apps_txt(self):
+        app_names = [self._get_app_name(app_info["app"]) for app_info in self.clone_instructions]
+        with open(os.path.join(self.build_directory, "apps.txt"), "w") as apps_file:
+            apps_file.write("\n".join(app_names) + "\n")
+
+    def _get_app_name(self, app: str) -> str:
+        """Return the package name of the app from pyproject.toml, setup.cfg or setup.py.
+
+        `bench get-app` installs the app under this name, and Frappe imports each app in
+        apps.txt by name. It can be different from the app name in Press.
+        """
+        app_path = os.path.join(self.build_directory, "apps", app)
+
+        pyproject_path = os.path.join(app_path, "pyproject.toml")
+        if os.path.exists(pyproject_path) and (
+            app_name := load_pyproject(app, pyproject_path).get("project", {}).get("name")
+        ):
+            return app_name
+
+        setup_cfg_path = os.path.join(app_path, "setup.cfg")
+        if os.path.exists(setup_cfg_path):
+            config = configparser.ConfigParser(interpolation=None)
+            config.read(setup_cfg_path)
+            if app_name := config.get("metadata", "name", fallback=None):
+                return app_name
+
+        setup_py_path = os.path.join(app_path, "setup.py")
+        if os.path.exists(setup_py_path):
+            with open(setup_py_path) as f:
+                if app_name := get_app_name_from_setup(f.read()):
+                    return app_name
+
+        return app
+
     @step("Prepare Build Context")
     def prepare_build_context(self):
         """Clone the apps passed from build instructions and return the build context directory path"""
@@ -354,10 +403,7 @@ class ContextManager(Base, JobMixin):
         with open(os.path.join(self.build_directory, "Dockerfile"), "w") as dockerfile:
             dockerfile.write(self.dockerfile)
 
-        with open(os.path.join(self.build_directory, "apps.txt"), "w") as apps_file:
-            apps_file.write(
-                "\n".join([app_info["app"] for app_info in self.clone_instructions]) + "\n",
-            )
+        self._generate_apps_txt()
 
         additional_packages = self._parse_additional_packages()
         self._inject_additional_packages(additional_packages)
