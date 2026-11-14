@@ -1693,9 +1693,9 @@ print(">>>" + frappe.session.sid + "<<<")
         if not columns:
             columns = []
 
-        command = f"describe-database-table --doctype '{doctype}' "
+        command = f"describe-database-table --doctype {quote(doctype)} "
         for column in columns:
-            command += f"--column {column} "
+            command += f"--column {quote(column)} "
         try:
             output = self.bench_execute(command)["output"]
             return json.loads(output)
