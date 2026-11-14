@@ -16,6 +16,7 @@ from mariadb_table_usage import usage as calculate_table_usage
 from peewee import MySQLDatabase
 
 from agent.database import CustomPeeweeDB, Database
+from agent.exceptions import AgentException
 from agent.job import job, step
 from agent.server import Server
 
@@ -750,12 +751,37 @@ WHERE `schema` IN (
         return sorted(stalks, key=lambda x: x["name"])
 
     def _purge_binlog(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
+        return not self._purge_binlogs_to(private_ip, mariadb_root_password, to_binlog)
+
+    def _purge_binlogs_to(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> list[str]:
+        """Purge the binlogs before to_binlog. Return the problems, or an empty list."""
+        if not re.fullmatch(r"mysql-bin\.\d+", to_binlog):
+            return [f"{to_binlog} is not a binlog name"]
         try:
             mariadb = Database(private_ip, self.db_port, "root", mariadb_root_password, "mysql")
-            mariadb.execute_query(f"PURGE BINARY LOGS TO '{to_binlog}';", commit=True)
-            return True
-        except Exception:
-            return False
+            success, output = mariadb.execute_query(
+                f"PURGE BINARY LOGS TO '{to_binlog}';\nSHOW WARNINGS;\n", commit=True, as_dict=True
+            )
+        except Exception as e:
+            return [str(e)]
+        if not success:
+            return [output]
+
+        # MariaDB keeps a binlog that crash recovery or a reader still needs, with a note and no error
+        kept = self._binlogs_before(to_binlog)
+        if not kept:
+            return []
+        problems = [f"{len(kept)} binlogs before {to_binlog} are still on disk, from {kept[0]} to {kept[-1]}"]
+        problems += [f"MariaDB: {row['Message']}" for row in output[-1]["output"] or []]
+        return problems
+
+    def _binlogs_before(self, to_binlog: str) -> list[str]:
+        last = int(to_binlog.rsplit(".", 1)[1])
+        return sorted(
+            file.name
+            for file in Path(self.mariadb_directory).iterdir()
+            if re.fullmatch(r"mysql-bin\.\d+", file.name) and int(file.name.rsplit(".", 1)[1]) < last
+        )
 
     @job("Purge Binlogs By Size Limit", priority="low")
     def purge_binlogs_by_size_limit(self, private_ip: str, mariadb_root_password: str, max_binlog_gb: int):
@@ -769,11 +795,13 @@ WHERE `schema` IN (
     @step("Purge Binlog")
     def purge_binlog_step(self, private_ip: str, mariadb_root_password: str, to_binlog: str) -> bool:
         output = f"Purging binlogs before: {to_binlog}\n"
-        if self._purge_binlog(private_ip, mariadb_root_password, to_binlog):
-            output += f"Successfully purged binlogs before: {to_binlog}\n"
-        else:
+        problems = self._purge_binlogs_to(private_ip, mariadb_root_password, to_binlog)
+        if problems:
             output += f"Failed to purge binlogs before: {to_binlog}\n"
+            output += "".join(f"{problem}\n" for problem in problems)
+            raise AgentException({"output": output})
 
+        output += f"Successfully purged binlogs before: {to_binlog}\n"
         return {
             "output": output,
         }
