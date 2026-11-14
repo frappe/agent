@@ -168,31 +168,6 @@ class TestAssetUploadAfterBuild(unittest.TestCase):
         self.assertTrue(builder.data["asset_store"]["insights"].startswith("Failed"))
         client.containers.create.return_value.remove.assert_called_once_with(force=True)
 
-    def test_public_folder_is_packed_as_the_build_unpacks_it(self):
-        from agent.builder import repack_public_folder
-
-        with tempfile.TemporaryDirectory() as directory:
-            public = os.path.join(directory, "public")
-            os.makedirs(os.path.join(public, "dist", "js"))
-            with open(os.path.join(public, "dist", "js", "app.bundle.js"), "w") as f:
-                f.write("console.log(1)")
-            os.symlink(
-                "/home/frappe/frappe-bench/apps/builder/node_modules", os.path.join(public, "node_modules")
-            )
-
-            exported = os.path.join(directory, "public.tar")
-            with tarfile.open(exported, "w") as tar:
-                tar.add(public, arcname="public")
-
-            tarball = os.path.join(directory, "assets.tar.gz")
-            repack_public_folder(exported, tarball, "builder")
-            with tarfile.open(tarball) as tar:
-                names = tar.getnames()
-
-        self.assertIn("builder/dist/js/app.bundle.js", names)
-        self.assertNotIn("builder/node_modules", names)
-        self.assertFalse([name for name in names if not name.startswith("builder")])
-
 
 def import_get_cached_app():
     """Import the build script without bench installed or build arguments."""
@@ -241,7 +216,8 @@ class TestGetCachedApp(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(tarfile, "data_filter"), "needs tarfile extraction filters")
     def test_stored_assets_replace_the_app_public_folder(self):
-        self.extract(self.make_tarball({"builder/frontend/index.html": "stored"}))
+        # The build packs changed files relative to apps/<app>
+        self.extract(self.make_tarball({"builder/public/frontend/index.html": "stored"}))
 
         with open(os.path.join(self.public, "frontend", "index.html")) as f:
             self.assertEqual(f.read(), "stored")
