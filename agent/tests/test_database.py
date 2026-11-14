@@ -462,3 +462,19 @@ class TestDatabase(unittest.TestCase):
         success, output = user1_db.execute_query("SELECT * FROM Person;")
         self.assertFalse(success, "User `user1` should not have access to the database")
         self.assertIn("Access denied for user", str(output))
+
+    def test_explain_queries_is_keyed_by_the_given_query(self):
+        db = self._db(self.db1__name, self.db1__username, self.db1__password)
+        query = "SELECT * FROM Person WHERE id = 1;"
+        data = db.explain_queries([query])
+        self.assertEqual(list(data.keys()), [query])
+        self.assertEqual(data[query][0]["table"], "Person")
+
+    def test_explain_queries_skips_a_query_that_cannot_be_explained(self):
+        """A truncated query from the slow query log must not fail the other queries"""
+        db = self._db(self.db1__name, self.db1__username, self.db1__password)
+        truncated = "UPDATE Person SET name='{\\'user\\': \\'a@b.c\\', \\'ip\\': \\'41.32.# Time: 2611"
+        valid = "SELECT * FROM Product WHERE id = 2"
+        data = db.explain_queries([truncated, valid])
+        self.assertNotIn(truncated, data)
+        self.assertEqual(data[valid][0]["table"], "Product")

@@ -288,15 +288,20 @@ class Database:
         return result[0]["output"]
 
     def explain_queries(self, queries: list) -> dict:
-        if len(queries) == 0:
-            return {}
-        sql_query = ""
-        for query in queries:
-            sql_query += f"EXPLAIN {query};\n"
-        result = self._run_sql(query=sql_query, as_dict=True)
+        """Explain each query on its own. The result is keyed by the given query.
+
+        The slow query log can hold a truncated or merged query. A query that
+        MariaDB cannot explain is left out of the result, so it does not stop
+        the analysis of the other queries.
+        """
         data = {}
-        for record in result:
-            data[record["query"]] = record["output"]
+        for query in queries:
+            statement = query.strip().rstrip(";")
+            try:
+                result = self._run_sql(query=f"EXPLAIN {statement}", as_dict=True)
+            except peewee.ProgrammingError:
+                continue
+            data[query] = result[0]["output"]
         return data
 
     def fetch_database_column_statistics(self, table):
