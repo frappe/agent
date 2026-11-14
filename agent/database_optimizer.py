@@ -5,12 +5,15 @@ This is largely based on heuristics and known good practices for indexing.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from sql_metadata import Parser
+
+from agent.database import is_safe_identifier
 
 if TYPE_CHECKING:
     from agent.site import Site
@@ -19,6 +22,8 @@ if TYPE_CHECKING:
 INDEX_SCORE_THRESHOLD = 0.3
 # Anything reading less than this percent of table is considered optimal
 OPTIMIZATION_THRESHOLD = 0.1
+
+logger = logging.getLogger(__name__)
 
 
 def cstr(data: str | None) -> str:
@@ -160,7 +165,7 @@ class ColumnStat:
             avg_frequency=data["avg_frequency"],
             avg_length=data["avg_length"],
             nulls_ratio=data["nulls_ratio"],
-            histogram=[flt(bin) for bin in data["histogram"].split(",")] if data["histogram"] else [],
+            histogram=[flt(bin) for bin in data["histogram"].split(",")] if data.get("histogram") else [],
         )
 
 
@@ -256,11 +261,27 @@ class DBOptimizer:
 
         return self._remove_existing_indexes(possible_db_indexes)
 
+    def indexable_candidates(self) -> list[DBIndex]:
+        """Potential indexes on known columns of a data type that can be indexed."""
+        candidates = []
+        for index in self.potential_indexes():
+            column = self._find_column(index)
+            # Data type is not easily indexable - skip
+            if column and "text" not in column.data_type.lower() and "json" not in column.data_type.lower():
+                candidates.append(index)
+        return candidates
+
+    def _find_column(self, index: DBIndex) -> DBColumn | None:
+        table = self.tables.get(index.table)
+        if not table:
+            return None
+        return next((c for c in table.schema if c.name == index.column), None)
+
     def _convert_to_db_index(self, column: str) -> DBIndex:
         column_name, table = None, None
 
         if "." in column:
-            table, column_name = column.split(".")
+            table, column_name = column.rsplit(".", 1)
         else:
             column_name = column
             for table_name, db_table in self.tables.items():
@@ -317,17 +338,11 @@ class DBOptimizer:
         if missing_tables := (set(self.tables_examined) - set(self.tables.keys())):
             raise Exception("DBTable information missing for: " + ", ".join(missing_tables))
 
-        potential_indexes = self.potential_indexes()
+        potential_indexes = self.indexable_candidates()
 
-        for index in list(potential_indexes):
-            table = self.tables[index.table]
-
-            # Data type is not easily indexable - skip
-            column = next(c for c in table.schema if c.name == index.column)
-            if "text" in column.data_type.lower() or "json" in column.data_type.lower():
-                potential_indexes.remove(index)
+        for index in potential_indexes:
             # Update cardinality from column so scoring can be done
-            index.cardinality = column.cardinality
+            index.cardinality = self._find_column(index).cardinality
 
         for index in potential_indexes:
             index._score = self.index_score(index)
@@ -376,52 +391,74 @@ class OptimizeDatabaseQueries:
         self.site = site
         self.database_root_password = database_root_password
         self.queries = queries
-        self.table_cache: dict[str, DBTable] = {}
+        self.table_cache: dict[str, DBTable | None] = {}
         self.column_statistics_cache: dict[str, list[ColumnStat]] = {}
+        self.analyzed_columns: dict[str, set[str]] = defaultdict(set)
 
-    def analyze(self) -> dict[str, list[DBIndex]] | None:
-        # generate explain output for all the queries at once
-        explain_output_of_queries_result = self.site.db_instance().explain_queries(self.queries)
-        explain_output_of_queries = {}
-        for query, explain_output in explain_output_of_queries_result.items():
-            explain_output_of_queries[query] = [DBExplain.from_frappe_output(e) for e in explain_output]
+    def analyze(self) -> dict[str, list[DBIndex]]:
+        explain_output_of_queries = self.site.db_instance().explain_queries(self.queries)
 
         suggested_indexes_of_queries = {}
-
-        for query in self.queries:
-            if query not in explain_output_of_queries:
+        for query, explain_output in explain_output_of_queries.items():
+            explain_plan = [DBExplain.from_frappe_output(e) for e in explain_output]
+            try:
+                index = self.suggest_index(query, explain_plan)
+            except Exception:
+                # The heuristics can fail on an unusual query. Keep the suggestions for the other queries.
+                logger.exception("Could not analyze slow query: %s", query)
                 continue
-            explain_output = explain_output_of_queries[query]
-            optimizer = DBOptimizer(query=query, explain_plan=explain_output)
-            tables = optimizer.tables_examined
-
-            for table in tables:
-                db_table = self.describe_database_table(table)
-                column_stats = self.fetch_column_stats(table)
-                db_table.update_cardinality(column_stats)
-                optimizer.update_table_data(db_table)
-
-            index = optimizer.suggest_index()
             if index:
-                if query not in suggested_indexes_of_queries:
-                    suggested_indexes_of_queries[query] = []
-                suggested_indexes_of_queries[query].append(index)
+                suggested_indexes_of_queries[query] = [index]
 
         return suggested_indexes_of_queries
+
+    def suggest_index(self, query: str, explain_plan: list[DBExplain]) -> DBIndex | None:
+        optimizer = DBOptimizer(query=query, explain_plan=explain_plan)
+
+        for table_name in optimizer.tables_examined:
+            table = self.describe_database_table(table_name)
+            if not table:
+                # Not the table of a DocType, so there is nothing to suggest
+                return None
+            optimizer.update_table_data(table)
+
+        # ANALYZE reads the full table. Get the statistics only of the columns that can get an index.
+        columns_of_tables = defaultdict(set)
+        for index in optimizer.indexable_candidates():
+            columns_of_tables[index.table].add(index.column)
+
+        for table_name, columns in columns_of_tables.items():
+            table = optimizer.tables[table_name]
+            if not table.total_rows:
+                # No index can help on an empty table
+                continue
+            table.update_cardinality(self.fetch_column_stats(table_name, sorted(columns)))
+
+        return optimizer.suggest_index()
 
     def describe_database_table(self, table_name: str) -> DBTable | None:
         if table_name in self.table_cache:
             return self.table_cache[table_name]
-        result = self.site.describe_database_table(table_name)
-        if result is None:
-            self.table_cache[table_name] = None
-            return None
-        table = DBTable.from_frappe_output(result)
+
+        table = None
+        # `describe-database-table` takes the name of the DocType, not of the table
+        if table_name.startswith("tab") and is_safe_identifier(table_name):
+            result = self.site.describe_database_table(table_name[3:])
+            if result:
+                table = DBTable.from_frappe_output(result)
+
         self.table_cache[table_name] = table
         return table
 
-    def fetch_column_stats(self, table_name: str) -> list[ColumnStat] | None:
-        if table_name in self.column_statistics_cache:
-            return self.column_statistics_cache[table_name]
-        db = self.site.db_instance("root", self.database_root_password)
-        return db.fetch_database_column_statistics(table_name)
+    def fetch_column_stats(self, table_name: str, columns: list[str]) -> list[ColumnStat]:
+        """Get the statistics of the columns. Each column is analyzed only once."""
+        cached = self.column_statistics_cache.setdefault(table_name, [])
+        new_columns = [column for column in columns if column not in self.analyzed_columns[table_name]]
+
+        if new_columns:
+            self.analyzed_columns[table_name].update(new_columns)
+            db = self.site.db_instance("root", self.database_root_password)
+            rows = db.fetch_database_column_statistics(table_name, new_columns)
+            cached.extend(ColumnStat.from_frappe_output(row) for row in rows)
+
+        return [stat for stat in cached if stat.column_name in columns]
