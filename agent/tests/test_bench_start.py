@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -62,8 +63,9 @@ class TestSingleContainerBenchStart(unittest.TestCase):
 
 class TestBenchStartCommand(unittest.TestCase):
     def run_start(self, benches: dict[str, Mock]):
-        with patch("agent.cli.Server", return_value=Mock(benches=benches)):
-            return CliRunner(mix_stderr=True).invoke(cli, ["bench", "start", *benches])
+        # agent/__init__.py re-exports the cli group as agent.cli, which hides the module
+        with patch.object(sys.modules["agent.cli"], "Server", return_value=Mock(benches=benches)):
+            return CliRunner().invoke(cli, ["bench", "start", *benches])
 
     def test_a_failing_bench_does_not_stop_the_benches_after_it_from_starting(self):
         failing = Mock(start=Mock(side_effect=Exception("name conflict")))
