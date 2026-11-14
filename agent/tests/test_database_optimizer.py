@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import unittest
 
-from agent.database_optimizer import DBExplain, DBOptimizer, DBTable
+from agent.database import Database
+from agent.database_optimizer import DBExplain, DBOptimizer, DBTable, OptimizeDatabaseQueries
+from agent.tests.test_database import DatabaseTestInstance
 
 
 class TestDatabaseOptimizer(unittest.TestCase):
@@ -657,3 +659,177 @@ EXPLAIN_OUTPUT = """[
         "type": "index"
     }
 ]"""
+
+
+class FakeSite:
+    """The parts of `Site` that `OptimizeDatabaseQueries` uses.
+
+    `describe_database_table` gives the same output as `bench describe-database-table`
+    in Frappe v15. Like Frappe, it takes the name of a DocType, not of a table.
+    """
+
+    def __init__(self, instance: DatabaseTestInstance, database: str):
+        self.instance = instance
+        self.database = database
+        self.analyze_calls = []
+        self.described_doctypes = []
+
+    def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
+        db = Database(
+            self.instance.host,
+            self.instance.port,
+            username or "root",
+            password or self.instance.db_root_password,
+            self.database,
+        )
+        fetch = db.fetch_database_column_statistics
+
+        def fetch_and_record(table, *args):
+            self.analyze_calls.append((table, *args))
+            return fetch(table, *args)
+
+        db.fetch_database_column_statistics = fetch_and_record
+        return db
+
+    def describe_database_table(self, doctype, columns=None):
+        self.described_doctypes.append(doctype)
+        table = f"tab{doctype}"
+        db = self.db_instance()
+        exists = db._run_sql(
+            f"SELECT table_rows FROM information_schema.tables"
+            f" WHERE table_schema = '{self.database}' AND table_name = '{table}'",
+            as_dict=True,
+        )[0]["output"]
+        if not exists:
+            return None
+
+        schema = [
+            {
+                "column": field["Field"],
+                "type": field["Type"],
+                "is_nullable": field["Null"] == "YES",
+                "default": field["Default"],
+            }
+            for field in db._run_sql(f"DESCRIBE `{table}`", as_dict=True)[0]["output"]
+        ]
+        indexes = []
+        for idx in db._run_sql(f"SHOW INDEX FROM `{table}`", as_dict=True)[0]["output"]:
+            indexes.append(
+                {
+                    "unique": not idx["Non_unique"],
+                    "cardinality": idx["Cardinality"],
+                    "name": idx["Key_name"],
+                    "sequence": idx["Seq_in_index"],
+                    "nullable": idx["Null"] == "YES",
+                    "column": idx["Column_name"],
+                    "type": idx["Index_type"],
+                }
+            )
+            if idx["Seq_in_index"] == 1:
+                for column in schema:
+                    if column["column"] == idx["Column_name"]:
+                        column["cardinality"] = idx["Cardinality"]
+        total_rows = exists[0]["table_rows"]
+        return {"table_name": table, "total_rows": total_rows, "schema": schema, "indexes": indexes}
+
+
+class TestOptimizeDatabaseQueries(unittest.TestCase):
+    """Run the slow query analysis end to end against MariaDB."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.instance = DatabaseTestInstance()
+        cls.instance.create_database("site_db")
+        cls.db = Database(
+            cls.instance.host, cls.instance.port, "root", cls.instance.db_root_password, "site_db"
+        )
+        rows = ",\n".join(
+            f"('{i}', 'Account {i % 50}', 'Company', '2026-01-{i % 28 + 1:02d}', {i}, {i % 2}, 'x', NOW())"
+            for i in range(500)
+        )
+        cls.db._run_sql(
+            f"""
+            CREATE TABLE `tabGL Entry` (
+                name varchar(140) PRIMARY KEY,
+                account varchar(140),
+                company varchar(140),
+                posting_date date,
+                debit decimal(21, 9),
+                is_cancelled int,
+                remarks text,
+                modified datetime(6),
+                INDEX posting_date (posting_date)
+            );
+            INSERT INTO `tabGL Entry` VALUES {rows};
+            CREATE TABLE `tabToDo` (name varchar(140) PRIMARY KEY, status varchar(140));
+            CREATE TABLE `tabBad'Name` (name varchar(140) PRIMARY KEY, status varchar(140));
+            INSERT INTO `tabBad'Name` VALUES ('1', 'Open'), ('2', 'Closed');
+            CREATE TABLE `not_a_doctype` (id int);
+            ANALYZE TABLE `tabGL Entry`, `tabToDo`, `tabBad'Name`
+            """,
+            commit=True,
+            allow_all_stmt_types=True,
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.instance.destroy()
+
+    def test_analyze_suggests_an_index_and_skips_the_queries_it_cannot_analyze(self):
+        site = FakeSite(self.instance, "site_db")
+        query = "select sum(`debit`) from `tabGL Entry` where `account` = 'Account 7' and `is_cancelled` = 0"
+        indexed = "select `name` from `tabGL Entry` where `posting_date` = '2026-01-05'"
+        truncated = "UPDATE `tabGL Entry` SET company='{\\'user\\': \\'a@b.c\\', # Time: 2611"
+        not_a_doctype = "select * from not_a_doctype where id = 1"
+
+        result = OptimizeDatabaseQueries(site, [truncated, not_a_doctype, indexed, query], "").analyze()
+
+        self.assertEqual(list(result.keys()), [query])
+        self.assertEqual([(i.table, i.column) for i in result[query]], [("tabGL Entry", "account")])
+        # `describe-database-table` takes the name of the DocType
+        self.assertEqual(site.described_doctypes, ["GL Entry"])
+
+    def test_analyze_reads_each_column_once_and_only_the_columns_that_can_get_an_index(self):
+        """ANALYZE reads the full table, so it must not run more than needed."""
+        site = FakeSite(self.instance, "site_db")
+        first = "select sum(`debit`) from `tabGL Entry` where `account` = 'Account 7' and `is_cancelled` = 0"
+        second = (
+            "select `name` from `tabGL Entry` where `account` = 'Account 3'"
+            " and `company` = 'Company' and `remarks` = 'x'"
+        )
+        empty_table = "select `name` from `tabToDo` where `status` = 'Open'"
+
+        result = OptimizeDatabaseQueries(site, [first, second, empty_table], "").analyze()
+
+        self.assertEqual(list(result.keys()), [first, second])
+        self.assertEqual(result[second][0].column, "account")
+        # `remarks` is a text column, and `tabToDo` has no rows
+        self.assertEqual(
+            site.analyze_calls,
+            [("tabGL Entry", ["account", "is_cancelled"]), ("tabGL Entry", ["company"])],
+        )
+
+    def test_analyze_skips_a_table_whose_name_is_not_safe_in_sql(self):
+        site = FakeSite(self.instance, "site_db")
+        query = "select `name` from `tabBad'Name` where `status` = 'Open'"
+
+        result = OptimizeDatabaseQueries(site, [query], "").analyze()
+
+        self.assertEqual(result, {})
+        self.assertEqual(site.described_doctypes, [])
+        self.assertEqual(site.analyze_calls, [])
+
+    def test_column_statistics_of_all_columns(self):
+        """The `Column Statistics` job of the database server gets all the columns."""
+        rows = self.db.fetch_database_column_statistics("tabGL Entry")
+
+        by_column = {row["column_name"]: row for row in rows}
+        self.assertTrue({"account", "company", "posting_date", "is_cancelled"} <= set(by_column))
+        self.assertEqual(by_column["account"]["avg_frequency"], 10.0)
+        self.assertIn("histogram", by_column["account"])
+
+    def test_column_statistics_refuse_a_name_that_is_not_safe_in_sql(self):
+        with self.assertRaises(ValueError):
+            self.db.fetch_database_column_statistics("tabGL Entry", ["account`) INDEXES (); SELECT (1"])
+        with self.assertRaises(ValueError):
+            self.db.fetch_database_column_statistics("tabBad'Name", ["status"])
