@@ -305,12 +305,22 @@ def bench():
 @click.argument("bench", nargs=-1)
 def start(bench: tuple[str]):
     server = Server()
-
-    if bench:
-        for b in bench:
-            server.benches[b].start()
-    else:
+    if not bench:
         server.start_all_benches()
+        return
+
+    benches = server.benches
+    failed = []
+    for name in bench:
+        try:
+            benches[name].start()
+        except Exception as e:
+            failed.append(name)
+            click.echo(f"Failed to start {name}: {e}", err=True)
+
+    # Exit non-zero so the caller (an Ansible play) still sees the failure
+    if failed:
+        raise click.ClickException(f"Failed to start benches: {', '.join(failed)}")
 
 
 @bench.command()
