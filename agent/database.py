@@ -2,10 +2,22 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 from decimal import Decimal
 from typing import Any
 
 import peewee
+
+# Letters, digits, `_`, `-` and spaces, as in the names of DocTypes and their columns
+SAFE_IDENTIFIER = re.compile(r"[\w \-]+")
+
+
+def is_safe_identifier(name: str) -> bool:
+    """Return true if the name of a table or column can go into SQL in backticks or quotes.
+
+    The names come from the slow query log of a site, so a site can choose them.
+    """
+    return bool(SAFE_IDENTIFIER.fullmatch(name))
 
 
 class Database:
@@ -304,39 +316,55 @@ class Database:
             data[query] = result[0]["output"]
         return data
 
-    def fetch_database_column_statistics(self, table):
-        """Get various stats about columns in a table.
+    def fetch_database_column_statistics(self, table: str, columns: list[str] | None = None) -> list[dict]:
+        """Get various stats about the columns of a table.
+
+        ANALYZE reads the full table. Give `columns` to analyze only these columns.
+        Without `columns`, all the columns are analyzed and the histogram is included.
 
         Refer:
             - https://mariadb.com/kb/en/engine-independent-table-statistics/
             - https://mariadb.com/kb/en/mysqlcolumn_stats-table/
         """
-        self._run_sql(
-            f"ANALYZE TABLE `{self.database_name}`.`{table}` PERSISTENT FOR ALL",
-        )
+        if columns is not None and not columns:
+            return []
 
+        for name in [table, *(columns or [])]:
+            if not is_safe_identifier(name):
+                raise ValueError(f"Not a valid table or column name: {name!r}")
+
+        if columns is None:
+            scope = "ALL"
+            histogram = ", decode_histogram(hist_type, histogram) as histogram"
+            column_filter = ""
+        else:
+            scope = "COLUMNS ({}) INDEXES ()".format(", ".join(f"`{column}`" for column in columns))
+            histogram = ""
+            column_filter = "and column_name in ({})".format(", ".join(f"'{column}'" for column in columns))
+
+        self._run_sql(f"ANALYZE TABLE `{self.database_name}`.`{table}` PERSISTENT FOR {scope}")
         results = self._run_sql(
             f"""
             SELECT
-                column_name, nulls_ratio, avg_length, avg_frequency,
-                decode_histogram(hist_type,histogram) as histogram
+                column_name, nulls_ratio, avg_length, avg_frequency{histogram}
             FROM
                 mysql.column_stats
             WHERE
                 db_name='{self.database_name}'
                 and table_name='{table}'
+                {column_filter}
             """,
             as_dict=True,
         )
-        if len(results) == 0:
+        rows = results[0]["output"]
+        if columns is None and not rows:
             raise Exception("Failed to fetch column stats")
-        result = results[0]["output"]
 
-        for row in results:
+        for row in rows:
             for column in ["nulls_ratio", "avg_length", "avg_frequency"]:
-                row[column] = float(row[column]) if row[column] else None
+                row[column] = float(row[column]) if row[column] is not None else None
 
-        return result
+        return rows
 
     def fetch_summarized_performance_report(self):
         queries = f"""
