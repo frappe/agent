@@ -275,21 +275,45 @@ def job(name: str, priority="default", timeout=None, on_success=None, on_failure
             return result
         agent_job_id = get_agent_job_id()
         agent_job_timeout = _requested_job_timeout()
-        instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
         final_timeout = resolve_job_timeout(agent_job_timeout, timeout, _configured_job_timeout)
-        queue(priority).enqueue_call(
-            wrapped,
-            args=args,
-            kwargs=kwargs,
-            timeout=final_timeout,
-            result_ttl=24 * 3600,
-            job_id=str(instance.job_record.model.id),
-            on_success=on_success or callback,
-            on_failure=on_failure or callback,
-        )
+        instance.job_record.enqueue(name, wrapped, args, kwargs, agent_job_id)
+        try:
+            queue(priority).enqueue_call(
+                wrapped,
+                args=args,
+                kwargs=kwargs,
+                timeout=final_timeout,
+                result_ttl=24 * 3600,
+                job_id=str(instance.job_record.model.id),
+                on_success=on_success or callback,
+                on_failure=on_failure or callback,
+            )
+        except Exception:
+            # Press looks up job records by agent_job_id to decide whether a job was
+            # delivered. A record without an RQ job stays Pending forever, and press
+            # stops retrying it. Remove it, so press sees the job as undelivered.
+            # Redis can accept the job and the reply still get lost: then keep it.
+            if _rq_job_exists(instance.job_record.model.id):
+                return instance.job_record.model.id
+            _discard_job_record(instance.job_record)
+            raise
         return instance.job_record.model.id
 
     return wrapper
+
+
+def _rq_job_exists(job_id) -> bool:
+    try:
+        return RQJob.exists(str(job_id), connection=connection())
+    except Exception:
+        return False
+
+
+def _discard_job_record(job_record: Job):
+    try:
+        job_record.model.delete_instance()
+    except Exception:
+        logger.exception("Could not delete job record %s after a failed enqueue", job_record.model.id)
 
 
 def get_agent_job_id():
