@@ -109,6 +109,7 @@ def link_node_modules(bench_path: str, app_name: str, app_public_path: str) -> N
     if os.path.isdir(node_modules) and not os.path.lexists(link):
         os.symlink(node_modules, link)
 
+
 def extract_assets(app_name: str, tar_path: str) -> None:
     """Apply the stored changed build files over the app, and restore the links bench build makes."""
     if not hasattr(tarfile, "data_filter"):
@@ -167,6 +168,7 @@ def _replace(src: str, dest: str) -> None:
         shutil.rmtree(dest)
     shutil.move(src, dest)
 
+
 def main():
     """Use the app's stored assets if the agent put them in the build context, else build them"""
     env = os.environ.copy()
@@ -184,7 +186,12 @@ def main():
             _update_assets_json(APP_NAME)
             change_working_directory()
             subprocess.run(["bench", "compile-po-to-mo", "--app", f"{APP_NAME}"], check=True, env=env)
-            subprocess.run(["../env/bin/python", "/usr/local/bin/run_hooks.py", f"{APP_NAME}"], check=True, env=env, cwd=os.getcwd()+"/sites")
+            subprocess.run(
+                ["../env/bin/python", "/usr/local/bin/run_hooks.py", f"{APP_NAME}"],
+                check=True,
+                env=env,
+                cwd=os.getcwd() + "/sites",
+            )
             return
         except UNUSABLE_ARCHIVE_ERRORS as e:
             print(f"Stored assets could not be used: {e}")
@@ -193,19 +200,29 @@ def main():
     subprocess.run(["touch", f"/home/frappe/time_marker_{APP_NAME}"], check=True, env=env)
     build_assets(APP_NAME)
     change_working_directory()
-    app_dir = os.getcwd()+f"/apps/{APP_NAME}"
+    app_dir = os.getcwd() + f"/apps/{APP_NAME}"
     list_path = f"/home/frappe/added_files_{APP_NAME}.txt"
     tar_path = f"/home/frappe/added_files_{APP_NAME}.tar.gz"
 
     with open(list_path, "w") as f:
         subprocess.run(
             [
-                "find", ".", "-mindepth", "1",
-                "-name", "node_modules", "-prune",
+                "find",
+                ".",
+                "-mindepth",
+                "1",
+                "-name",
+                "node_modules",
+                "-prune",
                 "-o",
-                "-cnewer", f"/home/frappe/time_marker_{APP_NAME}", "-printf", "%P\n",
+                "-cnewer",
+                f"/home/frappe/time_marker_{APP_NAME}",
+                "-printf",
+                "%P\n",
             ],
-            cwd=app_dir, stdout=f, check=True,
+            cwd=app_dir,
+            stdout=f,
+            check=True,
         )
 
     # --no-recursion: the list already names every changed file, and the
@@ -214,6 +231,7 @@ def main():
         ["tar", "-czf", tar_path, "--no-recursion", "-C", app_dir, "-T", list_path],
         check=True,
     )
+
 
 if __name__ == "__main__":
     main()
