@@ -134,7 +134,8 @@ def extract_assets(app_name: str, tar_path: str) -> None:
         os.unlink(assets_path)
     elif os.path.exists(assets_path):
         shutil.rmtree(assets_path)
-    os.symlink(app_public_path, assets_path)
+    if os.path.exists(app_public_path):
+        os.symlink(app_public_path, assets_path)
     link_node_modules(bench_path, app_name, app_public_path)
 
     print(f"Build files applied to {app_path} and symlink restored at {assets_path}")
