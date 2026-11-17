@@ -838,11 +838,11 @@ class Bench(Base):
 
     def start(self, secondary_server_private_ip: str | None = None):
         if self.bench_config.get("single_container"):
-            try:
+            # A stop that times out must not skip the rm, or docker run hits a name conflict
+            with suppress(Exception):
                 self.execute(f"docker stop {self.name}")
-                self.execute(f"docker rm {self.name}")
-            except Exception:
-                pass
+            with suppress(Exception):
+                self.execute(f"docker rm --force {self.name}")
 
             ssh_port = self.bench_config.get("ssh_port", self.bench_config["web_port"] + 4000)
             ssh_ip = secondary_server_private_ip or self.bench_config.get("private_ip", "127.0.0.1")
