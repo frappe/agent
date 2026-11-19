@@ -59,7 +59,7 @@ map $cors_origin_{{ bench_name_slug }} $cors_vary_{{ bench_name_slug }} {
 {% if standalone %}
 {% for site in sites + ( domains.keys() | list ) %}
 server {
-	listen 443 http2 ssl;
+	listen 443 ssl;
 	server_name {{ site.name or site}};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ site.host or site }}/fullchain.pem;
