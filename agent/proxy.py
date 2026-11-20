@@ -136,7 +136,7 @@ class Proxy(Server):
     def add_site_to_upstream_job(self, upstream, site):
         self.add_site_domain_to_upstream(upstream, site)
 
-    @job("Add Domain to Upstream")
+    @job("Add Domain to Upstream", priority="signup")
     def add_domain_to_upstream_job(self, upstream, domain):
         self.add_site_domain_to_upstream(upstream, domain)
 
@@ -289,7 +289,7 @@ class Proxy(Server):
         with open(site_file, "w") as f:
             f.write(status)
 
-    @job("Setup Redirects on Hosts")
+    @job("Setup Redirects on Hosts", priority="signup")
     def setup_redirects_job(self, hosts, target):
         with self.proxy_config_modification_lock:
             if target in hosts:

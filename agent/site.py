@@ -350,7 +350,7 @@ class Site(Base):
 
         self.set_config(new_config)
 
-    @job("Add Domain", priority="high")
+    @job("Add Domain", priority="signup")
     def add_domain(self, domain):
         domains = set(self.config.get("domains", []))
         domains.add(domain)
@@ -501,7 +501,7 @@ class Site(Base):
         command = f"execute frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs {payload}"
         return self.bench_execute(command)
 
-    @job("Update Site Configuration", priority="high")
+    @job("Update Site Configuration", priority="signup")
     def update_config_job(self, value, remove):
         self.update_config(value, remove)
 
