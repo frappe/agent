@@ -459,15 +459,18 @@ class Site(Base):
         data = {"tables": {}}
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
-            output = self.execute(
-                "set -o pipefail && "
-                f"gunzip -c '{backup_file_path}' | "
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
-                f"{self.database}",
-                executable="/bin/bash",
-            )
-            data["tables"][backup_file] = output
+            data["tables"][backup_file] = self._load_table_dump(backup_file_path)
         return data
+
+    def _load_table_dump(self, backup_file):
+        # Put back the rows the table had, even ones its JSON CHECK rejects
+        return self.execute(
+            "set -o pipefail && "
+            f"gunzip -c '{backup_file}' | "
+            f"{db_client_cli()} --init-command='SET SESSION check_constraint_checks=0' "
+            f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} {self.database}",
+            executable="/bin/bash",
+        )
 
     @step("Update ERPNext Configuration")
     def update_erpnext_config(self, value):
@@ -818,14 +821,7 @@ class Site(Base):
         for table in self.tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
-                output = self.execute(
-                    "set -o pipefail && "
-                    f"gunzip -c '{backup_file}' | "
-                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
-                    f"{self.database}",
-                    executable="/bin/bash",
-                )
-                data["restored"][table] = output
+                data["restored"][table] = self._load_table_dump(backup_file)
 
         dropped_tables = self.drop_new_tables()
         data.update(dropped_tables)
