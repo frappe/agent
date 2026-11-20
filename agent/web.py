@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import traceback
 from base64 import b64decode
@@ -9,6 +10,7 @@ from functools import wraps
 from typing import TYPE_CHECKING
 
 from flask import Flask, Response, jsonify, request
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from passlib.hash import pbkdf2_sha256 as pbkdf2
 from playhouse.shortcuts import model_to_dict
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -18,6 +20,7 @@ from rq.job import JobStatus
 
 from agent.backup_log import InvalidRange, parse_range
 from agent.base import AgentException
+from agent.build_only import is_build_only_request, require_build_only_docker
 from agent.builder import ImageBuilder, PatchImageBuilder
 from agent.database import JSONEncoderForSQLQueryResult
 from agent.database_physical_backup import DatabasePhysicalBackup
@@ -54,6 +57,7 @@ if TYPE_CHECKING:
 
 
 application = Flask(__name__)
+BUILD_ONLY_MODE = os.environ.get("PRESS_AGENT_BUILD_ONLY") == "1"
 
 SENSITIVE_CONFIG_KEYS = {
     "access_token",
@@ -100,26 +104,36 @@ log.handlers = []
 
 @application.before_request
 def validate_access_token():
-    exempt_endpoints = ["get_metrics"]
-    if request.endpoint in exempt_endpoints:
-        return None
+    if BUILD_ONLY_MODE:
+        if not is_build_only_request(request.endpoint, request.method):
+            return jsonify({"message": "Endpoint unavailable on build-only agent"}), 404
 
+    authenticated = request.endpoint == "get_metrics" and not BUILD_ONLY_MODE
     try:
-        if application.debug:
-            return None
-        method, access_token = request.headers["Authorization"].split(" ")
-        stored_hash = Server().config["access_token"]
-        if method.lower() == "bearer" and pbkdf2.verify(access_token, stored_hash):
-            return None
-        access_token = b64decode(access_token).decode().split(":")[1]
-        if method.lower() == "basic" and pbkdf2.verify(access_token, stored_hash):
-            return None
+        if application.debug and not BUILD_ONLY_MODE:
+            authenticated = True
+        elif not authenticated:
+            method, access_token = request.headers["Authorization"].split(" ")
+            stored_hash = Server().config["access_token"]
+            if method.lower() == "basic":
+                access_token = b64decode(access_token).decode().split(":")[1]
+            authenticated = method.lower() in {"bearer", "basic"} and pbkdf2.verify(
+                access_token, stored_hash
+            )
     except Exception:
-        pass
+        authenticated = False
 
-    response = jsonify({"message": "Unauthenticated"})
-    response.headers.set("WWW-Authenticate", "Basic")
-    return response, 401
+    if not authenticated:
+        response = jsonify({"message": "Unauthenticated"})
+        response.headers.set("WWW-Authenticate", "Basic")
+        return response, 401
+
+    if BUILD_ONLY_MODE:
+        try:
+            require_build_only_docker()
+        except RuntimeError:
+            return jsonify({"message": "Configured build daemon is unavailable or mismatched"}), 503
+    return None
 
 
 @application.route("/authentication", methods=["POST"])
@@ -2015,3 +2029,12 @@ def backup_db():
     offsite = data.get("offsite")
     job = SnapshotRecovery().backup_db(site, database_ip, database_name, mariadb_root_password, offsite)
     return {"job": job}
+
+
+if BUILD_ONLY_MODE:
+    # The normal Press Agent is mounted behind NGINX at /agent/. Build-only hosts
+    # expose that prefix directly over their dedicated TLS listener instead.
+    application.wsgi_app = DispatcherMiddleware(
+        lambda environ, start_response: Response("Not Found", status=404)(environ, start_response),
+        {"/agent": application.wsgi_app},
+    )

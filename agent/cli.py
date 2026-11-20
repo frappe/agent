@@ -76,17 +76,45 @@ def ping_server(password: str):
 @click.option("--proxy-ip", required=False, type=str, default=None)
 @click.option("--sentry-dsn", required=False, type=str)
 @click.option("--press-url", required=False, type=str)
-def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, press_url=None, db_port=3306):
+@click.option("--web-port", required=False, type=int, default=25052)
+@click.option("--redis-port", required=False, type=int, default=25025)
+@click.option("--tls-cert-file", required=False, type=str)
+@click.option("--tls-key-file", required=False, type=str)
+@click.option("--build-only", is_flag=True, default=False)
+@click.option("--docker-host", required=False, type=str)
+@click.option("--docker-root", required=False, type=str)
+@click.option("--web-bind-address", required=False, type=str)
+def config(
+    name,
+    user,
+    workers,
+    job_timeout,
+    proxy_ip=None,
+    sentry_dsn=None,
+    press_url=None,
+    db_port=3306,
+    web_port=25052,
+    redis_port=25025,
+    tls_cert_file=None,
+    tls_key_file=None,
+    build_only=False,
+    docker_host=None,
+    docker_root=None,
+    web_bind_address=None,
+):
+    if not (1 <= web_port <= 65535 and 1 <= redis_port <= 65535):
+        raise click.BadParameter("Web and Redis ports must be between 1 and 65535.")
+
     config = {
         "benches_directory": f"/home/{user}/benches",
         "name": name,
         "tls_directory": f"/home/{user}/agent/tls",
         "nginx_directory": f"/home/{user}/agent/nginx",
-        "redis_port": 25025,
+        "redis_port": redis_port,
         "user": user,
         "workers": workers,
         "gunicorn_workers": 2,
-        "web_port": 25052,
+        "web_port": web_port,
         "press_url": "https://frappecloud.com",
         "db_port": db_port,
         "job_timeout": job_timeout,
@@ -97,6 +125,29 @@ def config(name, user, workers, job_timeout, proxy_ip=None, sentry_dsn=None, pre
         config["proxy_ip"] = proxy_ip
     if sentry_dsn:
         config["sentry_dsn"] = sentry_dsn
+
+    if build_only:
+        from agent.build_only import validate_build_only_bind_address, validate_docker_daemon
+
+        if not tls_cert_file or not tls_key_file:
+            raise click.ClickException("Build-only mode requires an HTTPS certificate and key.")
+        valid, message = validate_docker_daemon(docker_host, docker_root)
+        if not valid:
+            raise click.ClickException(message)
+        try:
+            bind_address = validate_build_only_bind_address(web_bind_address)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+        config.update(
+            {
+                "build_only": True,
+                "docker_host": docker_host,
+                "docker_root": docker_root,
+                "web_bind_address": bind_address,
+                "tls_cert_file": tls_cert_file,
+                "tls_key_file": tls_key_file,
+            }
+        )
 
     with open("config.json", "w") as f:
         json.dump(config, f, sort_keys=True, indent=4)
@@ -116,6 +167,15 @@ def pyspy():
 @setup.command()
 @click.option("--password", prompt=True, hide_input=True)
 def authentication(password):
+    Server().setup_authentication(password)
+
+
+@setup.command("authentication-stdin")
+def authentication_stdin():
+    """Set the Agent token from stdin to avoid exposing it in process arguments."""
+    password = sys.stdin.readline().rstrip("\r\n")
+    if not password:
+        raise click.ClickException("Agent authentication token was empty.")
     Server().setup_authentication(password)
 
 

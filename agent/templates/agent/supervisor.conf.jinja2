@@ -1,6 +1,11 @@
 [program:web]
+{% if build_only %}
+command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind {{ web_bind_address }}:{{ web_port }} --certfile {{ tls_cert_file }} --keyfile {{ tls_key_file }} --workers {{ gunicorn_workers }} agent.web:application"
+environment=PYTHONUNBUFFERED=1, PRESS_AGENT_BUILD_ONLY=1, DOCKER_HOST="{{ docker_host }}", BUILD_DOCKER_ROOT="{{ docker_root }}"
+{% else %}
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && {{ directory }}/env/bin/gunicorn --bind 127.0.0.1:{{ web_port }} --workers {{ gunicorn_workers }} agent.web:application"
 environment=PYTHONUNBUFFERED=1{% if sentry_dsn %}, SENTRY_DSN="{{ sentry_dsn }}"{% endif %}
+{% endif %}
 autostart=true
 autorestart=true
 stdout_logfile={{ directory }}/logs/web.log
@@ -19,7 +24,11 @@ directory={{ directory }}
 
 [program:worker]
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{ directory }}/env/bin/rq worker {% if sentry_dsn %}--sentry-dsn '{{ sentry_dsn }}'{% endif %} --url redis://127.0.0.1:{{ redis_port }} high default low"
+{% if build_only %}
+environment=PYTHONUNBUFFERED=1, PRESS_AGENT_BUILD_ONLY=1, DOCKER_HOST="{{ docker_host }}", BUILD_DOCKER_ROOT="{{ docker_root }}"
+{% else %}
 environment=PYTHONUNBUFFERED=1
+{% endif %}
 autostart=true
 autorestart=true
 stopwaitsecs=1500
@@ -31,6 +40,7 @@ stderr_logfile={{ directory }}/logs/worker.error.log
 user={{ user }}
 directory={{ directory }}
 
+{% if not build_only %}
 {# Backups get their own worker so they can't head-of-line block the shared queues. #}
 {# Queue order matters: backup is drained first, the rest are picked up only when backup is idle. #}
 {# Known ceiling: a long `low` job here delays a newly-enqueued backup until it finishes — drop #}
@@ -48,8 +58,9 @@ stdout_logfile={{ directory }}/logs/worker_backup.log
 stderr_logfile={{ directory }}/logs/worker_backup.error.log
 user={{ user }}
 directory={{ directory }}
+{% endif %}
 
-{% if is_proxy_server or is_standalone %}
+{% if not build_only and (is_proxy_server or is_standalone) %}
 [program:nginx_reload_manager]
 command=bash -c "{{ directory }}/repo/wait-for-it.sh redis://127.0.0.1:{{ redis_port }} && exec {{directory}}/env/bin/python {{ directory }}/repo/agent/nginx_reload_manager.py"
 environment=PYTHONUNBUFFERED=1
@@ -64,9 +75,13 @@ directory={{ directory }}
 
 [group:agent]
 
+{% if build_only %}
+{% set programs = "web, redis, worker" %}
+{% else %}
 {% set programs = "web, redis, worker, worker_backup" %}
+{% endif %}
 
-{% if is_proxy_server or is_standalone %}
+{% if not build_only and (is_proxy_server or is_standalone) %}
     {% set programs = programs + ", nginx_reload_manager" %}
 {% endif %}
 
