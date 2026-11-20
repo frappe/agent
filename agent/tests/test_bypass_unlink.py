@@ -41,9 +41,33 @@ ET_DYN = 3  # shared object
 EXPECTED_EXPORTS = {"unlink", "unlinkat"}
 
 # The only externals the shim is allowed to import. strstr matches the marker;
-# dlsym resolves the real libc function. Anything else means the binary calls
-# into libc beyond what the source does.
-EXPECTED_IMPORTS = {"strstr", "dlsym"}
+# dlsym resolves the real libc function; __errno_location is how glibc reads
+# errno (to skip only EISDIR). Anything else means the binary calls into libc
+# beyond what the source does.
+EXPECTED_IMPORTS = {"strstr", "dlsym", "__errno_location"}
+
+# Run under the shim: os.remove skips directories, every other error still raises.
+REMOVE_DIRECTORY_CHECK = """
+import os, sys
+
+def expect_raise(exc, func, *args, **kwargs):
+    try:
+        func(*args, **kwargs)
+    except exc:
+        return
+    sys.exit(f"{func.__name__}{args} did not raise {exc.__name__}")
+
+tmp = sys.argv[1]
+os.mkdir(os.path.join(tmp, "dir"))
+os.remove(os.path.join(tmp, "dir"))
+assert os.path.isdir(os.path.join(tmp, "dir")), "directory should be left in place"
+expect_raise(FileNotFoundError, os.remove, os.path.join(tmp, "missing"))
+
+fd = os.open(tmp, os.O_RDONLY)
+os.remove("dir", dir_fd=fd)
+expect_raise(FileNotFoundError, os.remove, "missing", dir_fd=fd)
+expect_raise(FileNotFoundError, os.rmdir, "missing", dir_fd=fd)
+"""
 
 
 def _cstr(data, base, idx):
@@ -195,6 +219,18 @@ class TestBypassUnlinkShim(unittest.TestCase):
             f"shim imports {sorted(imported)}, expected {sorted(EXPECTED_IMPORTS)}. "
             "The shim must not call into libc beyond what the source does.",
         )
+
+    def test_remove_skips_only_directories(self):
+        """os.remove on a directory succeeds; a missing file or os.rmdir still raises."""
+        built = self._require_build()
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, "-c", REMOVE_DIRECTORY_CHECK, tmp],
+                env={**os.environ, "LD_PRELOAD": built},
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_no_debug_strings(self):
         """Guard against a debug printf creeping back into the binary."""
