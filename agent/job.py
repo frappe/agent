@@ -4,7 +4,9 @@ import datetime
 import json
 import logging
 import os
+import subprocess
 import traceback
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import wrapt
@@ -149,6 +151,7 @@ class Job(Action):
     @save
     def stop(self):
         send_stop_job_command(self.redis, self.job.get_id())
+        kill_container_processes(self.model.id)
         self.job.refresh()
         self.model.data = json.dumps(self.job.to_dict(), default=str)
         self.model.status = "Failure"
@@ -159,6 +162,40 @@ class Job(Action):
             self.stop()
         else:
             self.cancel()
+
+
+JOB_ID_VARIABLE = "AGENT_JOB_ID"
+
+
+def job_containers_key(job_id) -> str:
+    return f"agent:job:{job_id}:containers"
+
+
+def record_job_container(job_id, container: str):
+    key = job_containers_key(job_id)
+    redis = connection()
+    redis.sadd(key, container)
+    redis.expire(key, MAX_TIMEOUT + 3600)
+
+
+def kill_container_processes(job_id):
+    """Kill what the job still runs inside bench containers.
+
+    Stopping a job kills the work horse and its `docker exec` clients, but Docker
+    does not kill an exec'd process when its client dies. So a stopped migrate
+    keeps running in the container. docker_execute puts the job id in the
+    environment of each command, and every child process inherits it.
+    """
+    # -z -x: match one whole NUL-separated variable, so job 12 does not match job 123
+    script = f"grep -lsxz {JOB_ID_VARIABLE}={job_id} /proc/[0-9]*/environ | cut -d/ -f3 | xargs -r kill -9"
+    for container in connection().smembers(job_containers_key(job_id)):
+        with suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(
+                # Reading another user's environ needs CAP_SYS_PTRACE, which only --privileged gives
+                ["docker", "exec", "--privileged", "-u", "root", container.decode(), "sh", "-c", script],
+                capture_output=True,
+                timeout=60,
+            )
 
 
 def step(name):
