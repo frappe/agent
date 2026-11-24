@@ -1,7 +1,6 @@
 import argparse
 
 import frappe
-import subprocess
 
 parser = argparse.ArgumentParser(description="Process a single app name.")
 
@@ -14,11 +13,12 @@ frappe.init("")
 apps = [args.app]
 try:
     # Import your function
-    from frappe.commands.utils import run_after_build_hook
-    # Check if its running a version of frappe which has islands befoe building 
+    # Check if its running a version of frappe which has islands befoe building
     import frappe.bundler
+    from frappe.commands.utils import run_after_build_hook
+
     build_framework_islands = getattr(frappe.bundler, "build_framework_islands", None)
-    if build_framework_islands
+    if build_framework_islands:
         # enable once in release
         frappe.bundler.build_framework_islands(True)
     # Pass the list of apps you want to simulate as built
