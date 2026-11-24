@@ -89,8 +89,8 @@ class Server(Base):
     def docker_login(self, registry):
         url = shlex.quote(registry["url"])
         username = shlex.quote(registry["username"])
-        password = shlex.quote(registry["password"])
-        return self.execute(f"docker login -u {username} -p {password} {url}")
+        # The password goes through stdin, so it is not in the process list or the job data
+        return self.execute(f"docker login -u {username} --password-stdin {url}", input=registry["password"])
 
     def docker_inspect_manifest(self, image_tag: str):
         try:
