@@ -24,7 +24,7 @@ import requests
 from agent.app import App
 from agent.base import AgentException, Base
 from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
-from agent.job import job, step
+from agent.job import JOB_ID_VARIABLE, job, record_job_container, step
 from agent.mariadb_client import password_env
 from agent.site import Site
 from agent.utils import download_file, end_execution, get_execution_result, get_size
@@ -191,14 +191,20 @@ class Bench(Base):
             workdir = os.path.join(workdir, subdir)
 
         if self.bench_config.get("single_container"):
-            command = f"docker exec {as_root} -w {workdir} {interactive} {self.name} {command}"
+            container = self.name
         else:
             service = f"{self.name}_worker_default"
             task = self.execute(f"docker service ps -f desired-state=Running -q --no-trunc {service}")[
                 "output"
             ].split()[0]
-            command = f"docker exec {as_root} -w {workdir} {interactive} {service}.1.{task} {command}"
+            container = f"{service}.1.{task}"
 
+        job_env = ""
+        if hasattr(self.job_record, "model"):
+            job_env = f"-e {JOB_ID_VARIABLE}={self.job_record.model.id}"
+            record_job_container(self.job_record.model.id, container)
+
+        command = f"docker exec {as_root} {job_env} -w {workdir} {interactive} {container} {command}"
         return self.execute(command, input=input, non_zero_throw=non_zero_throw)
 
     @step("New Site")
