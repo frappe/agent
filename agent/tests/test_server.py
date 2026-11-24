@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import json
 import os
 import shutil
@@ -97,3 +98,49 @@ class TestServerNginxAccess(unittest.TestCase):
         config = self.server.config
         self.assertEqual(config["ip_accept"], ["183.82.5.84/32"])
         self.assertEqual(config["proxy_ip"], "10.3.1.0/24")
+
+
+class TestServerSupervisorConfig(unittest.TestCase):
+    """Signup jobs get a worker that long jobs on the shared queues can't hold."""
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        with open(os.path.join(self.directory, "config.json"), "w") as f:
+            json.dump(
+                {
+                    "name": "f1-mumbai.frappe.cloud",
+                    "benches_directory": os.path.join(self.directory, "benches"),
+                    "nginx_directory": os.path.join(self.directory, "nginx"),
+                    "web_port": 25052,
+                    "redis_port": 25025,
+                    "workers": 2,
+                    "user": "frappe",
+                },
+                f,
+            )
+
+        self.server = Server(self.directory)
+
+    def tearDown(self):
+        shutil.rmtree(self.directory)
+
+    def rendered_supervisor_config(self):
+        self.server._generate_supervisor_config()
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(os.path.join(self.directory, "supervisor.conf"))
+        return config
+
+    def test_signup_worker_listens_only_on_the_signup_queue(self):
+        command = self.rendered_supervisor_config()["program:worker_signup"]["command"]
+
+        self.assertTrue(command.endswith(' --url redis://127.0.0.1:25025 signup"'))
+
+    def test_shared_workers_also_take_signup_jobs(self):
+        command = self.rendered_supervisor_config()["program:worker"]["command"]
+
+        self.assertIn(" signup high default low", command)
+
+    def test_signup_worker_is_in_the_agent_group(self):
+        programs = self.rendered_supervisor_config()["group:agent"]["programs"]
+
+        self.assertIn("worker_signup", [program.strip() for program in programs.split(",")])
