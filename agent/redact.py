@@ -57,14 +57,26 @@ def _takes_password_value(flag: str) -> bool:
 
 
 def redact_call_arguments(function, args, kwargs) -> tuple[list, dict]:
-    """Mask the arguments of a job whose parameter name holds a password or a secret"""
+    """Mask the arguments of a job that hold a password or a secret, also inside site configs"""
     names = list(inspect.signature(function).parameters)
     args = [
-        REDACTED if index < len(names) and _is_secret(names[index]) else arg for index, arg in enumerate(args)
+        REDACTED if index < len(names) and _is_secret(names[index]) else _redact_secret_keys(arg)
+        for index, arg in enumerate(args)
     ]
-    kwargs = {name: REDACTED if _is_secret(name) else value for name, value in kwargs.items()}
-    return args, kwargs
+    return args, _redact_secret_keys(kwargs)
+
+
+def _redact_secret_keys(value):
+    if isinstance(value, dict):
+        return {
+            key: REDACTED if isinstance(key, str) and _is_secret(key) else _redact_secret_keys(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_redact_secret_keys(item) for item in value]
+    return value
 
 
 def _is_secret(name: str) -> bool:
-    return "password" in name or "secret" in name
+    name = name.lower()
+    return any(word in name for word in ("password", "secret", "token", "encryption_key"))

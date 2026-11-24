@@ -61,3 +61,27 @@ class TestRedactCallArguments(unittest.TestCase):
 
         self.assertEqual(args, ["a.test", "********"])
         self.assertEqual(kwargs, {"aws_secret": "********"})
+
+    def test_masks_secret_keys_inside_site_config_arguments(self):
+        def update_config_job(value, remove):
+            pass
+
+        config = {
+            "db_name": "a",
+            "encryption_key": "fake-key",
+            "nested": [{"fc_communication_secret": "fake"}],
+        }
+        args, kwargs = redact_call_arguments(update_config_job, (config,), {"remove": ["x"]})
+
+        self.assertEqual(
+            args,
+            [
+                {
+                    "db_name": "a",
+                    "encryption_key": "********",
+                    "nested": [{"fc_communication_secret": "********"}],
+                }
+            ],
+        )
+        self.assertEqual(kwargs, {"remove": ["x"]})
+        self.assertEqual(config["encryption_key"], "fake-key")

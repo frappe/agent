@@ -97,3 +97,16 @@ class TestServerNginxAccess(unittest.TestCase):
         config = self.server.config
         self.assertEqual(config["ip_accept"], ["183.82.5.84/32"])
         self.assertEqual(config["proxy_ip"], "10.3.1.0/24")
+
+
+class TestDockerLogin(unittest.TestCase):
+    def test_registry_password_goes_through_stdin_not_the_command(self):
+        server = Server.__new__(Server)
+        registry = {"url": "registry.test", "username": "bot", "password": "fake-registry-password"}
+
+        with patch.object(Server, "execute") as execute:
+            server.docker_login(registry)
+
+        command = execute.call_args.args[0]
+        self.assertEqual(command, "docker login -u bot --password-stdin registry.test")
+        self.assertEqual(execute.call_args.kwargs["input"], "fake-registry-password")
