@@ -413,6 +413,30 @@ class TestSite(unittest.TestCase):
         self.assertEqual(db_file, "20260929_101500-streamed_site_test-%stream%-database.sql.gz")
         self.assertFalse(fnmatch.fnmatch(db_file, "*-streamed_site_test-database.sql.gz"))
 
+    def test_db_client_command_gets_password_from_env_not_from_its_command_line(self):
+        site_name = "db.site.test"
+        self._create_test_site(site_name)
+        config = {"db_name": "_a1", "db_password": "fake-db-password", "db_host": "db", "db_port": 3306}
+        with patch.object(Site, "config", new=config):
+            site = Site(site_name, self._get_test_bench())
+
+        option_files = []
+
+        def execute(command, executable=None, env=None):
+            with open(os.path.join(env["HOME"], ".my.cnf")) as option_file:
+                option_files.append(option_file.read())
+            return {"output": "tabUser"}
+
+        with patch.object(Site, "execute", side_effect=execute) as mock_execute, patch(
+            "agent.site.db_client_cli", return_value="mariadb"
+        ):
+            self.assertEqual(site.tables, ["tabUser"])
+
+        command = mock_execute.call_args.args[0]
+        self.assertNotIn("fake-db-password", command)
+        self.assertNotIn(" -p", command)
+        self.assertEqual(option_files, ['[client]\npassword="fake-db-password"\n'])
+
     @unittest.skip("fails with 'Server' has no attr 'job'")
     def test_valid_sites_property_of_bench_throws_if_site_config_is_corrupt(
         self,

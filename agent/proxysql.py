@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from agent.job import job, step
+from agent.mariadb_client import password_env
 from agent.server import Server
 
 
@@ -10,13 +11,12 @@ class ProxySQL(Server):
 
         self.proxysql_admin_password = self.config.get("proxysql_admin_password")
 
-    def proxysql_execute(self, command):
-        command = (
-            "mysql -h 127.0.0.1 -P 6032 "
-            f"-u frappe -p{self.proxysql_admin_password} "
-            f"--disable-column-names -e '{command}'"
-        )
-        return self.execute(command)
+    def proxysql_execute(self, query):
+        # The query can hold a user's password, so it goes through stdin, not argv
+        with password_env(self.proxysql_admin_password) as env:
+            return self.execute(
+                "mysql -h 127.0.0.1 -P 6032 -u frappe --disable-column-names", input=query, env=env
+            )
 
     @job("Add User to ProxySQL")
     def add_user_job(

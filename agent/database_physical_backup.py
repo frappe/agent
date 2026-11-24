@@ -12,6 +12,7 @@ import requests
 from agent.database import CustomPeeweeDB
 from agent.database_server import DatabaseServer
 from agent.job import job, step
+from agent.mariadb_client import password_env
 from agent.utils import compute_file_hash, db_dump_cli, decode_mariadb_filename
 
 
@@ -285,12 +286,12 @@ class DatabasePhysicalBackup(DatabaseServer):
             db_dump_cli(),
             "-u",
             self._db_user,
-            "-p" + self._db_password,
             "--no-data",
             db_name,
         ]
         try:
-            output = subprocess.check_output(command)
+            with password_env(self._db_password) as env:
+                output = subprocess.check_output(command, env={**os.environ, **env})
         except subprocess.CalledProcessError as e:
             raise DatabaseSchemaExportError(e.output)
 
