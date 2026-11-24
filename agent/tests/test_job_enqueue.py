@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -18,6 +19,10 @@ class Worker:
 
     @job("Test Job")
     def run(self):
+        return "done"
+
+    @job("Test Job With Passwords")
+    def run_with_passwords(self, site, mariadb_root_password, admin_password=None):
         return "done"
 
 
@@ -98,6 +103,15 @@ class TestJobEnqueue(unittest.TestCase):
 
         with delete, self.assertLogs("agent.job", "ERROR"), self.assertRaises(ResponseError):
             Worker().run()
+
+    def test_record_masks_password_arguments_but_queue_gets_the_real_values(self):
+        Worker().run_with_passwords("a.test", "fake-root", admin_password="fake-admin")
+
+        data = json.loads(self.records()[0].data)
+        self.assertEqual(data["args"], ["a.test", "********"])
+        self.assertEqual(data["kwargs"], {"admin_password": "********"})
+        enqueued = self.queue.enqueue_call.call_args.kwargs
+        self.assertIn("fake-root", json.dumps([enqueued.get("args"), enqueued.get("kwargs")], default=str))
 
 
 if __name__ == "__main__":

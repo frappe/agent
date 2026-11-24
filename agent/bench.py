@@ -25,6 +25,7 @@ from agent.app import App
 from agent.base import AgentException, Base
 from agent.exceptions import InvalidSiteConfigException, SiteNotExistsException
 from agent.job import job, step
+from agent.mariadb_client import password_env
 from agent.site import Site
 from agent.utils import download_file, end_execution, get_execution_result, get_size
 
@@ -166,12 +167,13 @@ class Bench(Base):
                 traceback.print_exc()
         return analytics
 
-    def execute(self, command, input=None, non_zero_throw=True):
+    def execute(self, command, input=None, non_zero_throw=True, env=None):
         return super().execute(
             command,
             directory=self.directory,
             input=input,
             non_zero_throw=non_zero_throw,
+            env=env,
         )
 
     def docker_execute(
@@ -281,8 +283,7 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
-            self.execute(command)
+            self.execute_as_mariadb_root(query, mariadb_root_password)
         return database, user, password
 
     def drop_mariadb_user(self, site, mariadb_root_password, database=None):
@@ -294,8 +295,13 @@ class Bench(Base):
             "FLUSH PRIVILEGES",
         ]
         for query in queries:
-            command = f'mysql -h {self.host} -P {self.db_port} -uroot -p{mariadb_root_password} -e "{query}"'
-            self.execute(command)
+            self.execute_as_mariadb_root(query, mariadb_root_password)
+
+    def execute_as_mariadb_root(self, query, mariadb_root_password):
+        # The query can hold a password, so it goes through stdin; neither is in argv or job data
+        command = f"mysql -h {self.host} -P {self.db_port} -uroot"
+        with password_env(mariadb_root_password) as env:
+            return self.execute(command, input=query, env=env)
 
     def fetch_monitor_data(self):
         lines = []

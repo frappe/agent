@@ -24,6 +24,7 @@ from rq.command import send_stop_job_command
 from rq.job import Job as RQJob
 
 from agent.callbacks import callback
+from agent.redact import redact_call_arguments
 
 if TYPE_CHECKING:
     from agent.base import Base
@@ -126,6 +127,8 @@ class Job(Action):
         self.model.name = name
         self.model.status = "Pending"
         self.model.enqueue = datetime.datetime.now()
+        # Press reads this data while the job runs, so it must not carry a password
+        args, kwargs = redact_call_arguments(function, args, kwargs)
         self.model.data = json.dumps(
             {
                 "function": function.__func__.__name__,
