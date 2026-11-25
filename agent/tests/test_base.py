@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from agent.base import PUBLISH_INTERVAL_SECONDS, Base, Throttle
+from agent.exceptions import AgentException
 
 
 class FinishedProcess:
@@ -45,6 +46,36 @@ class TestParseOutput(unittest.TestCase):
 
         # a (first), b skipped at +1s, c at +2s, then the final output
         self.assertEqual(self.base.update_redis.call_count, 3)
+
+
+class TestExecuteKeepsPasswordsOutOfJobData(unittest.TestCase):
+    def setUp(self):
+        self.base = Base()
+        self.base.update_redis = MagicMock()
+
+    def test_env_reaches_the_subprocess_but_not_the_recorded_command(self):
+        command = ["sh", "-c", 'test "$AGENT_TEST_SECRET" = fake-secret && echo ok']
+
+        with patch("builtins.print"):
+            data = self.base.execute(command, directory="/tmp", env={"AGENT_TEST_SECRET": "fake-secret"})
+
+        self.assertEqual(data["output"], "ok")
+        self.assertEqual(data["command"], command)
+
+    def test_failed_command_records_masked_command_and_traceback(self):
+        with patch("builtins.print"), self.assertRaises(AgentException) as raised:
+            self.base.execute("false --admin-password fake-admin", directory="/tmp")
+
+        data = raised.exception.data
+        self.assertEqual(data["command"], "false --admin-password ********")
+        self.assertIn("--admin-password ********", data["traceback"])
+        self.assertNotIn("fake-admin", data["traceback"])
+
+    def test_logged_line_has_masked_command(self):
+        with patch("builtins.print") as printed:
+            self.base.execute("true --admin-password fake-admin", directory="/tmp")
+
+        self.assertNotIn("fake-admin", "".join(str(call) for call in printed.call_args_list))
 
 
 class TestThrottle(unittest.TestCase):

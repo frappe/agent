@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from agent.job import job, step
+from agent.mariadb_client import password_env
 from agent.server import Server
 from agent.utils import db_dump_cli
 
@@ -160,7 +161,6 @@ class SnapshotRecovery(Server):
             database_ip,
             "-u",
             "root",
-            f"-p{mariadb_root_password}",
             database_name,
             "|",
             "gzip",
@@ -168,7 +168,8 @@ class SnapshotRecovery(Server):
             file_path,
         ]
 
-        subprocess.run(" ".join(command), shell=True, check=True)
+        with password_env(mariadb_root_password) as env:
+            subprocess.run(" ".join(command), shell=True, check=True, env={**os.environ, **env})
 
     @step("Upload Backup Files to S3")
     def upload_backup_files_to_s3(self, backup_files, offsite) -> str:

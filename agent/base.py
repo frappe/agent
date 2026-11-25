@@ -17,6 +17,7 @@ import redis
 
 from agent.exceptions import AgentException
 from agent.job import connection
+from agent.redact import redact_command, redact_text
 from agent.utils import get_execution_result
 
 if TYPE_CHECKING:
@@ -70,11 +71,13 @@ class Base:
         skip_output_log=False,
         executable=None,
         non_zero_throw=True,
+        env=None,
     ):
         directory = directory or self.directory
         start = datetime.now()
         self.skip_output_log = skip_output_log
-        self.data = get_execution_result(command, directory, start)
+        # The command goes to the logs and to Press, so it must not carry a password
+        self.data = get_execution_result(redact_command(command), directory, start)
         self.log()
         output = ""
         try:
@@ -84,6 +87,7 @@ class Base:
                 input,
                 executable,
                 non_zero_throw,
+                env,
             )
         except subprocess.CalledProcessError as e:
             output = str(e.output or "")
@@ -91,7 +95,7 @@ class Base:
             self.data.update(
                 {
                     "status": "Failure",
-                    "traceback": "".join(traceback.format_exc()),
+                    "traceback": redact_text("".join(traceback.format_exc())),
                 }
             )
             raise AgentException(self.data) from e
@@ -110,7 +114,7 @@ class Base:
             self.log()
         return self.data
 
-    def run_subprocess(self, command, directory, input, executable, non_zero_throw=True):
+    def run_subprocess(self, command, directory, input, executable, non_zero_throw=True, env=None):
         # Start a child process and start reading output immediately
         if isinstance(command, str):
             import warnings
@@ -137,6 +141,7 @@ class Base:
             cwd=directory,
             shell=use_shell,
             executable=executable,
+            env={**os.environ, **env} if env else None,
         ) as process:
             if input:
                 process._stdin_write(input.encode())

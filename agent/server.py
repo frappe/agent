@@ -89,8 +89,8 @@ class Server(Base):
     def docker_login(self, registry):
         url = shlex.quote(registry["url"])
         username = shlex.quote(registry["username"])
-        password = shlex.quote(registry["password"])
-        return self.execute(f"docker login -u {username} -p {password} {url}")
+        # The password goes through stdin, so it is not in the process list or the job data
+        return self.execute(f"docker login -u {username} --password-stdin {url}", input=registry["password"])
 
     def docker_inspect_manifest(self, image_tag: str):
         try:
@@ -748,12 +748,16 @@ class Server(Base):
             shutil.move(destination, archived_site_path)
         shutil.move(site.directory, target.sites_directory)
 
-    def execute(self, command, directory=None, skip_output_log=False, non_zero_throw=True):
+    def execute(
+        self, command, directory=None, skip_output_log=False, non_zero_throw=True, input=None, env=None
+    ):
         return super().execute(
             command,
             directory=directory,
             skip_output_log=skip_output_log,
             non_zero_throw=non_zero_throw,
+            input=input,
+            env=env,
         )
 
     @job("Pull Docker Images", priority="high")
