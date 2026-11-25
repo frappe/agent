@@ -460,29 +460,16 @@ class Site(Base):
         data = {"tables": {}}
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
-            output = self.execute(
+            output = self.execute_db_client(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
             data["tables"][backup_file] = output
         return data
 
-<<<<<<< HEAD
-=======
-    def _load_table_dump(self, backup_file):
-        # Put back the rows the table had, even ones its JSON CHECK rejects
-        return self.execute_db_client(
-            "set -o pipefail && "
-            f"gunzip -c '{backup_file}' | "
-            f"{db_client_cli()} --init-command='SET SESSION check_constraint_checks=0' "
-            f"-h {self.host} -P {self.db_port} -u {self.user} {self.database}",
-            executable="/bin/bash",
-        )
-
->>>>>>> acd6810 (fix(mariadb): Keep database passwords out of argv, logs and job data)
     @step("Update ERPNext Configuration")
     def update_erpnext_config(self, value):
         config_file = os.path.join(self.directory, "journeys_config.json")
@@ -832,10 +819,10 @@ class Site(Base):
         for table in self.tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
-                output = self.execute(
+                output = self.execute_db_client(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
