@@ -19,6 +19,7 @@ import requests
 from agent.base import AgentException, Base
 from agent.database import Database
 from agent.job import job, step
+from agent.mariadb_client import password_env
 from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get_size
 
 if TYPE_CHECKING:
@@ -459,10 +460,10 @@ class Site(Base):
         data = {"tables": {}}
         for backup_file in os.listdir(self.backup_directory):
             backup_file_path = os.path.join(self.backup_directory, backup_file)
-            output = self.execute(
+            output = self.execute_db_client(
                 "set -o pipefail && "
                 f"gunzip -c '{backup_file_path}' | "
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} "
                 f"{self.database}",
                 executable="/bin/bash",
             )
@@ -731,10 +732,10 @@ class Site(Base):
         data = {"tables": {}}
         for table in tables:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
-            output = self.execute(
+            output = self.execute_db_client(
                 "set -o pipefail && "
                 f"{dump_command} --single-transaction --quick --lock-tables=false "
-                f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                f"-h {self.host} -P {self.db_port} -u {self.user} "
                 f"{self.database} '{table}' "
                 f" | gzip > '{backup_file}'",
                 executable="/bin/bash",
@@ -818,10 +819,10 @@ class Site(Base):
         for table in self.tables_to_restore:
             backup_file = os.path.join(self.backup_directory, f"{table}.sql.gz")
             if os.path.exists(backup_file):
-                output = self.execute(
+                output = self.execute_db_client(
                     "set -o pipefail && "
                     f"gunzip -c '{backup_file}' | "
-                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+                    f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} "
                     f"{self.database}",
                     executable="/bin/bash",
                 )
@@ -835,8 +836,8 @@ class Site(Base):
         new_tables = set(self.tables) - set(self.previous_tables)
         data = {"dropped": {}}
         for table in new_tables:
-            output = self.execute(
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} -p{self.password} "
+            output = self.execute_db_client(
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u {self.user} "
                 f"{self.database} -e 'DROP TABLE `{table}`'"
             )
             data["dropped"][table] = output
@@ -941,8 +942,8 @@ print(">>>" + frappe.session.sid + "<<<")
             " defkey = 'time_zone' and parent = '__default'"
         )
         try:
-            timezone = self.execute(
-                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u{self.database} -p{self.password} "
+            timezone = self.execute_db_client(
+                f"{db_client_cli()} -h {self.host} -P {self.db_port} -u{self.database} "
                 f'--connect-timeout 3 -sN -e "{query}"'
             )["output"].strip()
         except Exception:
@@ -951,9 +952,9 @@ print(">>>" + frappe.session.sid + "<<<")
 
     @property
     def tables(self):
-        return self.execute(
+        return self.execute_db_client(
             f"{db_client_cli()} --disable-column-names -B -e 'SHOW TABLES' "
-            f"-h {self.host} -P {self.db_port} -u {self.user} -p{self.password} {self.database}"
+            f"-h {self.host} -P {self.db_port} -u {self.user} {self.database}"
         )["output"].split("\n")
 
     @property
@@ -992,9 +993,9 @@ print(">>>" + frappe.session.sid + "<<<")
         try:
             # shell=True; quote every site_config-derived value so a password/host
             # with shell metacharacters can't execute in the agent process.
-            value = self.execute(
+            value = self.execute_db_client(
                 f"{db_client_cli()} -h {quote(self.host)} -P {quote(str(self.db_port))} "
-                f"-u{quote(self.user)} -p{quote(self.password)} "
+                f"-u{quote(self.user)} "
                 f"--connect-timeout 3 -sN -e {quote(query)}"
             )["output"].strip()
         except Exception:
@@ -1538,9 +1539,9 @@ print(">>>" + frappe.session.sid + "<<<")
         for table in tables:
             query = f"OPTIMIZE TABLE `{table}`"
             try:
-                self.execute(
+                self.execute_db_client(
                     f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} "
-                    f"-u{self.user} -p{self.password} {self.database} -e '{query}'"
+                    f"-u{self.user} {self.database} -e '{query}'"
                 )
                 optimized_tables.append(table)
             except:  # noqa # pylint: disable=bare-except
@@ -1665,8 +1666,8 @@ print(">>>" + frappe.session.sid + "<<<")
 
             query = f'SELECT size FROM press_meta.schema_sizes WHERE `schema` = "{self.database}"'
             command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} \
-                    -u{self.user} -p{self.password} -e '{query}'"
-            database_size = self.execute(command).get("output")
+                    -u{self.user} -e '{query}'"
+            database_size = self.execute_db_client(command).get("output")
 
         except Exception:
             # Fallback to old way if press_meta is not available
@@ -1680,8 +1681,8 @@ print(">>>" + frappe.session.sid + "<<<")
                 " GROUP BY `table_schema`"
             )
             command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} \
-                -u{self.user} -p{self.password} -e '{query}'"
-            database_size = self.execute(command).get("output")
+                -u{self.user} -e '{query}'"
+            database_size = self.execute_db_client(command).get("output")
 
         try:
             assert database_size is not None, "Could not fetch database size"
@@ -1731,8 +1732,8 @@ print(">>>" + frappe.session.sid + "<<<")
             f' WHERE `table_schema` = "{self.database}"'
             " GROUP BY `table_schema`"
         )
-        command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"  # noqa: E501
-        database_size = self.execute(command).get("output")
+        command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -e '{query}'"
+        database_size = self.execute_db_client(command).get("output")
 
         try:
             return int(database_size)
@@ -1749,8 +1750,8 @@ print(">>>" + frappe.session.sid + "<<<")
                 " AND ((`data_free` / (`data_length` + `index_length`)) > 0.2"
                 " OR `data_free` > 100 * 1024 * 1024)"
             )
-            command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -p{self.password} -e '{query}'"  # noqa: E501
-            output = self.execute(command).get("output")
+            command = f"{db_client_cli()} -sN -h {self.host} -P {self.db_port} -u{self.user} -e '{query}'"
+            output = self.execute_db_client(command).get("output")
             return [line.split("\t") for line in output.splitlines()]
         except Exception:
             return []
@@ -1830,6 +1831,11 @@ print(">>>" + frappe.session.sid + "<<<")
 
     def kill_database_process(self, pid: str, mariadb_root_password: str):
         return self.db_instance(username="root", password=mariadb_root_password).kill_process(pid)
+
+    def execute_db_client(self, command, executable=None):
+        # The password stays out of argv, logs and job data
+        with password_env(self.password) as env:
+            return self.execute(command, executable=executable, env=env)
 
     def db_instance(self, username: str | None = None, password: str | None = None) -> Database:
         if not username:
