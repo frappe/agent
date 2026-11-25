@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import subprocess
+import time
 import traceback
 from contextlib import suppress
 from typing import TYPE_CHECKING
@@ -151,6 +152,12 @@ class Job(Action):
     @save
     def stop(self):
         send_stop_job_command(self.redis, self.job.get_id())
+        # The worker kills the horse a moment later. Kill the container processes after that,
+        # or the job's finally blocks start new commands that live on.
+        for _ in range(15):
+            if self.job.get_status(refresh=True) != "started":
+                break
+            time.sleep(0.2)
         kill_container_processes(self.model.id)
         self.job.refresh()
         self.model.data = json.dumps(self.job.to_dict(), default=str)
@@ -187,14 +194,16 @@ def kill_container_processes(job_id):
     environment of each command, and every child process inherits it.
     """
     # -z -x: match one whole NUL-separated variable, so job 12 does not match job 123
-    script = f"grep -lsxz {JOB_ID_VARIABLE}={job_id} /proc/[0-9]*/environ | cut -d/ -f3 | xargs -r kill -9"
+    find = f"grep -lsxz {JOB_ID_VARIABLE}={job_id} /proc/[0-9]*/environ | cut -d/ -f3"
+    # Repeat until nothing matches: a process can fork between the grep and the kill
+    script = f'for _ in 1 2 3 4 5; do p=$({find}); [ -z "$p" ] && break; kill -9 $p; done'
     for container in connection().smembers(job_containers_key(job_id)):
         with suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
                 # Reading another user's environ needs CAP_SYS_PTRACE, which only --privileged gives
                 ["docker", "exec", "--privileged", "-u", "root", container.decode(), "sh", "-c", script],
                 capture_output=True,
-                timeout=60,
+                timeout=10,
             )
 
 
