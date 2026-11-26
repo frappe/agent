@@ -20,6 +20,7 @@ from agent.base import AgentException, Base
 from agent.database import Database
 from agent.job import job, step
 from agent.mariadb_client import password_env
+from agent.offsite import get_rclone_provider, get_s3_client
 from agent.utils import b2mb, compute_file_hash, db_client_cli, db_dump_cli, get_size
 
 if TYPE_CHECKING:
@@ -640,8 +641,6 @@ class Site(Base):
 
     @step("Upload Site Backup to S3")
     def upload_offsite_backup(self, backup_files, offsite, keep_files_locally_after_offsite_backup: bool):
-        import boto3
-
         offsite_files = {}
         try:
             bucket, auth, prefix = (
@@ -649,21 +648,7 @@ class Site(Base):
                 offsite["auth"],
                 offsite["path"],
             )
-            region = auth.get("REGION")
-
-            if region:
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=auth["ACCESS_KEY"],
-                    aws_secret_access_key=auth["SECRET_KEY"],
-                    region_name=region,
-                )
-            else:
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=auth["ACCESS_KEY"],
-                    aws_secret_access_key=auth["SECRET_KEY"],
-                )
+            s3 = get_s3_client(auth)
 
             for backup_file in backup_files.values():
                 file_name = backup_file["file"].split(os.sep)[-1]
@@ -1072,13 +1057,8 @@ print(">>>" + frappe.session.sid + "<<<")
             # letting a raw KeyError abort it with an opaque traceback.
             try:
                 # press stores PROVIDER as a human label (e.g. "AWS S3"), not
-                # rclone's provider name. Map the label to (rclone --s3-provider
-                # value, endpoint). The boto3 (non-streaming) path ignores
-                # PROVIDER entirely, so this mapping lives only here.
-                providers = {
-                    "AWS S3": ("AWS", f"s3.{auth['REGION']}.amazonaws.com"),
-                }
-                rclone_provider, endpoint = providers[auth["PROVIDER"]]
+                # rclone's provider name, so map it to (--s3-provider, endpoint).
+                rclone_provider, endpoint = get_rclone_provider(auth)
                 s3_flags = [
                     "--s3-provider",
                     rclone_provider,

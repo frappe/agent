@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent.job import job, step
 from agent.mariadb_client import password_env
+from agent.offsite import get_s3_client
 from agent.server import Server
 from agent.utils import db_dump_cli
 
@@ -173,29 +174,13 @@ class SnapshotRecovery(Server):
 
     @step("Upload Backup Files to S3")
     def upload_backup_files_to_s3(self, backup_files, offsite) -> str:
-        import boto3
-
         offsite_files = {}
         bucket, auth, prefix = (
             offsite["bucket"],
             offsite["auth"],
             offsite["path"],
         )
-        region = auth.get("REGION")
-
-        if region:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-                region_name=region,
-            )
-        else:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-            )
+        s3 = get_s3_client(auth)
 
         for backup_file in backup_files.values():
             file_name = backup_file["file"].split(os.sep)[-1]

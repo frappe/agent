@@ -18,6 +18,7 @@ from peewee import MySQLDatabase
 from agent.database import CustomPeeweeDB, Database
 from agent.exceptions import AgentException
 from agent.job import job, step
+from agent.offsite import get_s3_client
 from agent.server import Server
 
 # server_audit rotates server_audit.log to .1, .1 to .2 and so on. We move those to
@@ -1005,8 +1006,6 @@ WHERE `schema` IN (
 
     @step("Upload Binlogs To S3")
     def upload_binlogs_to_s3(self, binlogs: list[str], offsite):
-        import boto3
-
         offsite_files = {}
         failed_uploads = {}
 
@@ -1015,21 +1014,7 @@ WHERE `schema` IN (
             offsite["auth"],
             offsite["path"],
         )
-        region = auth.get("REGION")
-
-        if region:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-                region_name=region,
-            )
-        else:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-            )
+        s3 = get_s3_client(auth)
 
         tmp_folder = get_tmp_folder_path()
         for binlog in binlogs:
@@ -1141,8 +1126,6 @@ WHERE `schema` IN (
         start_timestamp, end_timestamp}}, "failed_uploads": {name: error}}. Press turns
         each offsite_files entry into a MariaDB Audit Log record.
         """
-        import boto3
-
         offsite_files = {}
         failed_uploads = {}
 
@@ -1151,21 +1134,7 @@ WHERE `schema` IN (
             offsite["auth"],
             offsite["path"],
         )
-        region = auth.get("REGION")
-
-        if region:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-                region_name=region,
-            )
-        else:
-            s3 = boto3.client(
-                "s3",
-                aws_access_key_id=auth["ACCESS_KEY"],
-                aws_secret_access_key=auth["SECRET_KEY"],
-            )
+        s3 = get_s3_client(auth)
 
         tmp_folder = get_tmp_folder_path()
         for log in list_audit_logs(self.audit_log_pending_directory, AUDIT_LOG_STAGED_RE):
