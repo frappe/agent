@@ -57,6 +57,19 @@ def validate_ip_sources(ip_accept: list[str], ip_drop: list[str], proxy_ip: str 
             raise AgentException({"error": f"{source!r} is not a valid IP address or CIDR."})
 
 
+def nginx_has_http2_fix() -> bool:
+    """HTTP/2 is on from nginx 1.31.9. Older versions keep it off, as #685 did.
+
+    Not cached: the agent keeps running when nginx is upgraded under it.
+    """
+    try:
+        output = subprocess.run(["/usr/sbin/nginx", "-v"], capture_output=True, text=True).stderr
+    except FileNotFoundError:
+        return False
+    version = output.partition("nginx/")[2].split()[0] if "nginx/" in output else ""
+    return tuple(int(part) for part in version.split(".") if part.isdigit()) >= (1, 31, 9)
+
+
 class Server(Base):
     def __init__(self, directory=None):
         super().__init__()
@@ -1317,6 +1330,7 @@ class Server(Base):
             options = {}
         options.update({"loader": PackageLoader("agent", "templates")})
         environment = Environment(**options)
+        environment.globals["nginx_http2"] = nginx_has_http2_fix()
         template = environment.get_template(template)
 
         with open(outfile, "w") as f:

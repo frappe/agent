@@ -16,6 +16,7 @@ map $http_upgrade $connection_upgrade {
 
 server {
 	listen 443 ssl;
+	{% if nginx_http2 %}http2 on;{% endif %}
 	server_name {{ name }};
 
 	ssl_certificate {{ tls_directory }}/fullchain.pem;

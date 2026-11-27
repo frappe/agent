@@ -60,6 +60,7 @@ map $cors_origin_{{ bench_name_slug }} $cors_vary_{{ bench_name_slug }} {
 {% for site in sites + ( domains.keys() | list ) %}
 server {
 	listen 443 ssl;
+	{% if nginx_http2 %}http2 on;{% endif %}
 	server_name {{ site.name or site}};
 
 	ssl_certificate {{ nginx_directory }}/hosts/{{ site.host or site }}/fullchain.pem;
@@ -171,6 +172,9 @@ server {
 		proxy_set_header X-Use-X-Accel-Redirect True;
 		proxy_read_timeout {{ http_timeout }};
 		proxy_redirect off;
+		# nginx 1.29.7+ keeps upstream connections alive by default. gunicorn
+		# closes idle ones after 2s, and a POST sent on a closing one is a 502.
+		proxy_http_version 1.0;
 
 		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
 		sub_filter '<h1><p>Internal Server Error</p></h1>' $gunicorn_internal_server_error_page_{{ bench_name_slug }};
@@ -343,6 +347,9 @@ server {
 		proxy_set_header X-Use-X-Accel-Redirect True;
 		proxy_read_timeout {{ http_timeout }};
 		proxy_redirect off;
+		# nginx 1.29.7+ keeps upstream connections alive by default. gunicorn
+		# closes idle ones after 2s, and a POST sent on a closing one is a 502.
+		proxy_http_version 1.0;
 
 		sub_filter '<h1>Internal Server Error</h1>' $internal_server_error_page_{{ bench_name_slug }};
 		sub_filter '<h1><p>Internal Server Error</p></h1>' $gunicorn_internal_server_error_page_{{ bench_name_slug }};
