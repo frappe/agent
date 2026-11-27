@@ -3,11 +3,17 @@
 Each request goes only to a public address. The host is resolved once, and the
 connection is pinned to the address that was checked. Redirects are followed by
 hand, and each target is checked the same way.
+
+An operator can trust named hosts on a private network, such as the platform's
+own S3-compatible backup store, by listing their exact hostnames, comma-separated,
+in the AGENT_TRUSTED_PRIVATE_HOSTS environment variable. Those hosts may resolve
+to private addresses; every other host is still checked.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -61,11 +67,18 @@ def _resolve_public_ip(hostname: str) -> str:
         raise RemoteURLError(f"Could not resolve the host '{hostname}'.") from error
 
     ips = [str(address[4][0]) for address in addresses]
+    trusted = hostname.lower() in _trusted_private_hosts()
     for ip in ips:
-        if not _is_public(ip):
+        if not trusted and not _is_public(ip):
             raise RemoteURLError("The URL resolves to an address that is not public.")
     # Prefer IPv4, as the server may not have IPv6 egress
     return next((ip for ip in ips if ipaddress.ip_address(ip).version == 4), ips[0])
+
+
+def _trusted_private_hosts() -> frozenset[str]:
+    """Exact hostnames the operator allows to resolve to private addresses."""
+    hosts = os.environ.get("AGENT_TRUSTED_PRIVATE_HOSTS", "")
+    return frozenset(host.strip().lower() for host in hosts.split(",") if host.strip())
 
 
 def _is_public(ip: str) -> bool:
