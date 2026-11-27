@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 from prometheus_client.registry import Collector
 from redis import Redis
@@ -5,10 +7,10 @@ from rq import Queue, Worker
 from rq.job import JobStatus
 
 
-def get_metrics(name: str, port: int):
+def get_metrics(name: str, port: int, password: str | None = None):
     from prometheus_client.exposition import generate_latest
 
-    return generate_latest(RQCollector(name, port))
+    return generate_latest(RQCollector(name, port, password))
 
 
 def get_workers_stats(connection: Redis):
@@ -42,10 +44,10 @@ def get_jobs_by_queue(connection: Redis):
 
 
 class RQCollector(Collector):
-    def __init__(self, name: str, port: int):
+    def __init__(self, name: str, port: int, password: str | None = None):
         self.name = name
         self.port = port
-        self.conn = Redis(port=port)
+        self.conn = Redis(port=port, password=password)
         super().__init__()
 
     def collect(self):
